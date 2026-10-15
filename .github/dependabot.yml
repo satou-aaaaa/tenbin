@@ -1,0 +1,11 @@
+# ワークフローの Actions を月1回まとめて新しくする PR を出す（共通部品 shared-workflows の呼び出しは @main なので対象外）。
+# .github/ を変える PR なので、Check が ✅ になったら手でマージする。
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      actions:
+        patterns: ["*"]
