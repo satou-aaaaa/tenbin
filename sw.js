@@ -11,7 +11,8 @@ self.addEventListener("fetch", e => {
   const u = new URL(req.url);
   const font = u.hostname === "fonts.googleapis.com" || u.hostname === "fonts.gstatic.com";
   if (u.origin !== location.origin && !font) return;
-  const key = req.mode === "navigate" ? "index.html" : req;
+  // 更新情報（changes.html）は別のページなので、アプリ本体に置き換えない
+  const key = req.mode === "navigate" && !u.pathname.endsWith("/changes.html") ? "index.html" : req;
   e.respondWith(caches.open(CACHE).then(async c => {
     const hit = await c.match(key, { ignoreSearch: req.mode === "navigate" });
     const net = fetch(req).then(r => { if (r && (r.ok || r.type === "opaque")) c.put(key, r.clone()); return r; }).catch(() => null);
