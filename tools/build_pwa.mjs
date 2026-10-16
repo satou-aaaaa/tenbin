@@ -19,14 +19,33 @@ const head = `<!doctype html>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}</style>
-<script>window.TENBIN_PWA = true;</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "${VER}";</script>
 </head><body>
 `;
 const tail = `
 <p style="text-align:center;margin:16px 0 24px;font:13px system-ui,sans-serif"><a href="changes.html" style="color:#cfe3d9">更新情報</a></p>
+<div id="tenbin-update" role="status" style="display:none;position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:2147483647;max-width:calc(100% - 32px);gap:12px;align-items:center;padding:10px 14px;border-radius:10px;background:#f4ecd4;color:#14302a;box-shadow:0 4px 16px rgba(0,0,0,.35);font:14px/1.4 system-ui,sans-serif">
+<span>新しい版があります。区切りのよいところで更新してください。</span>
+<button type="button" id="tenbin-update-go" style="font:inherit;font-weight:bold;padding:6px 12px;border:0;border-radius:6px;background:#14302a;color:#f4ecd4;cursor:pointer">更新</button>
+<button type="button" id="tenbin-update-x" aria-label="閉じる" style="font:inherit;padding:6px 8px;border:0;background:none;color:#14302a;cursor:pointer">×</button>
+</div>
 <script>
+// Service Worker の登録と、新しい版の案内。
+// 答案の途中で画面が勝手に入れ替わらないよう、自動では再読み込みしない（「更新」を押したときだけ）。
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
-  addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  const sw = navigator.serviceWorker, bar = document.getElementById("tenbin-update");
+  document.getElementById("tenbin-update-go").onclick = () => location.reload();
+  document.getElementById("tenbin-update-x").onclick = () => { bar.style.display = "none"; };
+  // 新しい SW が有効になったら版を聞き、この画面より新しければ案内を出す
+  sw.addEventListener("message", e => { if (e.data && e.data.version && e.data.version !== window.TENBIN_VER) bar.style.display = "flex"; });
+  sw.addEventListener("controllerchange", () => { if (sw.controller) sw.controller.postMessage("version"); });
+  addEventListener("load", () => sw.register("sw.js").then(reg => {
+    // 開いたままにする人のために、画面に戻ったとき（最短1時間おき）にも新しい版を確かめる
+    let last = Date.now();
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && Date.now() - last > 36e5) { last = Date.now(); reg.update().catch(() => {}); }
+    });
+  }).catch(() => {}));
 }
 </script>
 </body></html>
@@ -44,25 +63,45 @@ fs.writeFileSync(path.join(out, "manifest.webmanifest"), JSON.stringify({
   ],
 }, null, 2));
 fs.writeFileSync(path.join(out, "sw.js"), `// 天秤の書 Service Worker（オフライン用）。版: ${VER}
-const CACHE = "tenbin-${VER}";
+// tools/build_pwa.mjs が作る生成物。直接直さない。
+const VER = "${VER}";
+const CACHE = "tenbin-" + VER;
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"];
-self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
+// HTTP キャッシュの古いファイルを新しい版のキャッシュに入れないよう、cache: "reload" で取り直す
+self.addEventListener("install", e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
+});
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith("tenbin-") && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
-// アプリ本体とフォント: キャッシュをすぐ返し、裏で新しい版を取りに行く（stale-while-revalidate）
+// 画面が版を聞いてきたら答える（新しい版の案内に使う）
+self.addEventListener("message", e => { if (e.data === "version" && e.source) e.source.postMessage({ version: VER }); });
+const offline = () => new Response("オフラインです。一度インターネットにつないで開いてください。", { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } });
 self.addEventListener("fetch", e => {
   const req = e.request; if (req.method !== "GET") return;
   const u = new URL(req.url);
   const font = u.hostname === "fonts.googleapis.com" || u.hostname === "fonts.gstatic.com";
   if (u.origin !== location.origin && !font) return;
-  // 更新情報（changes.html）は別のページなので、アプリ本体に置き換えない
-  const key = req.mode === "navigate" && !u.pathname.endsWith("/changes.html") ? "index.html" : req;
+  if (req.mode === "navigate") {
+    // 画面（index.html・changes.html）: ネットを先に見て、つながらないか4秒で返らないときだけキャッシュを返す（network-first）。
+    // デプロイ後にオンラインで開けば、1回目から新しい版が出る。
+    const key = u.pathname.endsWith("/changes.html") ? req : "index.html";
+    e.respondWith(caches.open(CACHE).then(async c => {
+      const net = fetch(req).then(r => { if (r && r.ok) { const copy = r.clone(); e.waitUntil(c.put(key, copy)); } return r; }).catch(() => null);
+      const late = new Promise(ok => setTimeout(ok, 4000, null));
+      const first = await Promise.race([net, late]);
+      if (first) return first;
+      const hit = await c.match(key, { ignoreSearch: true });
+      return hit || (await net) || offline();
+    }));
+    return;
+  }
+  // アイコン・manifest・フォント: キャッシュをすぐ返し、裏で新しい版を取りに行く（stale-while-revalidate）
   e.respondWith(caches.open(CACHE).then(async c => {
-    const hit = await c.match(key, { ignoreSearch: req.mode === "navigate" });
-    const net = fetch(req).then(r => { if (r && (r.ok || r.type === "opaque")) c.put(key, r.clone()); return r; }).catch(() => null);
+    const hit = await c.match(req);
+    const net = fetch(req).then(r => { if (r && (r.ok || r.type === "opaque")) c.put(req, r.clone()); return r; }).catch(() => null);
     if (hit) { e.waitUntil(net); return hit; }
-    return (await net) || new Response("オフラインです。一度インターネットにつないで開いてください。", { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } });
+    return (await net) || offline();
   }));
 });
 `);
