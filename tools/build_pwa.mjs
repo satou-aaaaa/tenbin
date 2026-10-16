@@ -48,6 +48,63 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
   }).catch(() => {}));
 }
 </script>
+<div id="tenbin-backup" role="status" style="display:none;position:fixed;left:16px;right:16px;margin:0 auto;top:calc(12px + env(safe-area-inset-top));z-index:2147483646;max-width:520px;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-radius:10px;background:#f4ecd4;color:#14302a;box-shadow:0 4px 16px rgba(0,0,0,.35);font:14px/1.4 system-ui,sans-serif">
+<span id="tenbin-backup-msg"></span>
+<button type="button" id="tenbin-backup-go" style="font:inherit;font-weight:bold;padding:6px 12px;border:0;border-radius:6px;background:#14302a;color:#f4ecd4;cursor:pointer">書き出しへ</button>
+<button type="button" id="tenbin-backup-x" style="font:inherit;padding:6px 8px;border:0;background:none;color:#14302a;cursor:pointer;text-decoration:underline">あとで</button>
+</div>
+<script>
+// 記録を消えにくくする（PWA版だけ。claude.ai版には入らない）。
+// 1. 永続ストレージを頼む: 容量が足りないときにブラウザが記録を消す対象から外してもらう。
+//    web.dev の勧めに従い、読み込み直後ではなく最初の操作のときに1回だけ頼む（Firefox は確認を出すため）。
+// 2. バックアップの案内: 書き出したことが無いか、最後の書き出しから14日たったら、目次の画面で上に案内を出す。
+//    「あとで」で3日は出さない。書き出すと消える。
+(() => {
+  const DAY = 864e5, EVERY = 14, SNOOZE = 3;
+  const get = k => { try { return localStorage.getItem(k); } catch { return null; } };
+  const put = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+  const st = navigator.storage;
+  if (st && st.persist && st.persisted) {
+    const ask = () => {
+      removeEventListener("pointerdown", ask, true); removeEventListener("keydown", ask, true);
+      st.persisted().then(p => p || st.persist()).catch(() => {});
+    };
+    addEventListener("pointerdown", ask, true); addEventListener("keydown", ask, true);
+  }
+  const bar = document.getElementById("tenbin-backup"), msg = document.getElementById("tenbin-backup-msg");
+  // 記録が少しでもあるか（何も解いていないうちは案内しない）
+  const hasData = () => { try { const v = JSON.parse(get("roppo-quest-v2") || "{}");
+    return ["cases", "stats", "essays", "drafts", "norms"].some(k => v[k] && Object.keys(v[k]).length); } catch { return false; } };
+  const due = () => {
+    if (Date.now() < Number(get("tenbin-backup-snooze") || 0) || !hasData()) return "";
+    const last = Number(get("tenbin-lastexp") || 0);
+    if (!last) return "記録はこの端末のブラウザの中だけにあります。消えたときのために、書き出して控えを取っておきましょう。";
+    const d = Math.floor((Date.now() - last) / DAY);
+    return d >= EVERY ? "最後に記録を書き出してから" + d + "日たちました。控えを取り直しておきましょう。" : "";
+  };
+  // 書き出しボタンがある画面（目次）のときだけ出す
+  let shown = false;
+  const check = () => {
+    const m = document.getElementById("expBtn") ? due() : "";
+    if (m && msg.textContent !== m) msg.textContent = m; // 同じ文なら触らない（監視が回り続けないように）
+    if (!!m !== shown) { shown = !!m; bar.style.display = m ? "flex" : "none"; }
+  };
+  let queued = false;
+  new MutationObserver(() => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; check(); }); } })
+    .observe(document.body, { childList: true, subtree: true });
+  check();
+  document.addEventListener("click", e => {
+    if (e.target.closest && e.target.closest("#expBtn")) { put("tenbin-lastexp", String(Date.now())); check(); }
+  }, true);
+  document.getElementById("tenbin-backup-go").onclick = () => {
+    const b = document.getElementById("expBtn");
+    // 書き出しボタンを包む折りたたみ（「その他」→「記録の引っ越し」）を全部開く
+    for (let d = b && b.closest("details"); d; d = d.parentElement && d.parentElement.closest("details")) d.open = true;
+    if (b) { b.scrollIntoView({ block: "center", behavior: "smooth" }); b.focus({ preventScroll: true }); }
+  };
+  document.getElementById("tenbin-backup-x").onclick = () => { put("tenbin-backup-snooze", String(Date.now() + SNOOZE * DAY)); check(); };
+})();
+</script>
 </body></html>
 `;
 fs.writeFileSync(path.join(out, "index.html"), head + body + tail);
