@@ -5,12 +5,14 @@
 ## push する前の確認
 
 ```bash
-node tools/build_pwa.mjs <hourei-quest.html> .   # アプリ本体（単体HTML）から作り直す。index.html を手で直さない
-node tools/check.mjs --browser                    # 文法・manifest・ブラウザで開いてエラーが出ないか（CI の Check と同じ）
+npm ci && npx playwright install chromium         # 最初に一度（CHROMIUM_PATH があればそれを使う）
+node tools/build_pwa.mjs <hourei-quest.html> .   # アプリ本体（単体HTML）から作り直す。外側だけ直すなら <hourei-quest.html> の代わりに index.html でよい
+node tools/check.mjs --browser --rebuild          # 文法・manifest・アイコン・SHELL・ブラウザで開く・作り直して同じか（CI の Check と同じ）
 ```
 
 ## 公開
 
+- index.html・sw.js・manifest・アイコンは生成物。手で直さない（Check の作り直し比べで落ちる）。
 - GitHub Pages は `main` を公開する。マージすれば反映される。
 - `changes.html`（更新情報）は Changes ワークフローがマージされた PR の題から作り直す。手で直さない。
   遊ぶ人に見せたくない PR（.github/・qa/・tools/・README・CLAUDE.md だけの変更）は載らない。

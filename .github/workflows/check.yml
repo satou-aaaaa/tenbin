@@ -1,7 +1,8 @@
 name: Check
 
 # 天秤の書（PWA版）の最低限の検査（Claude は使わない）。index.html の中の JS と sw.js の文法、
-# manifest とアイコン、ブラウザ（スマホ・PC の大きさ）で開いて JS のエラーが出ないかを見る。中身は tools/check.mjs。
+# manifest とアイコン（大きさも）、sw.js の SHELL のファイルがそろっているか、ブラウザ（スマホ・PC の大きさ）で開いて
+# JS のエラーが出ないか、/opt に何も無いまっさらな環境で index.html から作り直して生成物と同じになるかを見る。中身は tools/check.mjs。
 # main で失敗すると ci-failure-issue.yml がラベル ci-failure の Issue を立てる（次に成功すれば閉じる）。
 on:
   pull_request:
@@ -26,9 +27,10 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - name: Playwright を入れる
+          cache: npm
+      - name: Playwright を入れる（版は package-lock.json で固定）
         run: |
-          npm install --no-save --no-audit --no-fund playwright@1.63.0
+          npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
       - name: 検査
-        run: node tools/check.mjs --browser
+        run: node tools/check.mjs --browser --rebuild

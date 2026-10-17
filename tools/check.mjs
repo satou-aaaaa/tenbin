@@ -1,8 +1,12 @@
 // 天秤の書（PWA版）の最低限の検査。Claude を使わず CI（.github/workflows/check.yml）で回す。
 // 1. index.html の中の <script> と sw.js の文法  2. manifest.webmanifest が JSON として読めるか
-// 3. ブラウザで開いて、JS のエラーが出ないか・画面に何か描かれるか（--browser のときだけ）
-// 使い方: node tools/check.mjs [--browser]
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
+// 3. sw.js の SHELL（オフライン用に先に取るファイル）が全部あるか・版が index.html と sw.js でそろっているか
+// 4. アイコンの PNG の大きさが manifest の sizes どおりか
+// 5. ブラウザで開いて、JS のエラーが出ないか・画面に何か描かれるか（--browser のときだけ）
+// 6. index.html から作り直して、index.html・sw.js・manifest が今のものと同じか（--rebuild のときだけ）。
+//    違えば、生成物を手で直したか、tools/build_pwa.mjs を直したのに作り直していない。
+// 使い方: node tools/check.mjs [--browser] [--rebuild]
+import { readFileSync, writeFileSync, mkdtempSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -28,13 +32,41 @@ try { execFileSync(process.execPath, ["--check", "sw.js"], { stdio: "pipe" }); o
 catch (e) { ng("sw.js に文法の誤り: " + String(e.stderr).split("\n")[0]); }
 
 // 2. manifest
+let mf = null;
 try {
-  const mf = JSON.parse(readFileSync("manifest.webmanifest", "utf8"));
+  mf = JSON.parse(readFileSync("manifest.webmanifest", "utf8"));
   for (const ic of mf.icons || []) readFileSync(ic.src.replace(/^\.?\//, ""));
+  if (!(mf.icons || []).length) throw new Error("icons が無い");
   ok("manifest.webmanifest とアイコン");
 } catch (e) { ng("manifest.webmanifest かアイコンが読めない: " + e.message); }
 
-// 3. ブラウザで開く
+// 3. SHELL と版
+const sw = readFileSync("sw.js", "utf8");
+const shell = sw.match(/const SHELL = (\[[^\]]*\]);/);
+if (!shell) ng("sw.js に SHELL が見つからない");
+else {
+  const missing = JSON.parse(shell[1]).filter((u) => u !== "./" && !existsSync(u.replace(/^\.?\//, "")));
+  if (missing.length) ng("sw.js の SHELL にあるのにファイルが無い: " + missing.join(", "));
+  else ok("sw.js の SHELL のファイルが全部ある");
+}
+const swVer = (sw.match(/const VER = "(\d{12})";/) || [])[1];
+const htmlVer = (html.match(/window\.TENBIN_VER = "(\d{12})"/) || [])[1];
+if (!swVer || swVer !== htmlVer) ng(`版がそろっていない（index.html: ${htmlVer}・sw.js: ${swVer}）`);
+else ok("版が index.html と sw.js でそろっている（" + swVer + "）");
+
+// 4. アイコンの大きさ（PNG の先頭 IHDR から幅と高さを読む）
+const pngSize = (f) => {
+  const b = readFileSync(f);
+  if (b.readUInt32BE(0) !== 0x89504e47 || b.toString("ascii", 12, 16) !== "IHDR") throw new Error(f + " が PNG でない");
+  return `${b.readUInt32BE(16)}x${b.readUInt32BE(20)}`;
+};
+const wantSizes = [...(mf?.icons || []).map((ic) => [ic.src.replace(/^\.?\//, ""), ic.sizes]), ["apple-touch-icon.png", "180x180"]];
+for (const [f, want] of wantSizes) {
+  try { const got = pngSize(f); if (got === want) ok(`${f} の大きさ ${got}`); else ng(`${f} の大きさが ${got}（${want} のはず）`); }
+  catch (e) { ng(`${f} の大きさを読めない: ${e.message}`); }
+}
+
+// 5. ブラウザで開く
 if (process.argv.includes("--browser")) {
   const { chromium } = await import("playwright");
   const types = { ".html": "text/html", ".js": "text/javascript", ".png": "image/png", ".webmanifest": "application/manifest+json" };
@@ -63,4 +95,17 @@ if (process.argv.includes("--browser")) {
   await browser.close(); server.close();
   if (errors.length) errors.forEach((e) => ng("JS のエラー: " + e)); else ok("JS のエラーなし");
 }
+// 6. 作り直して比べる（版は今の index.html と同じにする。アイコンは Chromium の版で画素が揺れるので比べない）
+if (process.argv.includes("--rebuild") && swVer) {
+  const v = swVer, epoch = Date.UTC(+v.slice(0, 4), +v.slice(4, 6) - 1, +v.slice(6, 8), +v.slice(8, 10), +v.slice(10, 12)) / 1000;
+  const out = mkdtempSync(join(tmpdir(), "tenbin-build-"));
+  try {
+    execFileSync(process.execPath, ["tools/build_pwa.mjs", "index.html", out], { stdio: "pipe", env: { ...process.env, SOURCE_DATE_EPOCH: String(epoch) } });
+    for (const f of ["index.html", "sw.js", "manifest.webmanifest"]) {
+      if (readFileSync(join(out, f), "utf8") === readFileSync(f, "utf8")) ok(`作り直した ${f} が今のものと同じ`);
+      else ng(`作り直した ${f} が今のものと違う。生成物を手で直さず、node tools/build_pwa.mjs <元のHTML> . で作り直す`);
+    }
+  } catch (e) { ng("作り直しに失敗: " + String(e.stderr || e.message).split("\n").slice(0, 5).join(" ")); }
+}
+
 process.exit(bad ? 1 : 0);

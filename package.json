@@ -1,0 +1,14 @@
+{
+  "name": "tenbin-pwa",
+  "private": true,
+  "description": "天秤の書 PWA版の作り直し（tools/build_pwa.mjs）と検査（tools/check.mjs）に使う道具",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node tools/build_pwa.mjs",
+    "check": "node tools/check.mjs --browser"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

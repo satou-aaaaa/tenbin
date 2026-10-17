@@ -1,10 +1,30 @@
-// 使い方: node build_pwa.mjs <hourei-quest.html> <出力フォルダ>
+// 使い方: node tools/build_pwa.mjs <元のHTML> <出力フォルダ>
+//   元のHTML: アプリ本体（claude.ai 版の単体HTML hourei-quest.html）か、前に作った index.html。
+//             index.html を渡すと、本体の部分だけを取り出して包み直す（元のHTMLが手元に無くても作り直せる）。
+//   版（VER）: ふだんは今の時刻。SOURCE_DATE_EPOCH（秒）があればその時刻にする（同じ入力から同じ出力を作るため）。
+//   ブラウザ: アイコンの PNG を描くのに Playwright の Chromium を使う。CHROMIUM_PATH があればそれを使う。
+// 作るもの: index.html・manifest.webmanifest・sw.js・アイコン4つ（どれも生成物。直接直さない）
 import fs from "fs"; import path from "path";
-import { chromium } from "/opt/node22/lib/node_modules/playwright/index.mjs";
+import { chromium } from "playwright";
 const [src, out] = process.argv.slice(2);
+if (!src || !out) { console.error("使い方: node tools/build_pwa.mjs <元のHTML> <出力フォルダ>"); process.exit(2); }
+const epoch = process.env.SOURCE_DATE_EPOCH;
+if (epoch && !/^\d+$/.test(epoch)) { console.error("SOURCE_DATE_EPOCH は秒の整数で指定する"); process.exit(2); }
+const VER = new Date(epoch ? Number(epoch) * 1000 : Date.now()).toISOString().slice(0, 16).replace(/[-:T]/g, "");
+// 外側（head と tail）の境目。tail の1行目（TAIL_START）を変えるときは、前に作った index.html からも
+// 取り出せるよう、前の1行目を TAIL_STARTS に残す。
+const HEAD_END = "</head><body>\n";
+const TAIL_START = "\n<p style=\"text-align:center;margin:16px 0 24px;font:13px system-ui,sans-serif\"><a href=\"changes.html\"";
+const TAIL_STARTS = [TAIL_START];
+const unwrap = (html) => {
+  if (!html.includes("window.TENBIN_PWA = true")) return html; // アプリ本体そのもの
+  const a = html.indexOf(HEAD_END);
+  const ends = TAIL_STARTS.map((t) => html.lastIndexOf(t)).filter((i) => i > a);
+  if (a < 0 || !ends.length) { console.error("index.html から本体の部分を取り出せない（外側の形が変わっている）"); process.exit(1); }
+  return html.slice(a + HEAD_END.length, Math.min(...ends));
+};
+const body = unwrap(fs.readFileSync(src, "utf8"));
 fs.mkdirSync(out, { recursive: true });
-const VER = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
-const body = fs.readFileSync(src, "utf8");
 const head = `<!doctype html>
 <html lang="ja"><head>
 <meta charset="utf-8">
@@ -172,7 +192,7 @@ ${pad > .8 ? `<rect x="6" y="6" width="88" height="88" rx="6" fill="none" stroke
 </g>
 <g fill="#d4b25a"><circle cx="50" cy="21" r="4"/><path d="M15 56 H41 A13 9 0 0 1 15 56 Z"/><path d="M59 56 H85 A13 9 0 0 1 59 56 Z"/></g>
 </g></svg>`;
-const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+const b = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const pg = await b.newPage();
 for (const [f, size, pad] of [["icon-192.png", 192, 1], ["icon-512.png", 512, 1], ["apple-touch-icon.png", 180, 1], ["icon-maskable-512.png", 512, .72]]) {
   await pg.setViewportSize({ width: size, height: size });
