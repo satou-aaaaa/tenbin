@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610161344";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610181346";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1720,6 +1720,16 @@ const CITES = [
  "note": "この事件自体では、権限の不行使は違法でないとされた"
 },
 {
+ "date": "昭和45年8月20日",
+ "name": "高知落石事件（道路の管理の瑕疵）",
+ "court": "最高裁判所第一小法廷",
+ "form": "判決",
+ "no": "昭和42年(オ)第921号",
+ "report": "民集24巻9号1268頁",
+ "url": "https://www.courts.go.jp/hanrei/54103/detail2/index.html",
+ "note": ""
+},
+{
  "date": "昭和33年5月28日",
  "name": "練馬事件（共謀共同正犯）",
  "court": "最高裁判所大法廷",
@@ -2660,6 +2670,30 @@ const RONBUN = [
     k: ["権限の趣旨・目的に照らし、不行使が著しく不合理と認められるときに違法になると書いた", "被害の重大性、危険の切迫と予見可能性、結果回避の可能性などを使ってあてはめた"],
   },
   {
+    id: "r-rakuseki", title: "落石注意の看板", label: "論文演習・基本", kamoku: "行政法",
+    story: [
+      "Y県が管理する県道のうち、山の斜面に沿って走る区間では、以前から斜面の上から石が落ちてくることがあった。",
+      "ある日、Xがこの区間を車で走っていたところ、斜面の上部から直径1メートルほどの岩が落ちてきて車を直撃し、Xは大けがをした。Xは、道路の管理に問題があったとして、Y県に損害賠償を求めている。Y県は「担当者に落ち度はなく、防護柵を作る予算もなかった」と反論している。",
+    ],
+    facts: [
+      { fact: "この区間では、これまでに何度も落石があり、斜面の土が崩れたこともあった", key: true },
+      { fact: "Y県は「落石注意」の標識を立てただけで、防護柵や金網の設置、斜面の点検と危ない岩の除去、危険なときの通行止めなどはしていなかった", key: true },
+      { fact: "Y県は、岩がいつ落ちるかを予測することはできず、担当者に落ち度はないと主張している", key: true },
+      { fact: "防護柵を作るには多額の費用がかかり、Y県はその予算を用意するのに困っていた", key: true },
+      { fact: "Xは、仕事でこの県道をよく通っていた", key: false },
+      { fact: "この県道は、観光地へ向かう道でもあった", key: false },
+    ],
+    toi: "Xは、Y県に対して、国家賠償法2条1項にもとづく損害賠償を求めることができるか。",
+    m: [
+      "国家賠償法2条1項は、道路などの公の営造物の設置または管理に瑕疵があったために他人に損害を生じたときは、国または公共団体が賠償責任を負うと定める。本件の県道はY県が管理する公の営造物であるから、その管理に「瑕疵」があったといえるか、また、Y県が主張するように担当者に落ち度がなく、予算の制約もあった場合にも責任を負うかが問題となる。",
+      "営造物の設置または管理の瑕疵とは、営造物が通常有すべき安全性を欠いていることをいい、これにもとづく国および公共団体の賠償責任については、その過失の存在を必要としない（最判昭和45年8月20日）。また、安全のための措置に多額の費用がかかり、予算の手当てに困るとしても、それによって直ちに賠償責任を免れることはできない（同判決）。",
+      "本件の区間では、これまでに何度も落石があり、斜面の土が崩れたこともあったから、通行する車に落石が当たる危険があった。それにもかかわらず、Y県は「落石注意」の標識を立てただけで、防護柵や金網の設置、斜面の点検と危ない岩の除去、危険なときの通行止めなどの措置をとっていなかった。そうすると、本件の県道は、通行の安全性の確保において欠け、通常有すべき安全性を欠いていたといえるから、その管理に瑕疵があった。Y県は、岩がいつ落ちるかを予測できず担当者に落ち度はないと主張するが、2条1項の責任には過失は必要でないから、この主張は責任を否定する理由にならない。また、防護柵を作る予算を用意するのに困っていたとしても、それだけで責任を免れることはできない。そして、Xの大けがは、この区間で落ちてきた岩が車を直撃したことによるものであり、管理の瑕疵によって生じた損害である。",
+      "よって、Xは、Y県に対して、国家賠償法2条1項にもとづく損害賠償を求めることができる。",
+    ],
+    p: "道路の管理に「瑕疵」（国家賠償法2条1項）があったかを問題にした",
+    k: ["瑕疵とは、営造物が通常有すべき安全性を欠いていることをいうと書いた", "2条1項の責任には過失が必要でなく、予算の制約だけでは責任を免れないと書いた"],
+  },
+  {
     id: "r-teito", title: "競売を妨げる占有者", label: "論文演習・基本", kamoku: "民法",
     story: [
       "X銀行は、Aに融資をし、A所有のビルに抵当権の設定を受けた。Aが返済できなくなったため、Xは抵当権を実行し、ビルの競売を申し立てた。",
@@ -3308,7 +3342,7 @@ const KAMOKU = ["憲法", "行政法", "民法", "商法", "民事訴訟法", "�
 // 科目の中の分野（依頼一覧の見出し）。ここにない問題は科目の末尾に並ぶ
 const BUNYA = {
   "憲法": [["表現・信教の自由", ["bira", "d-kenpo", "r-sashitome", "r-seikyo"]], ["経済的自由・財産権", ["yakkyoku", "r-shinrin"]], ["平等・選挙権・国家賠償", ["souzoku", "r-kokuseki", "touhyou", "yubin"]]],
-  "行政法": [["処分・行政指導と裁量", ["d-gyosei", "r-sairyo", "r-shido"]], ["行政訴訟", ["r-kukaku", "r-genkoku"]], ["国家賠償", ["r-kisei"]]],
+  "行政法": [["処分・行政指導と裁量", ["d-gyosei", "r-sairyo", "r-shido"]], ["行政訴訟", ["r-kukaku", "r-genkoku"]], ["国家賠償", ["r-kisei", "r-rakuseki"]]],
   "民法": [["総則", ["esute", "d-minpo", "r-ruisui", "unazuki"]], ["物権", ["r-haishin", "e", "r-kyoyu", "r-teito"]], ["債権（契約）", ["r-anzen", "r-shinrai"]], ["債権（不法行為）", ["yuketsu"]], ["相続", ["r-souzoku", "r-yokin"]]],
   "商法": [["株主総会", ["r-shoshu", "r-tashashoshu"]], ["取締役・取締役会", ["r-kabu", "r-daisansha", "d-shoho"]], ["株式の発行", ["r-shinkabu"]]],
   "民事訴訟法": [["訴えと判決の効力", ["r-ichibu", "d-minso", "r-kaitori"]], ["審理（弁論主義）", ["r-benron"]], ["証拠", ["r-jihaku", "r-nidan", "r-ringi"]]],
@@ -3772,6 +3806,8 @@ function writeCompare(id, meta = { time: null, hints: 0 }) {
     S.miss[id] = miss; schedule("e:" + id, ratio >= 0.7);
     const note = completeDay();
     const msg = document.getElementById("msg");
+    // 結果はふつうの欄として出す（下に貼り付く横並びのままだと、スマホで文字が縦に潰れる）
+    msg.classList.remove("stickybar");
     msg.innerHTML = `<p class="line good" style="font-size:20px">意見書の評価 ${rating(ratio)}</p>
       <p class="note tnum">${total}の観点のうち ${n}つができていました。${meta.time ? `（${meta.time}・ヒント${meta.hints}回）` : ""}</p>
       <p class="streak-inline"><span class="streak-num tnum">${S.streak.count}</span> 日連続で学習中</p>${note ? `<p class="note">${note}</p>` : ""}
