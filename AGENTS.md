@@ -4,10 +4,17 @@
 
 天秤の書（司法試験の論文式を練習する学習ゲーム）の PWA 版。https://satou-aaaaa.github.io/tenbin/
 
+## 準備（最初に一度）
+
+```bash
+bash scripts/setup.sh   # Node.js（版は .nvmrc）を確かめ、依存とブラウザを入れる。何度実行してもよい（Windows は Git Bash で）
+```
+
+Claude Code のクラウドセッションでは `.claude/settings.json` のフックが自動で実行する（ブラウザは CHROMIUM_PATH で入っているものを使う）。
+
 ## push する前の確認
 
 ```bash
-npm ci && npx playwright install chromium         # 最初に一度（CHROMIUM_PATH があればそれを使う）
 node tools/build_pwa.mjs <hourei-quest.html> .   # アプリ本体（単体HTML）から作り直す。外側だけ直すなら <hourei-quest.html> の代わりに index.html でよい
 node tools/check.mjs --browser --rebuild          # 文法・manifest・アイコン・SHELL・ブラウザで開く・作り直して同じか（CI の Check と同じ）
 ```
