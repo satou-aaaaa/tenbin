@@ -11,15 +11,14 @@
 
 ### 前提
 
-- Node.js 22 以上と npm
-- 最初に一度だけ、道具（Playwright と Chromium）を入れます。版は `package-lock.json` で固定しています。
+- Node.js 22 以上と npm（版は `.nvmrc`）
+- 最初に一度だけ、道具（Playwright と Chromium）を入れます。版は `package-lock.json` で固定しています。何度実行してもかまいません（Windows は Git Bash で）。
 
 ```
-npm ci
-npx playwright install chromium
+bash scripts/setup.sh
 ```
 
-すでに Chromium がある環境では、`CHROMIUM_PATH=<chromium の場所>` を付けるとそれを使います。
+すでに Chromium がある環境では、`CHROMIUM_PATH=<chromium の場所>` を付けるとそれを使います（Claude Code のクラウドセッションでは setup.sh が自動で設定します）。
 
 ### 作り直す
 
