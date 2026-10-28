@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610281835";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610281843";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -97,6 +97,10 @@ details.jbart > summary { cursor: pointer; }
 .gymr th,.gymr td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left;font-size:14px}
 .gymr td.ok{color:var(--hit);font-weight:700}
 .gymr td.ng{color:var(--miss);font-weight:700}
+.gyleft{margin:0 0 6px;font-family:var(--font-pixel);color:var(--gold);font-size:15px}
+.gyleft b{font-size:26px;margin:0 4px}
+/* 解説と条文が長いので、「つぎへ」を画面の下に貼りつける */
+#msg:has(.gydet) > .row:last-child{position:sticky;bottom:0;margin:0 -16px -14px;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:linear-gradient(to bottom,transparent,var(--window) 30%)}
 .others .fsw { justify-content: flex-start; margin: 8px 0; }
 .others details.win { border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; padding: 0; box-shadow: none; margin: 0; }
 .kname { white-space: nowrap; }
@@ -5462,8 +5466,12 @@ function drillEnd(d) {
 }
 
 // 根拠条文の本文（GY_JOBUN）と、くわしい解説（GY_DETAIL）を出す
-const gyDetail = q => { const d = (typeof GY_DETAIL !== "undefined" && GY_DETAIL[q.id]) || [];
-  return d.length ? `<div class="gydet"><h4>くわしい解説</h4><ul>${d.map(([k, t]) => `<li><b>${esc(k)}</b>${esc(t)}</li>`).join("")}</ul></div>` : ""; };
+// 5肢択一は選択肢を並べ替えて出すので、解説の「肢3」などは画面の番号に直す（perm[画面の位置] = もとの番号-1）
+const gyDetail = (q, perm) => { const d = (typeof GY_DETAIL !== "undefined" && GY_DETAIL[q.id]) || [];
+  const fix = t => perm ? t.replace(/肢([1-5])/g, (_, n) => `肢${perm.indexOf(+n - 1) + 1}`) : t;
+  return d.length ? `<div class="gydet"><h4>くわしい解説</h4><ul>${d.map(([k, t]) => `<li><b>${esc(k)}</b>${esc(fix(t))}</li>`).join("")}</ul></div>` : ""; };
+// 本試験までの日数
+const gyDaysLeft = () => { const d = new Date(2026, 10, 8), n = new Date(); n.setHours(0, 0, 0, 0); return Math.round((d - n) / 86400000); };
 const gyJobun = q => {
   const refs = (typeof GY_JB !== "undefined" && GY_JB[q.id]) || []; if (!refs.length) return "";
   const line = l => { const m = /^(-+) (.*)$/.exec(l); return m ? `<span class="jbi jbi${m[1].length}">${esc(m[2])}</span>` : esc(l); };
@@ -5504,6 +5512,7 @@ function showGyosei() {
   $app.innerHTML = `
     <div class="chapter-head">行政書士試験の対策</div>
     <section class="win today">
+      ${gyDaysLeft() >= 0 ? `<p class="gyleft tnum">${gyDaysLeft() ? `本試験まで あと<b>${gyDaysLeft()}</b>日` : "今日が本試験です"}</p>` : ""}
       <p class="note" style="margin:0">本試験と同じ3つの形式で、配点の大きい行政法・民法を中心に、憲法・商法・基礎法学・基礎知識も練習します。本試験は${GY_EXAM.day}、出題は${GY_EXAM.base}現在の法令です。</p>
       ${due.length ? `<button class="btn-gold big" id="gyDue">復習 ${due.length}問を解く ▶</button>` : `<button class="btn-gold big" id="gyMix">5肢択一を10問解く ▶</button>`}
     </section>
@@ -5557,7 +5566,7 @@ function gyRun(d) {
       msg.innerHTML = `<p class="line ${ok ? "good" : "bad"}">${ok ? "せいかい！" : "ざんねん…"}</p>
         <p class="explain"><b>正解：${v.a + 1}</b>　${esc(q.e)}</p>
         <ol class="gyex">${perm.map(i => { const t = /誤っている/.test(q.q) ? i !== q.a : i === q.a; return `<li class="${i === q.a ? "ok" : ""}"><b>${t ? "○" : "×"}</b> ${esc(q.ex[i])}</li>`; }).join("")}</ol>
-        <p class="article">根拠：${esc(q.art)}</p>${gyDetail(q)}${gyJobun(q)}${citeList(q.art)}`;
+        <p class="article">根拠：${esc(q.art)}</p>${gyDetail(q, perm)}${gyJobun(q)}${citeList(q.art)}`;
       showNext(msg, last, go); });
   } else if (k === "tashi") {
     const order = shuffle(q.words.map((_, i) => i)), labels = "アイウエ";
