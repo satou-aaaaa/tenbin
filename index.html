@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610281528";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610281835";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -89,6 +89,14 @@ details.jbart > summary { cursor: pointer; }
 .jbi { display: inline-block; padding-left: 1em; text-indent: -1em; margin-left: 1em; }
 .jbi2 { margin-left: 2em; }
 .jbsrc { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.gymock h3{margin:0 0 6px;font-size:17px}
+.gymh{margin:10px 0 0;padding-left:18px;font-size:13px;color:var(--muted)}
+.gytimer{margin-left:auto}
+.gytimer.over{color:var(--miss);border-color:var(--miss)}
+.gymr{width:100%;border-collapse:collapse;margin:8px 0}
+.gymr th,.gymr td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left;font-size:14px}
+.gymr td.ok{color:var(--hit);font-weight:700}
+.gymr td.ng{color:var(--miss);font-weight:700}
 .others .fsw { justify-content: flex-start; margin: 8px 0; }
 .others details.win { border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; padding: 0; box-shadow: none; margin: 0; }
 .kname { white-space: nowrap; }
@@ -4540,7 +4548,7 @@ const GY_KIJI = [
     e:"無権代理の相手方は、本人に対し、相当の期間を定めて、追認するかどうかを確答すべき旨を催告できます（114条前段）。期間内に確答がなければ、追認を「拒絶」したものとみなされます（同条後段）。「追認したものとみなす」と書くのが典型の誤りです。", art:"民法113条1項・114条" },
 ];
 
-// くわしい解説（問題id → [[見出し, 本文], …]）。5肢・多肢は「考え方・ひっかけ所・関連知識」、記述は「書き方・落としやすい点・関連知識」。
+// くわしい解説（問題id → [[見出し, 本文], …]）。5肢・多肢は「考え方・ひっかけ所・関連知識」、記述は「書き方・落としやすい点・関連知識」。build_detail.py で作る。
 const GY_DETAIL = {
   "gy-g1":[["考え方", "申請に対する処分は「受け付けたら審査する」流れで考えます。到達→遅滞なく審査開始（7条）→審査基準に照らして判断（5条）→拒否なら理由を示す（8条）。この順に肢を当てはめると、正しい肢が見えます。"], ["ひっかけ所", "「定めなければならない（義務）」と「定めるよう努める（努力義務）」の入れ替え。審査基準は義務、標準処理期間は努力義務です。肢1・肢2は、この二つを逆にしたひっかけです。"], ["関連知識", "申請の拒否は、申請者にとって不利益でも「不利益処分」には当たりません（2条4号ロ）。そのため聴聞も弁明の機会の付与も要らず、その代わりに理由の提示（8条）で手続を守ります。"]],
   "gy-g2":[["考え方", "不利益処分は「基準を定める→意見陳述（聴聞か弁明）→理由を示して処分」の流れです。聴聞の当事者には、資料の閲覧を求める権利が保障されています（18条1項）。"], ["ひっかけ所", "「特に理由がなくても拒める」のように、手続上の権利を弱める言い方は誤りを疑います。閲覧を拒めるのは「第三者の利益を害するおそれがあるときその他正当な理由があるとき」だけです。"], ["関連知識", "処分基準は「定め、かつ、公にしておくよう努める」努力義務（12条1項）。審査基準（5条、義務）との違いがセットで出ます。弁明は書面が原則、聴聞は口頭での審理が原則です。"]],
@@ -5499,6 +5507,12 @@ function showGyosei() {
       <p class="note" style="margin:0">本試験と同じ3つの形式で、配点の大きい行政法・民法を中心に、憲法・商法・基礎法学・基礎知識も練習します。本試験は${GY_EXAM.day}、出題は${GY_EXAM.base}現在の法令です。</p>
       ${due.length ? `<button class="btn-gold big" id="gyDue">復習 ${due.length}問を解く ▶</button>` : `<button class="btn-gold big" id="gyMix">5肢択一を10問解く ▶</button>`}
     </section>
+    <section class="win gymock">
+      <h3>ミニ模試（本番の3分の1）</h3>
+      <p class="note">本番と同じ順・同じ配点の比率で出し、時間を計ります（1問3分の目安。解説を読む時間は数えません）。最後に法令等・基礎知識・合計の合格ラインで判定します。</p>
+      <button class="btn-gold" id="gyMock">ミニ模試を始める ▶</button>
+      ${(S.gyMock || []).length ? `<ul class="gymh tnum">${S.gyMock.slice(-5).reverse().map(r => `<li>${esc(r.day)}　${r.pass ? "合格ライン" : "あと少し"}　合計${r.tot}/${r.max}点（法令${r.law}・基礎知識${r.kiso}）</li>`).join("")}</ul>` : ""}
+    </section>
     <h2 class="section-label">形式と科目から選ぶ</h2>
     <section class="wlist">${trapRow()}${GY_SUBS.filter(s => GY_GO.some(q => q.sub === s)).map(s => row("go", s)).join("")}${row("tashi")}${GY_SUBS.filter(s => GY_KIJI.some(q => q.sub === s)).map(s => row("kiji", s)).join("")}</section>
     <details class="win">
@@ -5518,6 +5532,7 @@ function showGyosei() {
     const unseen = shuffle(l.filter(q => !S.srs[q.id])), seen = l.filter(q => S.srs[q.id]).sort((a, c) => S.srs[a.id].due - S.srs[c.id].due);
     gyRun({ deck: [...unseen, ...seen].slice(0, 10), i: 0, right: 0, title: trap ? "ひっかけ・間違えやすい問題" : `${GY_KIND_NAME[b.dataset.gk]}${b.dataset.gs ? `（${b.dataset.gs}）` : ""}` }); });
   const gd = document.getElementById("gyDue"); if (gd) gd.onclick = () => gyRun({ deck: due.slice(0, 10), i: 0, right: 0, title: "行政書士の復習" });
+  document.getElementById("gyMock").onclick = () => gyRun(gyMockDeck());
   const gm = document.getElementById("gyMix"); if (gm) gm.onclick = () => { const l = GY_GO, unseen = shuffle(l.filter(q => !S.srs[q.id])), seen = shuffle(l.filter(q => S.srs[q.id]));
     gyRun({ deck: [...unseen, ...seen].slice(0, 10), i: 0, right: 0, title: "5肢択一" }); };
   toTop();
@@ -5527,8 +5542,9 @@ function gyRun(d) {
   const q = d.deck[d.i], k = gyKind(q);
   const head = `<div class="chapter-head">${esc(d.title)}</div>
     <div class="dprog" aria-hidden="true"><i style="width:${d.i / d.deck.length * 100}%"></i></div>
-    <div class="qhead"><span class="tag">${GY_KIND_NAME[k]}</span>${q.trap ? `<span class="tag">間違えやすい</span>` : ""}<span class="tag" style="border-color:var(--muted);color:var(--muted)">${esc(q.sub)}・${esc(q.topic)}</span><span class="qcount tnum">${d.i + 1}/${d.deck.length}</span></div>`;
-  const next = ok => { record(q, ok); if (ok) d.right++; };
+    <div class="qhead"><span class="tag">${GY_KIND_NAME[k]}</span>${q.trap ? `<span class="tag">間違えやすい</span>` : ""}<span class="tag" style="border-color:var(--muted);color:var(--muted)">${esc(q.sub)}・${esc(q.topic)}</span>${d.mock ? `<span class="tag tnum gytimer" id="gyTimer" role="timer"></span>` : ""}<span class="qcount tnum">${d.i + 1}/${d.deck.length}</span></div>`;
+  const stop = () => { const m = d.mock; if (m && m.on) { m.used += Date.now() - m.t0; m.on = false; } };
+  const next = (ok, pts) => { stop(); record(q, ok); if (ok) d.right++; if (d.mock) d.mock.pts[q.sub === "基礎知識" ? "kiso" : "law"] += pts; };
   const go = () => { d.i++; gyRun(d); };
   const last = d.i + 1 >= d.deck.length ? "結果を見る" : "つぎへ ▶";
   if (k === "go") {
@@ -5536,7 +5552,7 @@ function gyRun(d) {
     $app.innerHTML = `${head}<section class="win">${questionHTML(v, [], "").replace(/<div class="qhead">[\s\S]*?<\/div>/, "")}</section>
       <section class="win msg" id="msg" hidden></section><div class="row"><button id="quit">やめる</button></div>`;
     document.getElementById("quit").onclick = showGyosei; toTop();
-    bindQuiz(v, ok => { next(ok);
+    bindQuiz(v, ok => { next(ok, ok ? 4 : 0);
       const msg = document.getElementById("msg"); msg.hidden = false;
       msg.innerHTML = `<p class="line ${ok ? "good" : "bad"}">${ok ? "せいかい！" : "ざんねん…"}</p>
         <p class="explain"><b>正解：${v.a + 1}</b>　${esc(q.e)}</p>
@@ -5557,7 +5573,7 @@ function gyRun(d) {
       if (sels.some(s => s.value === "")) { const m = document.getElementById("msg"); m.hidden = false; m.innerHTML = `<p class="line bad">まだ選んでいない空欄があります。4つとも選んでください。</p>`; return; }
       sels.forEach(s => s.disabled = true); document.getElementById("gyCheck").disabled = true;
       sels.forEach((s, j) => { n += +s.value === q.ans[j] ? 1 : 0; s.parentElement.classList.add(+s.value === q.ans[j] && s.value !== "" ? "right" : "wrong"); });
-      next(n === 4);
+      next(n === 4, n * 2);
       const msg = document.getElementById("msg"); msg.hidden = false;
       msg.innerHTML = `<p class="line ${n === 4 ? "good" : "bad"}">${n}/4 正解（${n * 2}点/8点）</p>
         <p class="explain"><b>正解：</b>${q.ans.map((a, j) => `［${labels[j]}］${esc(q.words[a])}`).join("　")}</p>
@@ -5576,7 +5592,7 @@ function gyRun(d) {
     const upd = () => { const L = len(ta.value); cnt.textContent = `${L}字（目安は40字前後。本試験の解答欄は45字）`; cnt.style.color = L > 45 ? "var(--miss)" : ""; };
     ta.oninput = () => { upd(); S.gyo[q.id] = { ...(S.gyo[q.id] || {}), text: ta.value }; save(); }; upd();
     document.getElementById("gyShow").onclick = () => {
-      ta.readOnly = true; document.getElementById("gyShow").disabled = true;
+      ta.readOnly = true; document.getElementById("gyShow").disabled = true; stop();
       const msg = document.getElementById("msg"); msg.hidden = false;
       msg.innerHTML = `<div class="cmp"><h4>あなたの解答（${len(ta.value)}字）</h4><div class="mine">${esc(ta.value) || "（未記入）"}</div>
         <h4>模範解答（${len(q.model)}字）</h4><div class="model">${esc(q.model)}</div></div>
@@ -5585,9 +5601,40 @@ function gyRun(d) {
         <p class="explain">${esc(q.e)}</p><p class="article">根拠：${esc(q.art)}</p>${gyDetail(q)}${gyJobun(q)}${citeList(q.art)}`;
       const pts = () => [...msg.querySelectorAll("input[data-p]")].filter(x => x.checked).reduce((s, x) => s + +x.dataset.p, 0);
       msg.querySelectorAll("input[data-p]").forEach(x => x.onchange = () => { document.getElementById("gyPts").textContent = `自己採点：${pts()}点/20点`; });
-      showNext(msg, last, () => { const p = pts(); S.gyo[q.id] = { text: "", best: Math.max(p, (S.gyo[q.id] || {}).best || 0) }; next(p >= 14); go(); });
+      showNext(msg, last, () => { const p = pts(); S.gyo[q.id] = { text: "", best: Math.max(p, (S.gyo[q.id] || {}).best || 0) }; next(p >= 14, p); go(); });
     };
   }
+  if (d.mock) gyMockTimer(d);
+}
+// ミニ模試：本番（法令5肢40・多肢3・記述3・基礎知識14）のおよそ3分の1を本番の順に並べる
+const GY_MOCK = [["go", "基礎法学", 1], ["go", "憲法", 2], ["go", "行政法", 6], ["go", "民法", 3], ["go", "商法", 1], ["tashi", "", 1], ["kiji", "", 1], ["go", "基礎知識", 5]];
+function gyMockDeck() {
+  const deck = [];
+  GY_MOCK.forEach(([k, sub, n]) => deck.push(...shuffle(GY_ALL.filter(q => gyKind(q) === k && (!sub || q.sub === sub))).slice(0, n)));
+  const pt = q => ({ go: 4, tashi: 8, kiji: 20 })[gyKind(q)];
+  const max = { law: 0, kiso: 0 }; deck.forEach(q => max[q.sub === "基礎知識" ? "kiso" : "law"] += pt(q));
+  return { deck, i: 0, right: 0, title: "ミニ模試", mock: { limit: deck.length * 3 * 60000, used: 0, on: false, t0: 0, pts: { law: 0, kiso: 0 }, max } };
+}
+function gyMockTimer(d) {
+  const m = d.mock; m.t0 = Date.now(); m.on = true; clearInterval(m.iv);
+  const tick = () => { const el = document.getElementById("gyTimer"); if (!el) { clearInterval(m.iv); return; }
+    const left = m.limit - m.used - (m.on ? Date.now() - m.t0 : 0), a = Math.abs(left);
+    el.textContent = `${left < 0 ? "時間切れ +" : "残り "}${Math.floor(a / 60000)}:${String(Math.floor(a / 1000) % 60).padStart(2, "0")}`;
+    el.classList.toggle("over", left < 0); };
+  tick(); m.iv = setInterval(tick, 1000);
+}
+function gyMockResult(d) {
+  const m = d.mock; clearInterval(m.iv);
+  const tot = m.pts.law + m.pts.kiso, max = m.max.law + m.max.kiso;
+  const need = { law: Math.ceil(m.max.law * 122 / 244), kiso: Math.ceil(m.max.kiso * 24 / 56), tot: Math.ceil(max * 180 / 300) };
+  const okL = m.pts.law >= need.law, okK = m.pts.kiso >= need.kiso, okT = tot >= need.tot, pass = okL && okK && okT;
+  const used = Math.round(m.used / 60000);
+  S.gyMock = [...(S.gyMock || []), { day: new Date().toLocaleDateString("ja-JP"), law: m.pts.law, kiso: m.pts.kiso, tot, max, pass }].slice(-20); save();
+  const row = (name, v, mx, nd, ok) => `<tr><th>${name}</th><td>${v}/${mx}点</td><td>${nd}点以上</td><td class="${ok ? "ok" : "ng"}">${ok ? "○" : "×"}</td></tr>`;
+  return `<p class="line ${pass ? "good" : "bad"}" style="font-size:20px">${pass ? "合格ラインです！" : "合格ラインまであと少し"}</p>
+    <table class="gymr tnum"><tr><th></th><th>得点</th><th>合格ライン</th><th></th></tr>
+      ${row("法令等", m.pts.law, m.max.law, need.law, okL)}${row("基礎知識", m.pts.kiso, m.max.kiso, need.kiso, okK)}${row("合計", tot, max, need.tot, okT)}</table>
+    <p class="note tnum">解答にかかった時間：${used}分（目安${Math.round(m.limit / 60000)}分）。合格ラインは本番の基準（法令等122/244点・基礎知識24/56点・合計180/300点）を同じ割合にしたものです。${okK ? "" : "基礎知識が足りないと、ほかが満点でも不合格です。"}</p>`;
 }
 function gyEnd(d) {
   quiz = null;
@@ -5595,7 +5642,7 @@ function gyEnd(d) {
   $app.innerHTML = `
     <div class="chapter-head">${esc(d.title)}</div>
     <section class="win msg">
-      <p class="line good" style="font-size:20px">おつかれさま！</p>
+      ${d.mock ? gyMockResult(d) : `<p class="line good" style="font-size:20px">おつかれさま！</p>`}
       <p class="tnum">${d.deck.length}問中 ${d.right}問できました</p>
       <p class="streak-inline"><span class="streak-num tnum">${S.streak.count}</span> 日連続で学習中</p>
       ${note ? `<p class="note">${note}</p>` : ""}
