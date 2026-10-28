@@ -105,6 +105,16 @@ if (process.argv.includes("--rebuild") && swVer) {
       if (readFileSync(join(out, f), "utf8") === readFileSync(f, "utf8")) ok(`作り直した ${f} が今のものと同じ`);
       else ng(`作り直した ${f} が今のものと違う。生成物を手で直さず、node tools/build_pwa.mjs <元のHTML> . で作り直す`);
     }
+    // 本体（claude.ai 版の単体HTML）からも作れるか。本体だけを取り出したファイルから作り直し、同じ index.html になるか確かめる
+    const html = readFileSync("index.html", "utf8"), a = html.indexOf("</head><body>\n"), z = html.lastIndexOf('\n<p style="text-align:center;margin:16px 0 24px;font:13px system-ui,sans-serif"><a href="changes.html"');
+    if (a < 0 || z < a) ng("index.html から本体を取り出せない（check.mjs の境目を build_pwa.mjs に合わせる）");
+    else {
+      const src = join(out, "app.html"), out2 = join(out, "from-app");
+      writeFileSync(src, html.slice(a + "</head><body>\n".length, z));
+      execFileSync(process.execPath, ["tools/build_pwa.mjs", src, out2], { stdio: "pipe", env: { ...process.env, SOURCE_DATE_EPOCH: String(epoch) } });
+      if (readFileSync(join(out2, "index.html"), "utf8") === html) ok("本体のHTMLから作り直しても同じ index.html になる");
+      else ng("本体のHTMLから作り直すと index.html が変わる（build_pwa.mjs が本体を index.html と取り違えていないか）");
+    }
   } catch (e) { ng("作り直しに失敗: " + String(e.stderr || e.message).split("\n").slice(0, 5).join(" ")); }
 }
 
