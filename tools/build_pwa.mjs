@@ -16,8 +16,11 @@ const VER = new Date(epoch ? Number(epoch) * 1000 : Date.now()).toISOString().sl
 const HEAD_END = "</head><body>\n";
 const TAIL_START = "\n<p style=\"text-align:center;margin:16px 0 24px;font:13px system-ui,sans-serif\"><a href=\"changes.html\"";
 const TAIL_STARTS = [TAIL_START];
+const MARK = "<script>window.TENBIN_PWA = true; window.TENBIN_VER = ";
 const unwrap = (html) => {
-  if (!html.includes("window.TENBIN_PWA = true")) return html; // アプリ本体そのもの
+  // 外側が付けた <script> の行で見分ける。本体のコメントにも「window.TENBIN_PWA = true」の文字があるため、
+  // その文字だけで見分けると本体を index.html と取り違える。
+  if (!html.includes(MARK)) return html; // アプリ本体そのもの
   const a = html.indexOf(HEAD_END);
   const ends = TAIL_STARTS.map((t) => html.lastIndexOf(t)).filter((i) => i > a);
   if (a < 0 || !ends.length) { console.error("index.html から本体の部分を取り出せない（外側の形が変わっている）"); process.exit(1); }
