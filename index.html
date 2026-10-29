@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610290222";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610290237";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -65,8 +65,41 @@ body {
 .others > summary { color: var(--gold); }
 .gyentry { grid-template-columns: auto 1fr auto; border-color: var(--gold); }
 .gyentry > b { font-size: 26px; color: var(--gold); width: 48px; text-align: center; }
-.gyex { margin: 4px 0 0; padding-left: 1.4em; display: grid; gap: 4px; font-size: 13.5px; color: var(--muted); }
-.gyex li.ok { color: var(--hit); }
+/* 答え合わせ：見出し・ポイント・肢ごとの正誤 */
+#msg { scroll-margin-top: 12px; }
+#msg:focus { outline: none; }
+.gyres { display: flex; align-items: center; gap: 12px; margin: -2px 0 12px; padding: 10px 12px; border-radius: 4px; border: 1px solid; }
+.gyres.ok { border-color: var(--hit); background: color-mix(in srgb, var(--hit) 12%, transparent); }
+.gyres.ng { border-color: var(--miss); background: color-mix(in srgb, var(--miss) 12%, transparent); }
+.gyres-mark { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; font-size: 20px; font-weight: 700; color: var(--deep); }
+.gyres.ok .gyres-mark { background: var(--hit); }
+.gyres.ng .gyres-mark { background: var(--miss); }
+.gyres b { display: block; font-family: var(--font-pixel); font-size: 19px; font-weight: 600; }
+.gyres.ok b { color: var(--hit); }
+.gyres.ng b { color: var(--miss); }
+.gyres div > span { display: block; font-size: 14px; color: var(--chalk); }
+.gyres span b { display: inline; font-size: 17px; color: var(--gold); font-family: inherit; }
+.gypoint { margin: 0 0 12px; padding: 8px 12px; border-left: 3px solid var(--gold); background: var(--deep); border-radius: 0 4px 4px 0; }
+.gypoint h4, .gyexw h4 { margin: 0 0 4px; font-size: 14px; color: var(--gold); }
+.gypoint p { margin: 0; font-size: 15px; line-height: 1.75; }
+.gyexw { margin: 0 0 8px; }
+.gyex, .gyblank { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.gyex li { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 4px 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; }
+.gyex li p { grid-column: 1 / -1; margin: 0; font-size: 14.5px; line-height: 1.7; color: var(--chalk); }
+.gyex li.ans { border-color: var(--hit); }
+.gyex li.mine:not(.ans) { border-color: var(--miss); }
+.gyn { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 4px; border: 1px solid var(--muted); border-radius: 3px; font-size: 13px; color: var(--muted); }
+.gytf { font-size: 13px; font-weight: 700; }
+.gytf.t { color: var(--hit); }
+.gytf.f { color: var(--miss); }
+.gytag { justify-self: start; font-size: 12px; padding: 1px 6px; border-radius: 10px; background: var(--hit); color: var(--deep); font-weight: 700; }
+.gytag.mine { background: var(--miss); }
+.gyex li .gytag + .gytag { grid-column: 3; }
+.gyblank li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; font-size: 14.5px; }
+.gyblank li.r { border-color: var(--hit); }
+.gyblank li.w { border-color: var(--miss); }
+.gyblank small { display: block; color: var(--muted); font-size: 13px; }
+.gyart { margin: 8px 0 0; font-size: 13px; }
 .gytext .blank { color: var(--gold); }
 .gywords { margin: 4px 0 10px; padding-left: 2.2em; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 2px 12px; font-size: 14px; }
 .gysel { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 8px; margin-bottom: 8px; }
@@ -5692,6 +5725,12 @@ function drillEnd(d) {
 const gyDetail = (q, perm) => { const d = (typeof GY_DETAIL !== "undefined" && GY_DETAIL[q.id]) || [];
   const fix = t => perm ? t.replace(/肢([1-5])/g, (_, n) => `肢${perm.indexOf(+n - 1) + 1}`) : t;
   return d.length ? `<div class="gydet"><h4>くわしい解説</h4><ul>${d.map(([k, t]) => `<li><b>${esc(k)}</b>${esc(fix(t))}</li>`).join("")}</ul></div>` : ""; };
+// 答え合わせの見出し（色と記号の両方で正誤を示す）
+const gyRes = (ok, main, sub) => `<div class="gyres ${ok ? "ok" : "ng"}" role="status"><span class="gyres-mark" aria-hidden="true">${ok ? "✓" : "✗"}</span><div><b>${main}</b>${sub ? `<span>${sub}</span>` : ""}</div></div>`;
+const gyPoint = q => `<div class="gypoint"><h4>ポイント</h4><p>${esc(q.e)}</p></div>`;
+const gyArt = q => `<p class="article gyart">根拠：${esc(q.art)}</p>`;
+// 答えたあと、結果の見出しが画面の上に来るように動かす
+const gyShowRes = msg => { msg.tabIndex = -1; msg.focus({ preventScroll: true }); requestAnimationFrame(() => msg.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "start" })); };
 // 本試験までの日数
 const gyDaysLeft = () => { const d = new Date(2026, 10, 8), n = new Date(); n.setHours(0, 0, 0, 0); return Math.round((d - n) / 86400000); };
 const gyJobun = q => {
@@ -5783,13 +5822,15 @@ function gyRun(d) {
     $app.innerHTML = `${head}<section class="win">${questionHTML(v, [], "").replace(/<div class="qhead">[\s\S]*?<\/div>/, "")}</section>
       <section class="win msg" id="msg" hidden></section><div class="row"><button id="quit">やめる</button></div>`;
     document.getElementById("quit").onclick = showGyosei; toTop();
-    bindQuiz(v, ok => { next(ok, ok ? 4 : 0);
+    bindQuiz(v, (ok, pick) => { next(ok, ok ? 4 : 0);
       const msg = document.getElementById("msg"); msg.hidden = false;
-      msg.innerHTML = `<p class="line ${ok ? "good" : "bad"}">${ok ? "せいかい！" : "ざんねん…"}</p>
-        <p class="explain"><b>正解：${v.a + 1}</b>　${esc(q.e)}</p>
-        <ol class="gyex">${perm.map(i => { const t = /誤っている/.test(q.q) ? i !== q.a : i === q.a; return `<li class="${i === q.a ? "ok" : ""}"><b>${t ? "○" : "×"}</b> ${esc(q.ex[i])}</li>`; }).join("")}</ol>
-        <p class="article">根拠：${esc(q.art)}</p>${gyDetail(q, perm)}${gyJobun(q)}${citeList(q.art)}`;
-      showNext(msg, last, go); });
+      const neg = /誤っている|妥当でない|正しくない/.test(q.q);
+      msg.innerHTML = `${gyRes(ok, ok ? "せいかい！" : "ざんねん…", `正解は <b class="tnum">${v.a + 1}</b>${ok ? "" : `　あなたの解答は <span class="tnum">${pick + 1}</span>`}`)}
+        ${gyPoint(q)}
+        <div class="gyexw"><h4>肢ごとの正誤</h4>
+        <ol class="gyex">${perm.map((i, k) => { const t = neg ? i !== q.a : i === q.a; return `<li class="${i === q.a ? "ans" : ""}${k === pick ? " mine" : ""}"><span class="gyn tnum">${k + 1}</span><span class="gytf ${t ? "t" : "f"}">${t ? "○ 正しい" : "× 誤り"}</span>${i === q.a ? `<span class="gytag">正解</span>` : ""}${k === pick && !ok ? `<span class="gytag mine">あなたの解答</span>` : ""}<p>${esc(q.ex[i])}</p></li>`; }).join("")}</ol></div>
+        ${gyArt(q)}${gyDetail(q, perm)}${gyJobun(q)}${citeList(q.art)}`;
+      showNext(msg, last, go); gyShowRes(msg); });
   } else if (k === "tashi") {
     const order = shuffle(q.words.map((_, i) => i)), labels = "アイウエ";
     let n = 0; const html = esc(q.text).replace(/［([アイウエ])］/g, (_, L) => `<b class="blank">［${L}］</b>`);
@@ -5801,15 +5842,16 @@ function gyRun(d) {
     document.getElementById("quit").onclick = showGyosei; toTop();
     document.getElementById("gyCheck").onclick = () => {
       const sels = [...$app.querySelectorAll(".gysel select")];
-      if (sels.some(s => s.value === "")) { const m = document.getElementById("msg"); m.hidden = false; m.innerHTML = `<p class="line bad">まだ選んでいない空欄があります。4つとも選んでください。</p>`; return; }
+      if (sels.some(s => s.value === "")) { const m = document.getElementById("msg"); m.hidden = false; m.innerHTML = `<p class="line bad">まだ選んでいない空欄があります。4つとも選んでください。</p>`; gyShowRes(m); return; }
       sels.forEach(s => s.disabled = true); document.getElementById("gyCheck").disabled = true;
       sels.forEach((s, j) => { n += +s.value === q.ans[j] ? 1 : 0; s.parentElement.classList.add(+s.value === q.ans[j] && s.value !== "" ? "right" : "wrong"); });
       next(n === 4, n * 2);
       const msg = document.getElementById("msg"); msg.hidden = false;
-      msg.innerHTML = `<p class="line ${n === 4 ? "good" : "bad"}">${n}/4 正解（${n * 2}点/8点）</p>
-        <p class="explain"><b>正解：</b>${q.ans.map((a, j) => `［${labels[j]}］${esc(q.words[a])}`).join("　")}</p>
-        <p class="explain">${esc(q.e)}</p><p class="article">根拠：${esc(q.art)}</p>${gyDetail(q)}${gyJobun(q)}${citeList(q.art)}`;
-      showNext(msg, last, go); };
+      msg.innerHTML = `${gyRes(n === 4, n === 4 ? "全部せいかい！" : `${n}/4 せいかい`, `<span class="tnum">${n * 2}点/8点</span>`)}
+        <div class="gyexw"><h4>空欄ごとの答え</h4><ul class="gyblank">${q.ans.map((a, j) => { const mine = +sels[j].value, r = mine === a;
+          return `<li class="${r ? "r" : "w"}"><span class="gyn">${labels[j]}</span><span class="gytf ${r ? "t" : "f"}">${r ? "✓" : "✗"}</span><span>正解：<b>${esc(q.words[a])}</b>${r ? "" : `<small>あなたの答え：${esc(q.words[mine])}</small>`}</span></li>`; }).join("")}</ul></div>
+        ${gyPoint(q)}${gyArt(q)}${gyDetail(q)}${gyJobun(q)}${citeList(q.art)}`;
+      showNext(msg, last, go); gyShowRes(msg); };
   } else {
     S.gyo = S.gyo || {}; const draft = (S.gyo[q.id] || {}).text || "";
     $app.innerHTML = `${head}<section class="win"><p class="question">${esc(q.q)}</p>
@@ -5829,10 +5871,11 @@ function gyRun(d) {
         <h4>模範解答（${len(q.model)}字）</h4><div class="model">${esc(q.model)}</div></div>
         <div class="checks">${q.points.map(([t, p], j) => `<label><input type="checkbox" data-p="${p}"> <span>${esc(t)}（${p}点）</span></label>`).join("")}</div>
         <p class="tnum" id="gyPts">自己採点：0点/20点</p>
-        <p class="explain">${esc(q.e)}</p><p class="article">根拠：${esc(q.art)}</p>${gyDetail(q)}${gyJobun(q)}${citeList(q.art)}`;
+        ${gyPoint(q)}${gyArt(q)}${gyDetail(q)}${gyJobun(q)}${citeList(q.art)}`;
       const pts = () => [...msg.querySelectorAll("input[data-p]")].filter(x => x.checked).reduce((s, x) => s + +x.dataset.p, 0);
       msg.querySelectorAll("input[data-p]").forEach(x => x.onchange = () => { document.getElementById("gyPts").textContent = `自己採点：${pts()}点/20点`; });
       showNext(msg, last, () => { const p = pts(); S.gyo[q.id] = { text: "", best: Math.max(p, (S.gyo[q.id] || {}).best || 0) }; next(p >= 14, p); go(); });
+      gyShowRes(msg);
     };
   }
   if (d.mock) gyMockTimer(d);
