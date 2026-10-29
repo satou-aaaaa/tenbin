@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610290227";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610290237";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -67,6 +67,7 @@ body {
 .gyentry > b { font-size: 26px; color: var(--gold); width: 48px; text-align: center; }
 /* 答え合わせ：見出し・ポイント・肢ごとの正誤 */
 #msg { scroll-margin-top: 12px; }
+#msg:focus { outline: none; }
 .gyres { display: flex; align-items: center; gap: 12px; margin: -2px 0 12px; padding: 10px 12px; border-radius: 4px; border: 1px solid; }
 .gyres.ok { border-color: var(--hit); background: color-mix(in srgb, var(--hit) 12%, transparent); }
 .gyres.ng { border-color: var(--miss); background: color-mix(in srgb, var(--miss) 12%, transparent); }
@@ -5729,7 +5730,7 @@ const gyRes = (ok, main, sub) => `<div class="gyres ${ok ? "ok" : "ng"}" role="s
 const gyPoint = q => `<div class="gypoint"><h4>ポイント</h4><p>${esc(q.e)}</p></div>`;
 const gyArt = q => `<p class="article gyart">根拠：${esc(q.art)}</p>`;
 // 答えたあと、結果の見出しが画面の上に来るように動かす
-const gyShowRes = msg => requestAnimationFrame(() => msg.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "start" }));
+const gyShowRes = msg => { msg.tabIndex = -1; msg.focus({ preventScroll: true }); requestAnimationFrame(() => msg.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "start" })); };
 // 本試験までの日数
 const gyDaysLeft = () => { const d = new Date(2026, 10, 8), n = new Date(); n.setHours(0, 0, 0, 0); return Math.round((d - n) / 86400000); };
 const gyJobun = q => {
@@ -5841,7 +5842,7 @@ function gyRun(d) {
     document.getElementById("quit").onclick = showGyosei; toTop();
     document.getElementById("gyCheck").onclick = () => {
       const sels = [...$app.querySelectorAll(".gysel select")];
-      if (sels.some(s => s.value === "")) { const m = document.getElementById("msg"); m.hidden = false; m.innerHTML = `<p class="line bad">まだ選んでいない空欄があります。4つとも選んでください。</p>`; return; }
+      if (sels.some(s => s.value === "")) { const m = document.getElementById("msg"); m.hidden = false; m.innerHTML = `<p class="line bad">まだ選んでいない空欄があります。4つとも選んでください。</p>`; gyShowRes(m); return; }
       sels.forEach(s => s.disabled = true); document.getElementById("gyCheck").disabled = true;
       sels.forEach((s, j) => { n += +s.value === q.ans[j] ? 1 : 0; s.parentElement.classList.add(+s.value === q.ans[j] && s.value !== "" ? "right" : "wrong"); });
       next(n === 4, n * 2);
@@ -5871,10 +5872,10 @@ function gyRun(d) {
         <div class="checks">${q.points.map(([t, p], j) => `<label><input type="checkbox" data-p="${p}"> <span>${esc(t)}（${p}点）</span></label>`).join("")}</div>
         <p class="tnum" id="gyPts">自己採点：0点/20点</p>
         ${gyPoint(q)}${gyArt(q)}${gyDetail(q)}${gyJobun(q)}${citeList(q.art)}`;
-      gyShowRes(msg);
       const pts = () => [...msg.querySelectorAll("input[data-p]")].filter(x => x.checked).reduce((s, x) => s + +x.dataset.p, 0);
       msg.querySelectorAll("input[data-p]").forEach(x => x.onchange = () => { document.getElementById("gyPts").textContent = `自己採点：${pts()}点/20点`; });
       showNext(msg, last, () => { const p = pts(); S.gyo[q.id] = { text: "", best: Math.max(p, (S.gyo[q.id] || {}).best || 0) }; next(p >= 14, p); go(); });
+      gyShowRes(msg);
     };
   }
   if (d.mock) gyMockTimer(d);
