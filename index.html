@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610301704";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610301713";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -6299,7 +6299,8 @@ function gyExamResult() {
     </section>
     <h2 class="section-label">1問ずつ見直す</h2>
     <section class="win"><div class="gxgrid">${x.ids.map((id, i) => { const p = gyExamScore(x, id), mx = gyPts(GY_BY[id]);
-      return `<button data-i="${i}" class="${p === mx ? "ok" : p ? "part" : "ng"}" aria-label="${gyNo(i)} ${p}点/${mx}点">${i + 1}<small>${p === mx ? "○" : p ? "△" : "×"}</small></button>`; }).join("")}</div></section>
+      const ok = gyExamOk(x, id);
+      return `<button data-i="${i}" class="${ok ? "ok" : p ? "part" : "ng"}" aria-label="${gyNo(i)} ${p}点/${mx}点">${i + 1}<small>${ok ? "○" : p ? "△" : "×"}</small></button>`; }).join("")}</div></section>
     <div class="row">${x.ids.some(id => !gyExamOk(x, id)) ? `<button class="btn-gold" id="gxRevW">まちがえた問題だけ見直す</button>` : ""}<button id="gxRev">問1から見直す</button><button id="gxBackG">行政書士の対策にもどる</button></div>`;
   $app.querySelectorAll(".gxgrid button").forEach(b => b.onclick = () => gyExamReview(+b.dataset.i));
   document.getElementById("gxRev").onclick = () => gyExamReview(0);
