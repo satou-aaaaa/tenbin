@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610301639";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610301653";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -6140,6 +6140,9 @@ function gyExamOpen(fresh) {
   else if (x.step === "kiji") gyExamKiji(); else gyExamResult();
 }
 const gyNo = i => `問${i + 1}`;
+// 区分（5肢択一・多肢・記述・基礎知識）の切れ目を、実際に並んだ問題から求める（[始め, 終わり] の並び）
+function gyExamCuts(x) { const cuts = []; x.ids.forEach((id, i) => { const s = gyExamSec(i).replace(/（.*）$/, "");
+  if (!cuts.length || cuts[cuts.length - 1][2] !== s) cuts.push([i, i + 1, s]); else cuts[cuts.length - 1][1] = i + 1; }); return cuts; }
 function gyExamSec(i) { const q = GY_BY[S.gyExam.ids[i]], k = gyKind(q);
   return k === "go" ? (q.sub === "基礎知識" ? "基礎知識・5肢択一式" : `法令等・5肢択一式（${q.sub}）`) : k === "tashi" ? "法令等・多肢選択式" : "法令等・記述式"; }
 function gyExamQ() {
@@ -6176,14 +6179,14 @@ function gyExamQ() {
   document.getElementById("gxFlag").onchange = e => { x.flag[id] = e.target.checked; save(); };
   const to = j => { x.cur = j; x.back = ""; save(); gyExamQ(); toTop(); };
   document.getElementById("gxPrev").onclick = () => to(i - 1);
-  document.getElementById("gxNext").onclick = () => i + 1 < N ? to(i + 1) : gyExamList();
+  document.getElementById("gxNext").onclick = () => i + 1 < N ? to(i + 1) : (x.back = "", save(), gyExamList());
   document.getElementById("gxList").onclick = () => { if (x.back === "sheet") { x.back = ""; gyExamSheet(); } else gyExamList(); };
   document.getElementById("gxPause").onclick = () => { gyExamPause(); showGyosei(); };
   document.getElementById("gxEnd").onclick = gyExamConfirm;
 }
 function gyExamList() {
   const x = S.gyExam, N = x.ids.length;
-  const sec = [["法令等・5肢択一式", 0, 40], ["法令等・多肢選択式", 40, 43], ["法令等・記述式", 43, 46], ["基礎知識・5肢択一式", 46, N]];
+  const sec = gyExamCuts(x).map(([a, b]) => [gyExamSec(a).replace(/（.*）$/, ""), a, b]);
   $app.innerHTML = `<div class="chapter-head">本番形式模試・問題一覧</div>
     <div class="qhead"><span class="tag tnum gytimer" id="gxTimer" role="timer"></span><span class="qcount tnum">解答 ${x.ids.filter(d => gyDone(x, d)).length}/${N}</span></div>
     <section class="win"><p class="note" style="margin:0">番号を押すとその問題へ移ります。<span class="gxk done">■</span>解答ずみ　<span class="gxk">□</span>未解答　<span class="gxk flag">★</span>見直し</p>
@@ -6224,7 +6227,7 @@ function gyExamSheet(f) {
     <section class="win"><p class="note" style="margin:0 0 8px">自分の答えを確かめ、直したい問題を押すとその問題へ移ります。答えは採点するまで何度でも直せます。</p>
       <div class="fsw gxtabs" role="group" aria-label="表示する問題">${tab("all", `すべて ${N}`)}${tab("rest", `未解答 ${rest}`)}${tab("flag", `見直し印 ${fl}`)}</div>
       ${show.length ? `<ol class="gxsheet">${show.map(([id, i]) => { const t = gyAnsText(x, id), part = gyKind(GY_BY[id]) === "tashi" && t && !gyDone(x, id);
-        const hd = f === "all" && [0, 40, 43, 46].includes(i) ? `<li class="gxsh">${gyExamSec(i).replace(/（.*）$/, "")}</li>` : "";
+        const hd = f === "all" && gyExamCuts(x).some(([a]) => a === i) ? `<li class="gxsh">${gyExamSec(i).replace(/（.*）$/, "")}</li>` : "";
         return `${hd}<li><button data-i="${i}" class="${t ? "" : "none"}"><span class="gxno tnum">${gyNo(i)}</span><span class="gxsub">${esc(gyExamSec(i).replace(/^法令等・|^基礎知識・/, ""))}</span><span class="gxans">${t ? esc(t) : "未解答"}${part ? "（空欄あり）" : ""}</span>${x.flag[id] ? `<span class="gxstar" aria-label="見直し印">★</span>` : ""}</button></li>`; }).join("")}</ol>`
         : `<p class="note">${f === "rest" ? "未解答の問題はありません。" : "見直し印をつけた問題はありません。"}</p>`}
     </section>
