@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610301601";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610301713";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -151,6 +151,17 @@ details.jbart > summary { cursor: pointer; }
 .gxgrid button.part{color:var(--gold)}
 .gxk{font-size:13px;margin:0 2px}
 .gxk.flag{color:var(--miss)}
+.gxtabs{justify-content:flex-start;flex-wrap:wrap;margin:0 0 8px}
+.gxtabs button[aria-pressed="true"]{background:var(--gold);color:var(--deep);border-color:var(--gold)}
+.gxsheet{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.gxsheet button{width:100%;display:grid;grid-template-columns:3.4em 1fr auto;grid-template-areas:"n a t";gap:0 8px;align-items:center;text-align:left;padding:6px 10px;min-height:44px}
+.gxsheet .gxno{grid-area:n;font-family:var(--font-pixel);color:var(--gold)}
+.gxsheet .gxsub{display:none}
+.gxsheet .gxans{grid-area:a;font-size:13.5px;line-height:1.5;overflow-wrap:anywhere}
+.gxsheet .gxstar{grid-area:t;color:var(--miss)}
+.gxsheet button.none{border-color:var(--miss)}
+.gxsheet button.none .gxans{color:var(--miss);font-weight:700}
+.gxsheet .gxsh{font-size:13px;color:var(--gold);margin:8px 0 2px}
 .others .fsw { justify-content: flex-start; margin: 8px 0; }
 .others details.win { border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; padding: 0; box-shadow: none; margin: 0; }
 .kname { white-space: nowrap; }
@@ -6129,6 +6140,9 @@ function gyExamOpen(fresh) {
   else if (x.step === "kiji") gyExamKiji(); else gyExamResult();
 }
 const gyNo = i => `問${i + 1}`;
+// 区分（5肢択一・多肢・記述・基礎知識）の切れ目を、実際に並んだ問題から求める（[始め, 終わり] の並び）
+function gyExamCuts(x) { const cuts = []; x.ids.forEach((id, i) => { const s = gyExamSec(i).replace(/（.*）$/, "");
+  if (!cuts.length || cuts[cuts.length - 1][2] !== s) cuts.push([i, i + 1, s]); else cuts[cuts.length - 1][1] = i + 1; }); return cuts; }
 function gyExamSec(i) { const q = GY_BY[S.gyExam.ids[i]], k = gyKind(q);
   return k === "go" ? (q.sub === "基礎知識" ? "基礎知識・5肢択一式" : `法令等・5肢択一式（${q.sub}）`) : k === "tashi" ? "法令等・多肢選択式" : "法令等・記述式"; }
 function gyExamQ() {
@@ -6151,9 +6165,10 @@ function gyExamQ() {
     <div class="qhead"><span class="tag">${gyNo(i)}</span><span class="tag" style="border-color:var(--muted);color:var(--muted)">${gyExamSec(i)}</span><span class="tag tnum gytimer" id="gxTimer" role="timer"></span><span class="qcount tnum">解答 ${n}/${N}</span></div>
     <section class="win gyq">${body}
       <label class="gxflag"><input type="checkbox" id="gxFlag"${x.flag[id] ? " checked" : ""}> あとで見直す</label></section>
-    <div class="row gxnav"><button id="gxPrev"${i ? "" : " disabled"}>‹ 前の問題</button><button id="gxList">問題一覧</button><button class="btn-gold" id="gxNext">${i + 1 < N ? "次の問題 ›" : "問題一覧へ"}</button></div>
-    <div class="row"><button id="gxPause">中断して目次へ</button><button id="gxEnd">解答を終えて採点へ</button></div>`;
+    <div class="row gxnav"><button id="gxPrev"${i ? "" : " disabled"}>‹ 前の問題</button>${x.back === "sheet" ? `<button id="gxList">見直しにもどる</button>` : `<button id="gxList">問題一覧</button>`}<button class="btn-gold" id="gxNext">${i + 1 < N ? "次の問題 ›" : "問題一覧へ"}</button></div>
+    <div class="row"><button id="gxPause">中断して目次へ</button><button id="gxSheetB">解答の見直し</button><button id="gxEnd">解答を終えて採点へ</button></div>`;
   gyExamTick();
+  document.getElementById("gxSheetB").onclick = () => gyExamSheet();
   const set = v => { x.ans[id] = v; save(); };
   if (k === "go") $app.querySelectorAll(".gxc button").forEach(b => b.onclick = () => { const j = +b.dataset.j; set(x.ans[id] === j ? null : j);
     $app.querySelectorAll(".gxc button").forEach(c => c.setAttribute("aria-pressed", String(x.ans[id] === +c.dataset.j))); });
@@ -6162,23 +6177,24 @@ function gyExamQ() {
     const upd = () => { const L = len(ta.value); cnt.textContent = `${L}字（句読点も1字。目安は40字程度、解答欄は45字）`; cnt.style.color = L > 45 ? "var(--miss)" : ""; };
     ta.oninput = () => { upd(); set(ta.value); }; upd(); }
   document.getElementById("gxFlag").onchange = e => { x.flag[id] = e.target.checked; save(); };
-  const to = j => { x.cur = j; save(); gyExamQ(); toTop(); };
+  const to = j => { x.cur = j; x.back = ""; save(); gyExamQ(); toTop(); };
   document.getElementById("gxPrev").onclick = () => to(i - 1);
-  document.getElementById("gxNext").onclick = () => i + 1 < N ? to(i + 1) : gyExamList();
-  document.getElementById("gxList").onclick = gyExamList;
+  document.getElementById("gxNext").onclick = () => i + 1 < N ? to(i + 1) : (x.back = "", save(), gyExamList());
+  document.getElementById("gxList").onclick = () => { if (x.back === "sheet") { x.back = ""; gyExamSheet(); } else gyExamList(); };
   document.getElementById("gxPause").onclick = () => { gyExamPause(); showGyosei(); };
   document.getElementById("gxEnd").onclick = gyExamConfirm;
 }
 function gyExamList() {
   const x = S.gyExam, N = x.ids.length;
-  const sec = [["法令等・5肢択一式", 0, 40], ["法令等・多肢選択式", 40, 43], ["法令等・記述式", 43, 46], ["基礎知識・5肢択一式", 46, N]];
+  const sec = gyExamCuts(x).map(([a, b]) => [gyExamSec(a).replace(/（.*）$/, ""), a, b]);
   $app.innerHTML = `<div class="chapter-head">本番形式模試・問題一覧</div>
     <div class="qhead"><span class="tag tnum gytimer" id="gxTimer" role="timer"></span><span class="qcount tnum">解答 ${x.ids.filter(d => gyDone(x, d)).length}/${N}</span></div>
     <section class="win"><p class="note" style="margin:0">番号を押すとその問題へ移ります。<span class="gxk done">■</span>解答ずみ　<span class="gxk">□</span>未解答　<span class="gxk flag">★</span>見直し</p>
     ${sec.map(([t, a, b]) => `<h3 class="gxh">${t}</h3><div class="gxgrid">${x.ids.slice(a, b).map((id, j) => { const i = a + j;
       return `<button data-i="${i}" class="${gyDone(x, id) ? "done" : ""}${x.flag[id] ? " flag" : ""}${i === x.cur ? " cur" : ""}" aria-label="${gyNo(i)}${gyDone(x, id) ? " 解答ずみ" : " 未解答"}${x.flag[id] ? " 見直し" : ""}">${i + 1}</button>`; }).join("")}</div>`).join("")}</section>
-    <div class="row"><button class="btn-gold" id="gxBack">問題にもどる</button><button id="gxEnd">解答を終えて採点へ</button></div>`;
+    <div class="row"><button class="btn-gold" id="gxBack">問題にもどる</button><button id="gxSheetB">解答を一覧で見直す</button><button id="gxEnd">解答を終えて採点へ</button></div>`;
   gyExamTick();
+  document.getElementById("gxSheetB").onclick = () => gyExamSheet();
   $app.querySelectorAll(".gxgrid button").forEach(b => b.onclick = () => { x.cur = +b.dataset.i; save(); gyExamQ(); toTop(); });
   document.getElementById("gxBack").onclick = gyExamQ;
   document.getElementById("gxEnd").onclick = gyExamConfirm;
@@ -6190,10 +6206,39 @@ function gyExamConfirm() {
   const old = document.getElementById("gxConf"); if (old) old.remove();
   const box = document.createElement("section"); box.className = "win msg"; box.id = "gxConf"; box.tabIndex = -1;
   box.innerHTML = `<p class="line">解答を終えて採点しますか？</p><p class="note tnum">未解答 ${rest}問・見直し ${fl}問・${l >= 0 ? `残り ${gyClock(l)}` : `時間切れから ${gyClock(l)}`}。採点したあとは解答を直せません。</p>
-    <div class="row"><button class="btn-gold" id="gxGo">採点する</button><button id="gxNo">もどる</button></div>`;
+    <div class="row"><button class="btn-gold" id="gxGo">採点する</button><button id="gxChk">解答を見直す</button><button id="gxNo">もどる</button></div>`;
   $app.appendChild(box); box.focus({ preventScroll: true }); box.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "center" });
   document.getElementById("gxNo").onclick = () => box.remove();
+  document.getElementById("gxChk").onclick = () => gyExamSheet(rest ? "rest" : fl ? "flag" : "all");
   document.getElementById("gxGo").onclick = () => { gyExamPause(); x.step = "kiji"; x.kc = 0; save(); gyExamKiji(); };
+}
+// 解答の見直し（答案用紙のように、自分の答えを60問並べる）。押すとその問題へ移って直せる
+const gyAnsText = (x, id) => { const q = GY_BY[id], k = gyKind(q), a = x.ans[id];
+  if (k === "go") return a == null ? "" : `${a + 1}　${q.c[x.perm[id][a]]}`;
+  if (k === "tashi") return a && a.some(v => v != null) ? a.map((v, j) => `${"アイウエ"[j]} ${v == null ? "—" : q.words[v]}`).join("　") : "";
+  return (a || "").trim() ? `${a.trim()}（${[...a.replace(/\s/g, "")].length}字）` : ""; };
+function gyExamSheet(f) {
+  const x = S.gyExam; if (f) x.sf = f; f = x.sf || "all";
+  const N = x.ids.length, rest = x.ids.filter(d => !gyDone(x, d)).length, fl = x.ids.filter(d => x.flag[d]).length;
+  const show = x.ids.map((id, i) => [id, i]).filter(([id]) => f === "rest" ? !gyDone(x, id) : f === "flag" ? x.flag[id] : true);
+  const tab = (k, t) => `<button data-f="${k}" aria-pressed="${f === k}">${t}</button>`;
+  $app.innerHTML = `<div class="chapter-head">解答の見直し</div>
+    <div class="qhead"><span class="tag tnum gytimer" id="gxTimer" role="timer"></span><span class="qcount tnum">解答 ${N - rest}/${N}</span></div>
+    <section class="win"><p class="note" style="margin:0 0 8px">自分の答えを確かめ、直したい問題を押すとその問題へ移ります。答えは採点するまで何度でも直せます。</p>
+      <div class="fsw gxtabs" role="group" aria-label="表示する問題">${tab("all", `すべて ${N}`)}${tab("rest", `未解答 ${rest}`)}${tab("flag", `見直し印 ${fl}`)}</div>
+      ${show.length ? `<ol class="gxsheet">${show.map(([id, i]) => { const t = gyAnsText(x, id), part = gyKind(GY_BY[id]) === "tashi" && t && !gyDone(x, id);
+        const hd = f === "all" && gyExamCuts(x).some(([a]) => a === i) ? `<li class="gxsh">${gyExamSec(i).replace(/（.*）$/, "")}</li>` : "";
+        return `${hd}<li><button data-i="${i}" class="${t ? "" : "none"}"><span class="gxno tnum">${gyNo(i)}</span><span class="gxsub">${esc(gyExamSec(i).replace(/^法令等・|^基礎知識・/, ""))}</span><span class="gxans">${t ? esc(t) : "未解答"}${part ? "（空欄あり）" : ""}</span>${x.flag[id] ? `<span class="gxstar" aria-label="見直し印">★</span>` : ""}</button></li>`; }).join("")}</ol>`
+        : `<p class="note">${f === "rest" ? "未解答の問題はありません。" : "見直し印をつけた問題はありません。"}</p>`}
+    </section>
+    <div class="row"><button class="btn-gold" id="gxBack">問題にもどる</button><button id="gxEnd">解答を終えて採点へ</button></div>`;
+  gyExamTick();
+  // 再描画で押したタブが消えるので、同じタブにフォーカスを戻す（キーボード操作のため）
+  $app.querySelectorAll(".gxtabs button").forEach(b => b.onclick = () => { gyExamSheet(b.dataset.f); $app.querySelector(`.gxtabs button[data-f="${b.dataset.f}"]`).focus({ preventScroll: true }); });
+  $app.querySelectorAll(".gxsheet button").forEach(b => b.onclick = () => { x.cur = +b.dataset.i; x.back = "sheet"; save(); gyExamQ(); toTop(); });
+  document.getElementById("gxBack").onclick = () => { gyExamQ(); toTop(); };
+  document.getElementById("gxEnd").onclick = gyExamConfirm;
+  toTop();
 }
 // 記述式は模範解答と観点で自己採点する（本番は1問20点・部分点あり）
 function gyExamKiji() {
@@ -6222,12 +6267,14 @@ function gyExamScore(x, id) { const q = GY_BY[id], k = gyKind(q), a = x.ans[id];
   if (k === "go") return a != null && x.perm[id][a] === q.a ? 4 : 0;
   if (k === "tashi") return (a || []).reduce((s, v, j) => s + (v === q.ans[j] ? 2 : 0), 0);
   return q.points.reduce((s, [, p], j) => s + (x.kp[id] && x.kp[id][j] ? p : 0), 0); }
+// できたかどうかの判定はここ1か所にまとめる（記述は14点以上、ほかは満点。復習の間隔・見直し・表示で共通）
+const gyExamOk = (x, id) => { const q = GY_BY[id], p = gyExamScore(x, id); return gyKind(q) === "kiji" ? p >= 14 : p === gyPts(q); };
 function gyExamFinish() {
   const x = S.gyExam, r = { law: 0, kiso: 0, lawMax: 0, kisoMax: 0, sub: {} };
   x.ids.forEach(id => { const q = GY_BY[id], p = gyExamScore(x, id), mx = gyPts(q), kiso = q.sub === "基礎知識";
     r[kiso ? "kiso" : "law"] += p; r[kiso ? "kisoMax" : "lawMax"] += mx;
     const key = gyKind(q) === "go" ? q.sub : GY_KIND_NAME[gyKind(q)]; const s = r.sub[key] || [0, 0]; s[0] += p; s[1] += mx; r.sub[key] = s;
-    record(q, gyKind(q) === "kiji" ? p >= 14 : p === mx); });
+    record(q, gyExamOk(x, id)); });
   r.tot = r.law + r.kiso; r.max = r.lawMax + r.kisoMax;
   r.pass = r.law >= GY_PASS.law && r.kiso >= GY_PASS.kiso && r.tot >= GY_PASS.tot;
   r.min = Math.round(x.used / 60000);
@@ -6252,15 +6299,17 @@ function gyExamResult() {
     </section>
     <h2 class="section-label">1問ずつ見直す</h2>
     <section class="win"><div class="gxgrid">${x.ids.map((id, i) => { const p = gyExamScore(x, id), mx = gyPts(GY_BY[id]);
-      return `<button data-i="${i}" class="${p === mx ? "ok" : p ? "part" : "ng"}" aria-label="${gyNo(i)} ${p}点/${mx}点">${i + 1}<small>${p === mx ? "○" : p ? "△" : "×"}</small></button>`; }).join("")}</div></section>
-    <div class="row"><button class="btn-gold" id="gxRev">問1から見直す</button><button id="gxBackG">行政書士の対策にもどる</button></div>`;
+      const ok = gyExamOk(x, id);
+      return `<button data-i="${i}" class="${ok ? "ok" : p ? "part" : "ng"}" aria-label="${gyNo(i)} ${p}点/${mx}点">${i + 1}<small>${ok ? "○" : p ? "△" : "×"}</small></button>`; }).join("")}</div></section>
+    <div class="row">${x.ids.some(id => !gyExamOk(x, id)) ? `<button class="btn-gold" id="gxRevW">まちがえた問題だけ見直す</button>` : ""}<button id="gxRev">問1から見直す</button><button id="gxBackG">行政書士の対策にもどる</button></div>`;
   $app.querySelectorAll(".gxgrid button").forEach(b => b.onclick = () => gyExamReview(+b.dataset.i));
   document.getElementById("gxRev").onclick = () => gyExamReview(0);
+  const w = document.getElementById("gxRevW"); if (w) w.onclick = () => gyExamReview(x.ids.findIndex(id => !gyExamOk(x, id)), true);
   document.getElementById("gxBackG").onclick = showGyosei;
   document.getElementById("gxBackG").focus({ preventScroll: true });
   toTop();
 }
-function gyExamReview(i) {
+function gyExamReview(i, wrong) {
   const x = S.gyExam, id = x.ids[i], q = GY_BY[id], k = gyKind(q), a = x.ans[id], p = gyExamScore(x, id), mx = gyPts(q), N = x.ids.length;
   let body;
   if (k === "go") {
@@ -6276,17 +6325,19 @@ function gyExamReview(i) {
         return `<li class="${r ? "r" : "w"}"><span class="gyn">${L[j]}</span><span class="gytf ${r ? "t" : "f"}">${r ? "✓" : "✗"}</span><span>正解：<b>${esc(q.words[c])}</b>${r ? "" : `<small>あなたの答え：${aa[j] == null ? "未解答" : esc(q.words[aa[j]])}</small>`}</span></li>`; }).join("")}</ul></div>
       ${gyPoint(q)}${gyArt(q)}${gyDetail(q)}${gyJobun(q)}${citeList(q.art)}`;
   } else {
-    body = `<p class="question">${esc(q.q)}</p>${gyRes(p >= 14, `自己採点 ${p}点/20点`, "")}
+    body = `<p class="question">${esc(q.q)}</p>${gyRes(gyExamOk(x, id), `自己採点 ${p}点/20点`, "")}
       <div class="cmp"><h4>あなたの解答</h4><div class="mine">${esc(a || "") || "（未記入）"}</div><h4>模範解答</h4><div class="model">${esc(q.model)}</div></div>
       <ul class="gyblank">${q.points.map(([t, pt], j) => { const r = !!(x.kp[id] && x.kp[id][j]); return `<li class="${r ? "r" : "w"}"><span class="gytf ${r ? "t" : "f"}">${r ? "✓" : "✗"}</span><span>${esc(t)}（${pt}点）</span></li>`; }).join("")}</ul>
       ${gyPoint(q)}${gyArt(q)}${gyDetail(q)}${gyJobun(q)}${citeList(q.art)}`;
   }
-  $app.innerHTML = `<div class="chapter-head">見直し</div>
+  const miss = x.ids.map((d, j) => j).filter(j => !gyExamOk(x, x.ids[j]));
+  const prev = wrong ? miss.filter(j => j < i).pop() : i ? i - 1 : undefined, nxt = wrong ? miss.find(j => j > i) : i + 1 < N ? i + 1 : undefined;
+  $app.innerHTML = `<div class="chapter-head">${wrong ? `まちがえた問題の見直し（${miss.indexOf(i) + 1}/${miss.length}）` : "見直し"}</div>
     <div class="qhead"><span class="tag">${gyNo(i)}</span><span class="tag" style="border-color:var(--muted);color:var(--muted)">${esc(q.sub)}・${esc(q.topic)}</span><span class="qcount tnum">${p}/${mx}点</span></div>
     <section class="win msg gyq">${body}</section>
-    <div class="row gxnav"><button id="gxPrev"${i ? "" : " disabled"}>‹ 前</button><button id="gxRes">結果にもどる</button><button class="btn-gold" id="gxNext"${i + 1 < N ? "" : " disabled"}>次 ›</button></div>`;
-  document.getElementById("gxPrev").onclick = () => gyExamReview(i - 1);
-  document.getElementById("gxNext").onclick = () => gyExamReview(i + 1);
+    <div class="row gxnav"><button id="gxPrev"${prev == null ? " disabled" : ""}>‹ 前</button><button id="gxRes">結果にもどる</button><button class="btn-gold" id="gxNext"${nxt == null ? " disabled" : ""}>次 ›</button></div>`;
+  document.getElementById("gxPrev").onclick = () => gyExamReview(prev, wrong);
+  document.getElementById("gxNext").onclick = () => gyExamReview(nxt, wrong);
   document.getElementById("gxRes").onclick = gyExamResult;
   toTop();
 }
