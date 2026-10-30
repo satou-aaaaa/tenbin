@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610301633";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610301639";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -157,7 +157,7 @@ details.jbart > summary { cursor: pointer; }
 .gxsheet button{width:100%;display:grid;grid-template-columns:3.4em 1fr auto;grid-template-areas:"n a t";gap:0 8px;align-items:center;text-align:left;padding:6px 10px;min-height:44px}
 .gxsheet .gxno{grid-area:n;font-family:var(--font-pixel);color:var(--gold)}
 .gxsheet .gxsub{display:none}
-.gxsheet .gxans{grid-area:a;font-size:13.5px;line-height:1.5;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.gxsheet .gxans{grid-area:a;font-size:13.5px;line-height:1.5;overflow-wrap:anywhere}
 .gxsheet .gxstar{grid-area:t;color:var(--miss)}
 .gxsheet button.none{border-color:var(--miss)}
 .gxsheet button.none .gxans{color:var(--miss);font-weight:700}
@@ -6230,7 +6230,8 @@ function gyExamSheet(f) {
     </section>
     <div class="row"><button class="btn-gold" id="gxBack">問題にもどる</button><button id="gxEnd">解答を終えて採点へ</button></div>`;
   gyExamTick();
-  $app.querySelectorAll(".gxtabs button").forEach(b => b.onclick = () => gyExamSheet(b.dataset.f));
+  // 再描画で押したタブが消えるので、同じタブにフォーカスを戻す（キーボード操作のため）
+  $app.querySelectorAll(".gxtabs button").forEach(b => b.onclick = () => { gyExamSheet(b.dataset.f); $app.querySelector(`.gxtabs button[data-f="${b.dataset.f}"]`).focus({ preventScroll: true }); });
   $app.querySelectorAll(".gxsheet button").forEach(b => b.onclick = () => { x.cur = +b.dataset.i; x.back = "sheet"; save(); gyExamQ(); toTop(); });
   document.getElementById("gxBack").onclick = () => { gyExamQ(); toTop(); };
   document.getElementById("gxEnd").onclick = gyExamConfirm;
