@@ -54,6 +54,12 @@ const htmlVer = (html.match(/window\.TENBIN_VER = "(\d{12})"/) || [])[1];
 if (!swVer || swVer !== htmlVer) ng(`版がそろっていない（index.html: ${htmlVer}・sw.js: ${swVer}）`);
 else ok("版が index.html と sw.js でそろっている（" + swVer + "）");
 
+// 3b. 応援（Ko-fi）は下のただのリンク（2026-10-31 satouさんが Ko-fi に決めた。外のスクリプトは読まない）
+const kofi = (html.match(/<a id="kofi" href="https:\/\/ko-fi\.com\/satouaaaaa"[^>]*>/) || [""])[0];
+if (!((kofi.match(/\brel="([^"]*)"/) || [])[1] || "").split(/\s+/).includes("noopener")) ng("下に Ko-fi の応援リンク（noopener つき）が無い");
+else if (/<script\b[^>]*\bsrc\s*=/i.test(html) || /createElement\(\s*["'`]script/i.test(html) || /\bimport\(\s*["'`](https?:)?\/\//i.test(html)) ng("index.html が外のスクリプトを読んでいる（script src・createElement(\"script\")・外への import()）");
+else ok("下に Ko-fi の応援リンクがある（ただのリンク）");
+
 // 4. アイコンの大きさ（PNG の先頭 IHDR から幅と高さを読む）
 const pngSize = (f) => {
   const b = readFileSync(f);
