@@ -2,7 +2,7 @@
 // 1. index.html の中の <script> と sw.js の文法  2. manifest.webmanifest が JSON として読めるか
 // 3. sw.js の SHELL（オフライン用に先に取るファイル）が全部あるか・版が index.html と sw.js でそろっているか
 // 4. アイコンの PNG の大きさが manifest の sizes どおりか
-// 5. ブラウザで開いて、JS のエラーが出ないか・画面に何か描かれるか（--browser のときだけ）
+// 5. ブラウザで開いて、JS のエラーが出ないか・画面に何か描かれるか・hidden の枠が隠れるか（--browser のときだけ）
 // 6. index.html から作り直して、index.html・sw.js・manifest が今のものと同じか（--rebuild のときだけ）。
 //    違えば、生成物を手で直したか、tools/build_pwa.mjs を直したのに作り直していない。
 // 使い方: node tools/check.mjs [--browser] [--rebuild]
@@ -90,6 +90,10 @@ if (process.argv.includes("--browser")) {
     const text = (await page.evaluate(() => document.body.innerText || "")).trim();
     if (text.length < 20) ng(`${vp.name}の画面がほとんど空（${text.length}文字）`);
     else ok(`${vp.name}の画面で開けた（${text.length}文字）`);
+    // hidden を付けた枠は、クラスで display を決めていても隠れること（claude.ai 版の外側と同じ。外れると空の枠が出る）
+    const shown = await page.evaluate(() => { const d = document.createElement("section"); d.className = "win msg"; d.hidden = true; d.textContent = "x";
+      (document.getElementById("app") || document.body).appendChild(d); const v = d.getClientRects().length > 0; d.remove(); return v; });
+    if (shown) ng(`${vp.name}: hidden を付けた枠が見えている（外側の [hidden]{display:none!important} が抜けている）`); else ok(`${vp.name}: hidden の枠は隠れる`);
     await page.close();
   }
   await browser.close(); server.close();
