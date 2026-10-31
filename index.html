@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610310428";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610310440";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -5168,7 +5168,7 @@ const S = {
   gyMock: saved.gyMock || [],          // 行政書士のミニ模試の結果（新しいものが後ろ、最大20回）
   gyExam: saved.gyExam || null,        // 行政書士の本番形式模試（解答中・採点後の1回分）
   gyExamHist: saved.gyExamHist || [],  // 本番形式模試の結果（最大20回）
-  gyExamSeen: saved.gyExamSeen || Object.fromEntries(((saved.gyExam || {}).ids || []).map(id => [id, 1])),  // 本番形式模試に出た回数: 問題id -> 回数（次の模試で出ていない問題を先に出す。記録前の版で受けた模試の問題は1回として数える）
+  gyExamSeen: Object.keys(saved.gyExamSeen || {}).length ? saved.gyExamSeen : Object.fromEntries(((saved.gyExam || {}).ids || []).map(id => [id, 1])),  // 本番形式模試に出た回数: 問題id -> 回数（次の模試で出ていない問題を先に出す。記録がない・空のときは、保存済みの模試の問題を1回として数える）
 };
 const save = () => store.set(S);
 const INTERVALS = [1, 3, 7, 14, 30];
