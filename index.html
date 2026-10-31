@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610311616";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610311625";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -66,6 +66,12 @@ body {
 /* ほかの資格試験の対策（行政書士の見た目 .gy* / .gx* をそのまま使い、足りない所だけ足す） */
 .xmlist { display: grid; gap: 10px; margin: 12px 0; }
 .xmentry .ch-sub { display: block; }
+.xmun { white-space: nowrap; }
+.xmph { display: inline-block; }
+/* 全体の見た目の手直し（2026-10-31 UI点検） */
+.chapter-head { text-wrap: balance; }  /* 長い題で最後の1字だけが次の行に落ちないように */
+.chapter-head .topback { min-height: 44px; }  /* タップしやすい高さ（44px 以上） */
+.fsw button[data-fs] { min-height: 44px; min-width: 56px; }
 .gyentry { grid-template-columns: auto 1fr auto; border-color: var(--gold); }
 .gyentry > b { font-size: 26px; color: var(--gold); width: 48px; text-align: center; }
 /* 答え合わせ：見出し・ポイント・肢ごとの正誤 */
@@ -6693,6 +6699,8 @@ function xmAdd(cfg) { XM_LIST.push(cfg); XM_CONF[cfg.key] = cfg; cfg.qs.forEach(
 const xmSt = k => { S.xm = S.xm || {}; return S.xm[k] = S.xm[k] || { seen: {}, cur: null, hist: [] }; };
 const xmDue = c => { const t = today(); return c.qs.filter(q => S.srs[q.id] && S.srs[q.id].due <= t); };
 const xmDueAll = () => XM_LIST.reduce((n, c) => n + xmDue(c).length, 0);
+// 画面の題：語句の途中で折り返さないよう、まとまりごとに区切る（「（」の前でも区切る）
+const xmPh = (...parts) => parts.flatMap(t => t.split(/(?=（)/)).map(t => `<span class="xmph">${esc(t)}</span>`).join("");
 const xmNeg = q => /誤っているもの|誤りであるもの|妥当でないもの|正しくないもの|適切でないもの|不適当なもの/.test(q.q);  // 「誤っているもの」を選ぶ問題は、正解の肢が「誤り」になる
 const xmDays = c => { if (!c.date) return null; const d = new Date(c.date[0], c.date[1] - 1, c.date[2]), n = new Date(); n.setHours(0, 0, 0, 0); return Math.round((d - n) / 86400000); };
 const xmPts = (c, q) => q.pts || c.pts || 1;
@@ -6736,7 +6744,7 @@ function showXm(k) {
   const traps = c.qs.filter(q => q.trap);
   if (traps.length) { decks.trap = ["ひっかけ・間違えやすい問題", traps]; rows.push(rowOf("trap", "ひっかけ・間違えやすい問題（数字・例外・主語）", traps)); }
   c.subs.forEach(s => { const l = c.qs.filter(q => q.sub === s); if (l.length) { decks["s:" + s] = [s, l]; rows.push(rowOf("s:" + s, s, l)); } });
-  $app.innerHTML = `<div class="chapter-head">${esc(c.name)}の対策</div>
+  $app.innerHTML = `<div class="chapter-head">${xmPh(c.name, "の対策")}</div>
     <section class="win today">
       ${days != null && days >= 0 ? `<p class="gyleft tnum">${days ? `本試験まで あと<b>${days}</b>日` : "今日が本試験です"}</p>` : ""}
       <p class="note" style="margin:0">${esc(c.intro)}</p>
@@ -6831,7 +6839,7 @@ const xmDone = (x, id) => x.ans[id] != null;
 function xmQ() {
   const x = xmCur(), c = XM_CONF[x.k], m = xmMock(x), i = x.cur, id = x.ids[i], q = XM_BY[id], N = x.ids.length, p = x.perm[id];
   const n = x.ids.filter(d => xmDone(x, d)).length;
-  $app.innerHTML = `<div class="chapter-head">${esc(c.short)}・${esc(m.name)}</div>
+  $app.innerHTML = `<div class="chapter-head">${xmPh(c.short + "・", m.name.split("（")[0])}</div>
     <div class="dprog" aria-hidden="true"><i style="width:${n / N * 100}%"></i></div>
     <div class="qhead"><span class="tag">${xmNo(i)}</span><span class="tag" style="border-color:var(--muted);color:var(--muted)">${esc(q.sub)}</span><span class="tag tnum gytimer" id="gxTimer" role="timer"></span><span class="qcount tnum">解答 ${n}/${N}</span></div>
     <section class="win gyq"><p class="question">${esc(q.q)}</p><div class="choices gxc">${p.map((o, j) => `<button data-j="${j}" aria-pressed="${x.ans[id] === j}"><span class="key">${j + 1}</span><span>${esc(q.c[o])}</span></button>`).join("")}</div>
@@ -6915,9 +6923,9 @@ function xmFinish() {
 }
 function xmResult() {
   const x = xmCur(), c = XM_CONF[x.k], m = xmMock(x), r = x.res;
-  $app.innerHTML = `<div class="chapter-head">${esc(c.short)}・${esc(m.name)}の結果</div>
+  $app.innerHTML = `<div class="chapter-head">${xmPh(c.short + "・", m.name.split("（")[0], "の結果")}</div>
     <section class="win msg">
-      ${gyRes(r.pass, r.pass ? "合格ラインに届いています" : "合格ラインに届きませんでした", `<span class="tnum">${r.tot}点/${r.max}点・解答時間 ${r.min}分（制限 ${m.min}分）</span>`)}
+      ${gyRes(r.pass, r.pass ? "合格ラインに届いています" : "合格ラインに届きませんでした", `<span class="tnum">${r.tot}点/${r.max}点・解答時間 <span class="xmun">${r.min}分（制限 ${m.min}分）</span></span>`)}
       <table class="gymr tnum"><tr><th></th><th>得点</th><th>合格ライン</th><th></th></tr>${r.rows.map(([n, v, mx, nd, ok]) => `<tr><th>${esc(n)}</th><td>${v}/${mx}点</td><td>${nd}点以上</td><td class="${ok ? "ok" : "ng"}">${ok ? "○" : "×"}</td></tr>`).join("")}</table>
       ${r.min > m.min ? `<p class="note">制限時間を${r.min - m.min}分こえました。本番では時間内に解いた分だけが得点になります。</p>` : ""}
       ${c.subs.filter(k => r.sub[k]).every(k => m.pass.some(b => b.subs ? b.subs.length === 1 && b.subs[0] === k : c.subs.filter(j => r.sub[j]).length === 1)) ? "" : `<h4>分野ごとの得点</h4>
@@ -6957,10 +6965,10 @@ function xmEntry(c, m) {
   const un = xmUnseen(c, m);
   return `<section class="win gymock gyexam" data-m="${m.id}">
       <h3>${esc(m.name)}</h3>
-      <p class="note">${esc(m.note)}${un ? `　まだ模試に出ていない問題：${un}問。` : ""}</p>
+      <p class="note">${esc(m.note)}${un ? `　<span class="xmun">まだ模試に出ていない問題：${un}問。</span>` : ""}</p>
       ${live ? `<p class="note tnum">${esc(x.day)}に始めた模試：解答 ${x.ids.filter(d => xmDone(x, d)).length}/${x.ids.length}・${xmLeft(x) >= 0 ? `残り ${gyClock(xmLeft(x))}` : "時間切れ"}</p>
         <div class="row"><button class="btn-gold xmCont">続きから解く ▶</button><button class="xmNew">新しく始める</button></div>`
-      : `<div class="row"><button class="btn-gold xmNew">${esc(m.name)}を始める ▶</button>${mine && x.step === "done" ? `<button class="xmLast">前回の結果</button>` : ""}</div>${other ? `<p class="note">ほかの模試が途中です。始めると、途中の解答は消えます。</p>` : ""}`}
+      : `<div class="row"><button class="btn-gold xmNew">模試を始める ▶</button>${mine && x.step === "done" ? `<button class="xmLast">前回の結果</button>` : ""}</div>${other ? `<p class="note">ほかの模試が途中です。始めると、途中の解答は消えます。</p>` : ""}`}
       ${h.length ? `<ul class="gymh tnum">${h.slice(-5).reverse().map(r => `<li>${esc(r.day)}　${r.pass ? "合格ライン" : "ライン未満"}　${r.tot}/${r.max}点　${r.min}分</li>`).join("")}</ul>` : ""}
     </section>`;
 }
