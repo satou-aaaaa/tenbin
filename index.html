@@ -11,8 +11,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
-<style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610310440";</script>
+<style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610310504";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -162,6 +162,34 @@ details.jbart > summary { cursor: pointer; }
 .gxsheet button.none{border-color:var(--miss)}
 .gxsheet button.none .gxans{color:var(--miss);font-weight:700}
 .gxsheet .gxsh{font-size:13px;color:var(--gold);margin:8px 0 2px}
+
+/* 行政書士の対策：使いやすさの改善（gyosei_ux.js と対） */
+/* hidden を付けた枠を必ず隠す（.msg などが display を決めていても）。PWA 版では外側にこの指定がない */
+[hidden] { display: none !important; }
+/* 設問の「誤っているもの」「妥当なもの」の印 */
+.gykey { font-style: normal; font-weight: 700; color: var(--gold); text-decoration: underline 2px; text-underline-offset: 4px; }
+.gykey.neg { color: var(--miss); text-decoration-style: wavy; text-decoration-thickness: 1.5px; }
+/* 模試・見直し：残り時間を上に、前・一覧・次を下に貼りつける（長い問題でもスクロールせずに移れる） */
+.qhead:has(#gxTimer), .qhead:has(#gyTimer) { position: sticky; top: 0; z-index: 5; margin-inline: -16px; padding: 8px 16px; background: var(--night); box-shadow: 0 6px 10px -8px rgb(0 0 0 / .6); }
+.gyq + .gxnav { position: sticky; bottom: 0; z-index: 5; flex-wrap: nowrap; margin-inline: -16px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to bottom, transparent, var(--night) 28%); }
+.gyq + .gxnav button { flex: 1 1 0; min-height: 48px; padding-inline: 6px; white-space: nowrap; background-color: var(--window); }
+.gyq + .gxnav button.btn-gold { background-color: var(--gold); }
+.gxflag { min-height: 44px; cursor: pointer; }
+.gxflag input { width: 22px; height: 22px; accent-color: var(--gold); }
+/* 結果の見出しが1字だけ折り返さないように */
+.gyres b { font-size: clamp(15px, 4.2vw, 19px); text-wrap: pretty; }
+/* 模試の結果：科目ごとの得点の棒と「練習」 */
+.gyh4 { margin: 12px 0 0; font-size: 14px; color: var(--gold); font-family: var(--font-pixel); font-weight: 600; }
+.gymr td:has(.gybar) { white-space: nowrap; }
+.gybar { display: inline-block; vertical-align: middle; width: calc(100% - 3.6em); min-width: 32px; height: 8px; border: 1px solid var(--muted); border-radius: 2px; overflow: hidden; }
+.gybar i { display: block; height: 100%; background: var(--hit); }
+.gymr tr.weak .gybar i { background: var(--miss); }
+.gymr tr.weak th { color: var(--miss); }
+.gypc { display: inline-block; width: 3.2em; text-align: right; }
+.gymr td.gyprac { width: 1%; white-space: nowrap; padding-block: 2px; }
+.gyprac-b { min-height: 44px; padding: 4px 10px; font-size: 13px; border-color: var(--gold); color: var(--gold); }
+/* 目次：模試の途中 */
+.gyentry .gyon { color: var(--gold); }
 .others .fsw { justify-content: flex-start; margin: 8px 0; }
 .others details.win { border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; padding: 0; box-shadow: none; margin: 0; }
 .kname { white-space: nowrap; }
@@ -6445,6 +6473,61 @@ function gyExamBind() {
     if (x && x.step !== "done" && x.ids.some(d => gyDone(x, d)) && !n.dataset.sure) { n.dataset.sure = "1"; n.textContent = "途中の解答を消して始める（もう一度押す）"; return; }
     gyExamOpen(true); };
 }
+
+// ===== 行政書士の対策：使いやすさの改善（2026-10-31） =====
+// 画面を作る関数（gyosei_ui.js・gyosei_exam.js）はそのままにして、描いたあとに手を加える。
+// 問題の追加や模試の改良とぶつからないよう、このファイルだけで完結させる。
+(() => {
+  const after = (fn, extra) => function (...a) { const r = fn.apply(this, a); try { extra(...a); } catch (e) { console.warn("gyosei_ux", e); } return r; };
+
+  // 1. 設問の「誤っているもの」「妥当なもの」に印をつける（正誤の取り違えを防ぐ）
+  const KEY = /(誤っている|妥当でない|正しくない|適切でない|最も妥当な|妥当な|正しい|適切な)もの(?=(?:の組合せ)?は(?:どれか|いくつ))/;
+  const markKey = () => $app.querySelectorAll(".gyq .question").forEach(p => {
+    if (p.dataset.gk || p.querySelector(".gykey")) return; p.dataset.gk = "1";
+    p.innerHTML = p.innerHTML.replace(KEY, (m, w) => `<em class="gykey${/誤|でない|くない/.test(w) ? " neg" : ""}">${w}もの</em>`);
+  });
+  gyRun = after(gyRun, markKey);
+  gyExamQ = after(gyExamQ, markKey);
+  gyExamReview = after(gyExamReview, markKey);
+
+  // 2. 本番形式模試の結果：科目ごとの得点に棒をつけ、弱い科目はその場で練習できるようにする
+  const KEYQ = { "多肢選択": q => gyKind(q) === "tashi", "40字記述": q => gyKind(q) === "kiji" };
+  const inKey = (k, q) => KEYQ[k] ? KEYQ[k](q) : gyKind(q) === "go" && q.sub === k;
+  gyExamResult = after(gyExamResult, () => {
+    const x = S.gyExam, r = x && x.res; if (!r) return;
+    const tables = $app.querySelectorAll(".gymr"); const t = tables[1]; if (!t) return;
+    const h = t.previousElementSibling; if (h && h.tagName === "H4") h.classList.add("gyh4");
+    const rows = [...t.querySelectorAll("tr")].map(tr => { const k = tr.querySelector("th").textContent, [v, m] = r.sub[k] || [0, 1]; return { tr, k, p: v / m }; });
+    const weak = rows.filter(o => o.p < .6).sort((a, b) => a.p - b.p).slice(0, 3).map(o => o.k);
+    rows.forEach(({ tr, k, p }) => {
+      const td = tr.children[2]; td.innerHTML = `<span class="gybar" aria-hidden="true"><i style="width:${Math.round(p * 100)}%"></i></span><span class="gypc">${Math.round(p * 100)}%</span>`;
+      const c = document.createElement("td"); c.className = "gyprac";
+      if (weak.includes(k)) c.innerHTML = `<button class="gyprac-b" data-k="${esc(k)}">練習 ▶</button>`;
+      tr.appendChild(c); tr.classList.toggle("weak", weak.includes(k));
+    });
+    if (weak.length) t.insertAdjacentHTML("afterend", `<p class="note">6割に届かなかった科目に「練習」を出しています。この模試でまちがえた問題から先に10問出します。</p>`);
+    t.querySelectorAll(".gyprac-b").forEach(b => b.onclick = () => {
+      const k = b.dataset.k, miss = x.ids.map(id => GY_BY[id]).filter(q => inKey(k, q) && !gyExamOk(x, q.id));
+      const rest = shuffle(GY_ALL.filter(q => inKey(k, q) && !miss.includes(q)));
+      gyRun({ deck: [...miss, ...rest].slice(0, 10), i: 0, right: 0, title: `${k}の練習（模試の復習）` });
+    });
+  });
+
+  // 3. 目次の「行政書士試験の対策」に、模試の途中かどうかを出す
+  showOffice = after(showOffice, () => {
+    const x = S.gyExam, sub = document.querySelector("#goGyosei .ch-sub"); if (!sub || !x || x.step === "done") return;
+    sub.insertAdjacentHTML("afterend", `<span class="ch-sub gyon tnum">本番形式模試の途中（解答 ${x.ids.filter(d => gyDone(x, d)).length}/${x.ids.length}）</span>`);
+  });
+
+  // 4. 模試と見直しのキー操作：1〜5で肢を選ぶ、← → で前後の問題へ
+  document.addEventListener("keydown", e => {
+    if (e.ctrlKey || e.metaKey || e.altKey || quiz) return;
+    const tag = (document.activeElement || {}).tagName; if (tag === "TEXTAREA" || tag === "SELECT" || tag === "INPUT") return;
+    if (!document.getElementById("gxNext") || document.getElementById("gxConf")) return;
+    if (/^[1-5]$/.test(e.key)) { const b = $app.querySelectorAll(".gxc button")[+e.key - 1]; if (b) { e.preventDefault(); b.click(); } }
+    else if (e.key === "ArrowRight" || e.key === "ArrowLeft") { const b = document.getElementById(e.key === "ArrowRight" ? "gxNext" : "gxPrev"); if (b && !b.disabled) { e.preventDefault(); b.click(); } }
+  });
+})();
 
 // keyboard: 1-5 / o x to answer, Enter for next
 document.addEventListener("keydown", e => {
