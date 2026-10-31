@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610310504";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610310511";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -6521,7 +6521,7 @@ function gyExamBind() {
 
   // 4. 模試と見直しのキー操作：1〜5で肢を選ぶ、← → で前後の問題へ
   document.addEventListener("keydown", e => {
-    if (e.ctrlKey || e.metaKey || e.altKey || quiz) return;
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || quiz) return; // 長押しのくり返しで選んだ肢が外れないように
     const tag = (document.activeElement || {}).tagName; if (tag === "TEXTAREA" || tag === "SELECT" || tag === "INPUT") return;
     if (!document.getElementById("gxNext") || document.getElementById("gxConf")) return;
     if (/^[1-5]$/.test(e.key)) { const b = $app.querySelectorAll(".gxc button")[+e.key - 1]; if (b) { e.preventDefault(); b.click(); } }
