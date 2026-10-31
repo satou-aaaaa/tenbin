@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610310703";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610310830";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -190,6 +190,9 @@ details.jbart > summary { cursor: pointer; }
 .gyprac-b { min-height: 44px; padding: 4px 10px; font-size: 13px; border-color: var(--gold); color: var(--gold); }
 /* 目次：模試の途中 */
 .gyentry .gyon { color: var(--gold); }
+/* 残り時間の幅を固定する。明朝体の数字は字ごとに幅がちがい、1秒ごとに幅が変わって上部の折り返しと高さが動いていた（2026-10-31 スマホでカクカクする件）。時間切れの表示でも幅を変えない */
+.gytimer { flex: none; margin-left: 0; width: 10.4em; text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.qhead:has(.gytimer) .qcount { flex: none; min-width: 5.6em; text-align: right; white-space: nowrap; }
 .others .fsw { justify-content: flex-start; margin: 8px 0; }
 .others details.win { border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; padding: 0; box-shadow: none; margin: 0; }
 .kname { white-space: nowrap; }

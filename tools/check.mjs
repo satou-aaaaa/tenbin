@@ -2,7 +2,7 @@
 // 1. index.html の中の <script> と sw.js の文法  2. manifest.webmanifest が JSON として読めるか
 // 3. sw.js の SHELL（オフライン用に先に取るファイル）が全部あるか・版が index.html と sw.js でそろっているか
 // 4. アイコンの PNG の大きさが manifest の sizes どおりか
-// 5. ブラウザで開いて、JS のエラーが出ないか・画面に何か描かれるか・hidden の枠が隠れるか（--browser のときだけ）
+// 5. ブラウザで開いて、JS のエラーが出ないか・画面に何か描かれるか・hidden の枠が隠れるか・残り時間の幅が動かないか（--browser のときだけ）
 // 6. index.html から作り直して、index.html・sw.js・manifest が今のものと同じか（--rebuild のときだけ）。
 //    違えば、生成物を手で直したか、tools/build_pwa.mjs を直したのに作り直していない。
 // 使い方: node tools/check.mjs [--browser] [--rebuild]
@@ -94,6 +94,20 @@ if (process.argv.includes("--browser")) {
     const shown = await page.evaluate(() => { const d = document.createElement("section"); d.className = "win msg"; d.hidden = true; d.textContent = "x";
       (document.getElementById("app") || document.body).appendChild(d); const v = d.getClientRects().length > 0; d.remove(); return v; });
     if (shown) ng(`${vp.name}: hidden を付けた枠が見えている（外側の [hidden]{display:none!important} が抜けている）`); else ok(`${vp.name}: hidden の枠は隠れる`);
+    // 1秒ごとに変わる残り時間（role="timer"）は、数字が変わっても幅と周りの位置が動かないこと（明朝体の数字は字ごとに幅がちがい、スマホで上部がカクカクした。2026-10-31）
+    const jit = await page.evaluate(() => {
+      if (typeof gyExamOpen !== "function" || typeof gyExamTick !== "function") return null;
+      const keep = S.gyExam; gyExamOpen(true); const x = S.gyExam, seen = new Set();
+      for (const ms of [0, 1111000, 2222000, 3333000, 4444000, 5555000, 6666000, 7777000, 8888000, 9999000, 10799000, 10801000, 11999000]) {
+        x.used = ms; x.t0 = Date.now(); gyExamTick();
+        const t = document.querySelector('[role="timer"]').getBoundingClientRect(), q = document.querySelector(".gyq").getBoundingClientRect();
+        seen.add([t.width, t.top, q.top].map((v) => Math.round(v * 10) / 10).join("/"));
+      }
+      gyExamPause(); S.gyExam = keep; showOffice(); return [...seen];
+    });
+    if (jit === null) ok(`${vp.name}: 模試の画面がないので残り時間の幅は確かめない`);
+    else if (jit.length === 1) ok(`${vp.name}: 模試の残り時間の幅と位置が変わらない`);
+    else ng(`${vp.name}: 模試の残り時間が変わるたびに幅か位置が動く（${jit.join(" , ")}）。.gytimer の幅を固定する`);
     await page.close();
   }
   await browser.close(); server.close();
