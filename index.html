@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610310830";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202610311534";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -63,6 +63,9 @@ body {
 .wrap details.kgroup > summary .mbar { width: 64px; flex: none; margin-left: auto; }
 .wrap details.kgroup > summary .kcount { margin-left: 8px; width: 128px; flex: none; text-align: right; }
 .others > summary { color: var(--gold); }
+/* ほかの資格試験の対策（行政書士の見た目 .gy* / .gx* をそのまま使い、足りない所だけ足す） */
+.xmlist { display: grid; gap: 10px; margin: 12px 0; }
+.xmentry .ch-sub { display: block; }
 .gyentry { grid-template-columns: auto 1fr auto; border-color: var(--gold); }
 .gyentry > b { font-size: 26px; color: var(--gold); width: 48px; text-align: center; }
 /* 答え合わせ：見出し・ポイント・肢ごとの正誤 */
@@ -5344,6 +5347,7 @@ const S = {
   gyExamHist: saved.gyExamHist || [],  // 本番形式模試の結果（最大20回）
   gyExamSeen: Object.keys(saved.gyExamSeen || {}).length ? saved.gyExamSeen : Object.fromEntries(((saved.gyExam || {}).ids || []).map(id => [id, 1])),  // 本番形式模試に出た回数: 問題id -> 回数（次の模試で出ていない問題を先に出す。記録がない・空のときは、保存済みの模試の問題を1回として数える）
 };
+S.xm = saved.xm || {};  // ほかの資格試験: 試験 -> { seen: 模試に出た回数, cur: 解答中・採点後の模試, hist: 模試の結果 }
 const save = () => store.set(S);
 const INTERVALS = [1, 3, 7, 14, 30];
 
@@ -5508,6 +5512,7 @@ function showOffice() {
     ...(dueN ? [{ label: `規範カードの復習 <b class="tnum">${dueN}</b>枚`, attr: `id="normsDue"` }] : []),
     ...(due && !doneToday ? [{ label: `知識ドリルの復習 <b class="tnum">${due}</b>問`, attr: `id="drillDue"` }] : []),
     ...(gyDueN ? [{ label: `行政書士の復習 <b class="tnum">${gyDueN}</b>問`, attr: `id="gyDueHome"` }] : []),
+    ...((c => c ? [{ label: `${esc(c.short)}の復習 <b class="tnum">${xmDue(c).length}</b>問`, attr: `id="xmDueHome"` }] : [])(XM_LIST.find(c => xmDue(c).length))),
   ];
   const nums = "①②③④⑤";
   $app.innerHTML = `
@@ -5528,6 +5533,7 @@ function showOffice() {
       <button id="drill"><b aria-hidden="true">択</b><span>知識ドリル</span><span class="note">補助・10問</span></button>
     </nav>
     <button class="chapter gyentry" id="goGyosei"><b class="pixel" aria-hidden="true">行</b><span><span class="ch-title">行政書士試験の対策</span><span class="ch-sub">5肢択一・多肢選択・40字記述（${GY_ALL.length}問）</span></span><span class="ch-state">${gyDueN ? `<b class="due">復習${gyDueN}</b>` : "▶"}</span></button>
+    <button class="chapter gyentry" id="goXm"><b class="pixel" aria-hidden="true">資</b><span><span class="ch-title">ほかの資格試験の対策</span><span class="ch-sub">${XM_LIST.map(c => esc(c.short)).join("・")}（${XM_LIST.reduce((n, c) => n + c.qs.length, 0)}問）</span></span><span class="ch-state">${xmDueAll() ? `<b class="due">復習${xmDueAll()}</b>` : "▶"}</span></button>
     <h2 class="section-label" id="essayList" tabindex="-1">科目から選ぶ（論文演習）</h2>
     <p class="note" style="margin:0">科目をタップすると、分野ごとの問題が開きます。★は論点が2つある本番形式の大問です。棒は書き終えた問題の割合、平均は自己採点の平均です。</p>
     ${groups.map(k => { const cs = probs().filter(c => c.kamoku === k).sort((a, b) => !!a.big - !!b.big);
@@ -5584,6 +5590,7 @@ function showOffice() {
         <li>規範カード：各依頼の論点と規範（大問は論点ごとに答案に書くこと）をカードにしています。「まだ」としたカードから先に出ます</li>
         <li>知識の確認ドリル：まちがえた問題は翌日以降に、正解した問題は1日後・3日後・1週間後…と間隔をあけて再出題します</li>
         <li>行政書士試験の対策：本試験と同じ5肢択一・多肢選択・40字記述の形式で解きます。記述は観点ごとの点数で自己採点します。問題はすべて新しく作ったもので、過去問の文章は使っていません</li>
+        <li>ほかの資格試験の対策：宅建士などの択一式を、分野ごとの練習と本番と同じ問題数・制限時間の模試で解きます。模試は、まだ出ていない問題から先に出します。問題はすべて新しく作ったもので、過去問の文章は使っていません</li>
         <li>連続記録は、論文演習かドリルのどちらかをすると1日分になります。1日休んでも、おやすみ券（週1枚）で続きます</li>
         <li>進み具合と書いた答案は、このブラウザにだけ保存されます。別の端末へは「ホーム画面に追加・記録の引っ越し」で移せます</li>
         <li>学習用に簡略化した説明です。実際の法律問題は専門家に相談してください</li>
@@ -5606,6 +5613,8 @@ function showOffice() {
   document.getElementById("startToday").onclick = () => $app.querySelector(".todo button").click();
   const dd = document.getElementById("drillDue"); if (dd) dd.onclick = startDrill;
   document.getElementById("goGyosei").onclick = showGyosei;
+  document.getElementById("goXm").onclick = showXmList;
+  const xh = document.getElementById("xmDueHome"); if (xh) xh.onclick = () => { const c = XM_LIST.find(c => xmDue(c).length); xmRun(c, { deck: xmDue(c).slice(0, 10), i: 0, right: 0, title: `${c.short}の復習` }); };
   const gh = document.getElementById("gyDueHome"); if (gh) gh.onclick = () => gyRun({ deck: gyDue().slice(0, 10), i: 0, right: 0, title: "行政書士の復習" });
   bindXfer();
 }
@@ -6674,6 +6683,1094 @@ function gyExamBind() {
     else if (e.key === "ArrowRight" || e.key === "ArrowLeft") { const b = document.getElementById(e.key === "ArrowRight" ? "gxNext" : "gxPrev"); if (b && !b.disabled) { e.preventDefault(); b.click(); } }
   });
 })();
+
+// ===== ほかの資格試験の対策（宅建士・司法試験の短答式・司法書士・社労士など。共通の仕組み） =====
+// 試験ごとに xmAdd(設定) で登録する。問題は { id, sub, topic, q, c:[肢…], a:正解の番号(0から), ex:[肢ごとの説明], e:ポイント, art:根拠, trap?, d:[[見出し, 本文]×3] }。
+// 練習（すぐ答え合わせ）・本番形式模試（時間つき・最後にまとめて採点）・見直し・模試に出た回数の少ない問題から出す仕組みを、どの試験でも同じ作りで使う。
+// 記録は S.srs / S.stats（ほかの問題と共用）と S.xm[試験] = { seen: 模試に出た回数, cur: 解答中・採点後の模試, hist: 模試の結果 }。
+const XM_LIST = [], XM_BY = {}, XM_CONF = {};
+function xmAdd(cfg) { XM_LIST.push(cfg); XM_CONF[cfg.key] = cfg; cfg.qs.forEach(q => { q.xm = cfg.key; XM_BY[q.id] = q; }); }
+const xmSt = k => { S.xm = S.xm || {}; return S.xm[k] = S.xm[k] || { seen: {}, cur: null, hist: [] }; };
+const xmDue = c => { const t = today(); return c.qs.filter(q => S.srs[q.id] && S.srs[q.id].due <= t); };
+const xmDueAll = () => XM_LIST.reduce((n, c) => n + xmDue(c).length, 0);
+const xmNeg = q => /誤っているもの|誤りであるもの|妥当でないもの|正しくないもの|適切でないもの|不適当なもの/.test(q.q);  // 「誤っているもの」を選ぶ問題は、正解の肢が「誤り」になる
+const xmDays = c => { if (!c.date) return null; const d = new Date(c.date[0], c.date[1] - 1, c.date[2]), n = new Date(); n.setHours(0, 0, 0, 0); return Math.round((d - n) / 86400000); };
+const xmPts = (c, q) => q.pts || c.pts || 1;
+// 解説の「肢3」などを画面の番号に直す（perm[画面の位置] = もとの番号）
+const xmDetail = (q, perm) => { const d = q.d || [];
+  const fix = t => perm ? t.replace(/肢([1-5])/g, (_, n) => `肢${perm.indexOf(+n - 1) + 1}`) : t;
+  return d.length ? `<div class="gydet"><h4>くわしい解説</h4><ul>${d.map(([k, t]) => `<li><b>${esc(k)}</b>${esc(fix(t))}</li>`).join("")}</ul></div>` : ""; };
+const xmJobun = (c, q) => gyJobun(q).replace(/本試験は令和8年4月1日現在の法令で出題されます。/, esc(c.lawNote || ""));
+// 肢ごとの正誤（答え合わせ・見直しで共通）
+function xmChoices(q, perm, pick) {
+  const neg = xmNeg(q);
+  return `<div class="gyexw"><h4>肢ごとの正誤</h4><ol class="gyex">${perm.map((o, j) => { const t = q.tf ? q.tf[o] : neg ? o !== q.a : o === q.a;
+    return `<li class="${o === q.a ? "ans" : ""}${j === pick ? " mine" : ""}"><span class="gyn tnum">${j + 1}</span>${q.tf === false ? "" : `<span class="gytf ${t ? "t" : "f"}">${t ? "○ 正しい" : "× 誤り"}</span>`}${o === q.a ? `<span class="gytag">正解</span>` : ""}${j === pick && o !== q.a ? `<span class="gytag mine">あなたの解答</span>` : ""}<p class="gyct">${esc(q.c[o])}</p><p class="gycx">${esc(q.ex[o])}</p></li>`; }).join("")}</ol></div>`;
+}
+const xmAfter = (c, q, perm) => `${gyArt(q)}${xmDetail(q, perm)}${xmJobun(c, q)}${citeList(q.art)}`;
+
+// ---- 試験の一覧 ----
+function showXmList() {
+  quiz = null;
+  const row = c => { const due = xmDue(c).length, st = gyStat(c.qs), x = xmSt(c.key).cur, live = x && x.step !== "done";
+    return `<button class="chapter gyentry xmentry" data-k="${c.key}"><b class="pixel" aria-hidden="true">${esc(c.icon)}</b><span><span class="ch-title">${esc(c.name)}</span><span class="ch-sub tnum">${esc(c.form)}・${c.qs.length}問${st.n ? `・正答${Math.round(st.r / st.n * 100)}%` : ""}${live ? "・模試の途中" : ""}</span></span><span class="ch-state">${due ? `<b class="due">復習${due}</b>` : "▶"}</span></button>`; };
+  $app.innerHTML = `<div class="chapter-head">ほかの資格試験の対策</div>
+    <section class="win"><p class="note" style="margin:0">どの試験も、分野ごとの練習（すぐ答え合わせ）と、本番と同じ問題数・制限時間の本番形式模試があります。模試はまだ出ていない問題から先に出します。問題はすべてこのアプリのために作ったもので、過去問の文章は使っていません。</p></section>
+    <div class="xmlist">${XM_LIST.map(row).join("")}
+    <button class="chapter gyentry xmentry" id="xmGy"><b class="pixel" aria-hidden="true">行</b><span><span class="ch-title">行政書士試験</span><span class="ch-sub tnum">5肢択一・多肢選択・40字記述（${GY_ALL.length}問）</span></span><span class="ch-state">▶</span></button></div>
+    <div class="row"><button class="btn-gold" id="home">目次にもどる</button></div>`;
+  document.getElementById("home").onclick = showOffice;
+  document.getElementById("xmGy").onclick = showGyosei;
+  $app.querySelectorAll(".xmentry[data-k]").forEach(b => b.onclick = () => showXm(b.dataset.k));
+  toTop();
+}
+
+// ---- 試験ごとの画面 ----
+function showXm(k) {
+  quiz = null; xmPause();
+  const c = XM_CONF[k], due = xmDue(c), days = xmDays(c);
+  const pick = l => { const unseen = shuffle(l.filter(q => !S.srs[q.id])), seen = l.filter(q => S.srs[q.id]).sort((a, b) => S.srs[a.id].due - S.srs[b.id].due); return [...unseen, ...seen].slice(0, 10); };
+  const rowOf = (key, title, l) => { const st = gyStat(l);
+    return `<button class="gyb" data-r="${esc(key)}"><span class="ch-title">${esc(title)}</span><span class="ch-sub tnum">${st.done}/${l.length}問${st.n ? `・正答${Math.round(st.r / st.n * 100)}%` : ""}</span></button>`; };
+  const rows = [], decks = {};
+  const traps = c.qs.filter(q => q.trap);
+  if (traps.length) { decks.trap = ["ひっかけ・間違えやすい問題", traps]; rows.push(rowOf("trap", "ひっかけ・間違えやすい問題（数字・例外・主語）", traps)); }
+  c.subs.forEach(s => { const l = c.qs.filter(q => q.sub === s); if (l.length) { decks["s:" + s] = [s, l]; rows.push(rowOf("s:" + s, s, l)); } });
+  $app.innerHTML = `<div class="chapter-head">${esc(c.name)}の対策</div>
+    <section class="win today">
+      ${days != null && days >= 0 ? `<p class="gyleft tnum">${days ? `本試験まで あと<b>${days}</b>日` : "今日が本試験です"}</p>` : ""}
+      <p class="note" style="margin:0">${esc(c.intro)}</p>
+      ${due.length ? `<button class="btn-gold big" id="xmDue">復習 ${due.length}問を解く ▶</button>` : `<button class="btn-gold big" id="xmMix">${esc(c.form)}を10問解く ▶</button>`}
+    </section>
+    ${c.mocks.map(m => xmEntry(c, m)).join("")}
+    <h2 class="section-label">分野から選ぶ</h2>
+    <section class="wlist">${rows.join("")}</section>
+    <details class="win"><summary>本試験の形式と合格点</summary><ul>${c.about.map(t => `<li>${esc(t)}</li>`).join("")}</ul></details>
+    <div class="row"><button class="btn-gold" id="xmBackL">試験の一覧にもどる</button><button id="home">目次にもどる</button></div>`;
+  document.getElementById("home").onclick = showOffice;
+  document.getElementById("xmBackL").onclick = showXmList;
+  $app.querySelectorAll(".gyb[data-r]").forEach(b => b.onclick = () => { const [t, l] = decks[b.dataset.r]; xmRun(c, { deck: pick(l), i: 0, right: 0, title: `${c.short}：${t}` }); });
+  const dd = document.getElementById("xmDue"); if (dd) dd.onclick = () => xmRun(c, { deck: due.slice(0, 10), i: 0, right: 0, title: `${c.short}の復習` });
+  const mx = document.getElementById("xmMix"); if (mx) mx.onclick = () => xmRun(c, { deck: pick(c.qs), i: 0, right: 0, title: c.short });
+  xmBind(c);
+  toTop();
+}
+
+// ---- 練習（1問ずつすぐ答え合わせ） ----
+function xmRun(c, d) {
+  if (d.i >= d.deck.length) return xmEnd(c, d);
+  const q = d.deck[d.i], n = q.c.length, perm = shuffle([...Array(n).keys()]), v = { ...q, t: "choice", c: perm.map(i => q.c[i]), a: perm.indexOf(q.a) };
+  const last = d.i + 1 >= d.deck.length ? "結果を見る" : "つぎへ ▶";
+  $app.innerHTML = `<div class="chapter-head">${esc(d.title)}</div>
+    <div class="dprog" aria-hidden="true"><i style="width:${d.i / d.deck.length * 100}%"></i></div>
+    <div class="qhead"><span class="tag">${esc(c.form)}</span>${q.trap ? `<span class="tag">間違えやすい</span>` : ""}<span class="tag" style="border-color:var(--muted);color:var(--muted)">${esc(q.sub)}・${esc(q.topic)}</span><span class="qcount tnum">${d.i + 1}/${d.deck.length}</span></div>
+    <section class="win gyq">${questionHTML(v, [], "").replace(/<div class="qhead">[\s\S]*?<\/div>/, "")}</section>
+    <section class="win msg" id="msg" hidden></section><div class="row"><button id="quit">やめる</button></div>`;
+  document.getElementById("quit").onclick = () => showXm(c.key); toTop();
+  bindQuiz(v, (ok, p) => { record(q, ok); if (ok) d.right++;
+    const msg = document.getElementById("msg"); msg.hidden = false;
+    msg.innerHTML = `${gyRes(ok, ok ? "せいかい！" : "ざんねん…", `正解は <b class="tnum">${v.a + 1}</b>${ok ? "" : `　あなたの解答は <span class="tnum">${p + 1}</span>`}`)}
+      ${gyPoint(q)}${xmChoices(q, perm, p)}${xmAfter(c, q, perm)}`;
+    showNext(msg, last, () => { d.i++; xmRun(c, d); }); gyShowRes(msg); });
+}
+function xmEnd(c, d) {
+  quiz = null;
+  const note = completeDay();
+  $app.innerHTML = `<div class="chapter-head">${esc(d.title)}</div>
+    <section class="win msg"><p class="line good" style="font-size:20px">おつかれさま！</p>
+      <p class="tnum">${d.deck.length}問中 <b>${d.right}</b>問 せいかい</p>
+      <p class="note">まちがえた問題は、あしたの「復習」に出ます。${esc(note)}</p></section>
+    <div class="row"><button class="btn-gold" id="xmAgain">${esc(c.short)}の対策にもどる</button><button id="home">目次にもどる</button></div>`;
+  document.getElementById("xmAgain").onclick = () => showXm(c.key);
+  document.getElementById("home").onclick = showOffice;
+  document.getElementById("xmAgain").focus({ preventScroll: true });
+  toTop();
+}
+
+// ---- 本番形式模試 ----
+// 問題冊子と同じ順（設定の plan の順）に並べ、途中では正誤を見せずに最後にまとめて採点する。
+// 時間はこの画面を開いている間だけ進む（「中断」で止め、続きから再開できる）。
+let xmIv = 0, xmK = null;
+const xmCur = () => xmK && xmSt(xmK).cur;
+const xmMock = x => XM_CONF[x.k].mocks.find(m => m.id === x.mid);
+const xmLeft = x => xmMock(x).min * 60000 - x.used - (x.t0 ? Date.now() - x.t0 : 0);
+const xmNo = i => `問${i + 1}`;
+// 模試に出た回数が少ない問題から選ぶ（同じ回数のものは毎回シャッフル）
+function xmNew(c, m) {
+  const seen = xmSt(c.key).seen, ids = [];
+  const fresh = a => shuffle(a).sort((p, q) => (seen[p.id] || 0) - (seen[q.id] || 0));
+  m.plan.forEach(([sub, n, top]) => { // top: 分野の中で先に置く論点（正規表現の文字列）があれば、その順に並べる
+    let pool = fresh(c.qs.filter(q => q.sub === sub && !ids.includes(q.id))).slice(0, n);
+    if (top) { const ord = top.map(t => new RegExp(t)); const rk = q => { const i = ord.findIndex(r => r.test(q.topic)); return i < 0 ? ord.length : i; }; pool = pool.sort((a, b) => rk(a) - rk(b)); }
+    ids.push(...pool.map(q => q.id)); });
+  ids.forEach(id => { seen[id] = (seen[id] || 0) + 1; });
+  const perm = {}; ids.forEach(id => { perm[id] = shuffle([...Array(XM_BY[id].c.length).keys()]); });
+  return { k: c.key, mid: m.id, ids, perm, ans: {}, flag: {}, used: 0, cur: 0, step: "test", day: new Date().toLocaleDateString("ja-JP") };
+}
+const xmUnseen = c => { const n = xmSt(c.key).seen; return c.qs.filter(q => !n[q.id]).length; };
+function xmFold() { const x = xmCur(); if (x && x.t0) { const n = Date.now(); x.used += n - x.t0; x.t0 = n; save(); } }
+function xmPause() { clearInterval(xmIv); xmIv = 0; const x = xmCur(); if (x && x.t0) { xmFold(); x.t0 = 0; save(); } }
+function xmTick() {
+  const x = xmCur(), el = document.getElementById("gxTimer");
+  if (!x || !el) { xmPause(); return; }
+  const l = xmLeft(x); el.textContent = l >= 0 ? `残り ${gyClock(l)}` : `時間切れ +${gyClock(l)}`; el.classList.toggle("over", l < 0);
+  if (++x.tk % 15 === 0) xmFold();
+}
+function xmOpen(c, m) {
+  quiz = null; xmK = c.key;
+  const st = xmSt(c.key);
+  if (m) st.cur = xmNew(c, m);
+  const x = st.cur;
+  if (x.step === "test") { x.t0 = Date.now(); x.tk = 0; save(); clearInterval(xmIv); xmIv = setInterval(xmTick, 1000); xmQ(); }
+  else xmResult();
+}
+// 区分（分野）の切れ目
+function xmCuts(x) { const cuts = []; x.ids.forEach((id, i) => { const s = XM_BY[id].sub;
+  if (!cuts.length || cuts[cuts.length - 1][2] !== s) cuts.push([i, i + 1, s]); else cuts[cuts.length - 1][1] = i + 1; }); return cuts; }
+const xmDone = (x, id) => x.ans[id] != null;
+function xmQ() {
+  const x = xmCur(), c = XM_CONF[x.k], m = xmMock(x), i = x.cur, id = x.ids[i], q = XM_BY[id], N = x.ids.length, p = x.perm[id];
+  const n = x.ids.filter(d => xmDone(x, d)).length;
+  $app.innerHTML = `<div class="chapter-head">${esc(c.short)}・${esc(m.name)}</div>
+    <div class="dprog" aria-hidden="true"><i style="width:${n / N * 100}%"></i></div>
+    <div class="qhead"><span class="tag">${xmNo(i)}</span><span class="tag" style="border-color:var(--muted);color:var(--muted)">${esc(q.sub)}</span><span class="tag tnum gytimer" id="gxTimer" role="timer"></span><span class="qcount tnum">解答 ${n}/${N}</span></div>
+    <section class="win gyq"><p class="question">${esc(q.q)}</p><div class="choices gxc">${p.map((o, j) => `<button data-j="${j}" aria-pressed="${x.ans[id] === j}"><span class="key">${j + 1}</span><span>${esc(q.c[o])}</span></button>`).join("")}</div>
+      <label class="gxflag"><input type="checkbox" id="gxFlag"${x.flag[id] ? " checked" : ""}> あとで見直す</label></section>
+    <div class="row gxnav"><button id="gxPrev"${i ? "" : " disabled"}>‹ 前の問題</button>${x.back === "sheet" ? `<button id="gxList">見直しにもどる</button>` : `<button id="gxList">問題一覧</button>`}<button class="btn-gold" id="gxNext">${i + 1 < N ? "次の問題 ›" : "問題一覧へ"}</button></div>
+    <div class="row"><button id="gxPause">中断して目次へ</button><button id="gxSheetB">解答の見直し</button><button id="gxEnd">解答を終えて採点へ</button></div>`;
+  xmTick();
+  document.getElementById("gxSheetB").onclick = () => xmSheet();
+  $app.querySelectorAll(".gxc button").forEach(b => b.onclick = () => { const j = +b.dataset.j; x.ans[id] = x.ans[id] === j ? null : j; save();
+    $app.querySelectorAll(".gxc button").forEach(e => e.setAttribute("aria-pressed", String(x.ans[id] === +e.dataset.j))); });
+  document.getElementById("gxFlag").onchange = e => { x.flag[id] = e.target.checked; save(); };
+  const to = j => { x.cur = j; x.back = ""; save(); xmQ(); toTop(); };
+  document.getElementById("gxPrev").onclick = () => to(i - 1);
+  document.getElementById("gxNext").onclick = () => i + 1 < N ? to(i + 1) : (x.back = "", save(), xmList());
+  document.getElementById("gxList").onclick = () => { if (x.back === "sheet") { x.back = ""; xmSheet(); } else xmList(); };
+  document.getElementById("gxPause").onclick = () => { xmPause(); showXm(c.key); };
+  document.getElementById("gxEnd").onclick = xmConfirm;
+}
+function xmList() {
+  const x = xmCur(), c = XM_CONF[x.k], N = x.ids.length;
+  $app.innerHTML = `<div class="chapter-head">${esc(c.short)}・問題一覧</div>
+    <div class="qhead"><span class="tag tnum gytimer" id="gxTimer" role="timer"></span><span class="qcount tnum">解答 ${x.ids.filter(d => xmDone(x, d)).length}/${N}</span></div>
+    <section class="win"><p class="note" style="margin:0">番号を押すとその問題へ移ります。<span class="gxk done">■</span>解答ずみ　<span class="gxk">□</span>未解答　<span class="gxk flag">★</span>見直し</p>
+    ${xmCuts(x).map(([a, b, t]) => `<h3 class="gxh">${esc(t)}（${xmNo(a)}〜${b}）</h3><div class="gxgrid">${x.ids.slice(a, b).map((id, j) => { const i = a + j;
+      return `<button data-i="${i}" class="${xmDone(x, id) ? "done" : ""}${x.flag[id] ? " flag" : ""}${i === x.cur ? " cur" : ""}" aria-label="${xmNo(i)}${xmDone(x, id) ? " 解答ずみ" : " 未解答"}${x.flag[id] ? " 見直し" : ""}">${i + 1}</button>`; }).join("")}</div>`).join("")}</section>
+    <div class="row"><button class="btn-gold" id="gxBack">問題にもどる</button><button id="gxSheetB">解答を一覧で見直す</button><button id="gxEnd">解答を終えて採点へ</button></div>`;
+  xmTick();
+  document.getElementById("gxSheetB").onclick = () => xmSheet();
+  $app.querySelectorAll(".gxgrid button").forEach(b => b.onclick = () => { x.cur = +b.dataset.i; save(); xmQ(); toTop(); });
+  document.getElementById("gxBack").onclick = xmQ;
+  document.getElementById("gxEnd").onclick = xmConfirm;
+  toTop();
+}
+function xmConfirm() {
+  const x = xmCur(), rest = x.ids.filter(d => !xmDone(x, d)).length, fl = x.ids.filter(d => x.flag[d]).length, l = xmLeft(x);
+  const old = document.getElementById("gxConf"); if (old) old.remove();
+  const box = document.createElement("section"); box.className = "win msg"; box.id = "gxConf"; box.tabIndex = -1;
+  box.innerHTML = `<p class="line">解答を終えて採点しますか？</p><p class="note tnum">未解答 ${rest}問・見直し ${fl}問・${l >= 0 ? `残り ${gyClock(l)}` : `時間切れから ${gyClock(l)}`}。採点したあとは解答を直せません。</p>
+    <div class="row"><button class="btn-gold" id="gxGo">採点する</button><button id="gxChk">解答を見直す</button><button id="gxNo">もどる</button></div>`;
+  $app.appendChild(box); box.focus({ preventScroll: true }); box.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "center" });
+  document.getElementById("gxNo").onclick = () => box.remove();
+  document.getElementById("gxChk").onclick = () => xmSheet(rest ? "rest" : fl ? "flag" : "all");
+  document.getElementById("gxGo").onclick = () => { xmPause(); xmFinish(); };
+}
+// 解答の見直し（答案用紙のように自分の答えを並べる）。押すとその問題へ移って直せる
+function xmSheet(f) {
+  const x = xmCur(), c = XM_CONF[x.k]; if (f) x.sf = f; f = x.sf || "all";
+  const N = x.ids.length, rest = x.ids.filter(d => !xmDone(x, d)).length, fl = x.ids.filter(d => x.flag[d]).length;
+  const show = x.ids.map((id, i) => [id, i]).filter(([id]) => f === "rest" ? !xmDone(x, id) : f === "flag" ? x.flag[id] : true);
+  const tab = (k, t) => `<button data-f="${k}" aria-pressed="${f === k}">${t}</button>`;
+  const ans = id => { const a = x.ans[id]; return a == null ? "" : `${a + 1}　${XM_BY[id].c[x.perm[id][a]]}`; };
+  const cuts = xmCuts(x);
+  $app.innerHTML = `<div class="chapter-head">${esc(c.short)}・解答の見直し</div>
+    <div class="qhead"><span class="tag tnum gytimer" id="gxTimer" role="timer"></span><span class="qcount tnum">解答 ${N - rest}/${N}</span></div>
+    <section class="win"><p class="note" style="margin:0 0 8px">自分の答えを確かめ、直したい問題を押すとその問題へ移ります。答えは採点するまで何度でも直せます。</p>
+      <div class="fsw gxtabs" role="group" aria-label="表示する問題">${tab("all", `すべて ${N}`)}${tab("rest", `未解答 ${rest}`)}${tab("flag", `見直し印 ${fl}`)}</div>
+      ${show.length ? `<ol class="gxsheet">${show.map(([id, i]) => { const t = ans(id);
+        const hd = f === "all" && cuts.some(([a]) => a === i) ? `<li class="gxsh">${esc(XM_BY[id].sub)}</li>` : "";
+        return `${hd}<li><button data-i="${i}" class="${t ? "" : "none"}"><span class="gxno tnum">${xmNo(i)}</span><span class="gxsub">${esc(XM_BY[id].topic)}</span><span class="gxans">${t ? esc(t) : "未解答"}</span>${x.flag[id] ? `<span class="gxstar" aria-label="見直し印">★</span>` : ""}</button></li>`; }).join("")}</ol>`
+        : `<p class="note">${f === "rest" ? "未解答の問題はありません。" : "見直し印をつけた問題はありません。"}</p>`}
+    </section>
+    <div class="row"><button class="btn-gold" id="gxBack">問題にもどる</button><button id="gxEnd">解答を終えて採点へ</button></div>`;
+  xmTick();
+  $app.querySelectorAll(".gxtabs button").forEach(b => b.onclick = () => { xmSheet(b.dataset.f); $app.querySelector(`.gxtabs button[data-f="${b.dataset.f}"]`).focus({ preventScroll: true }); });
+  $app.querySelectorAll(".gxsheet button").forEach(b => b.onclick = () => { x.cur = +b.dataset.i; x.back = "sheet"; save(); xmQ(); toTop(); });
+  document.getElementById("gxBack").onclick = () => { xmQ(); toTop(); };
+  document.getElementById("gxEnd").onclick = xmConfirm;
+  toTop();
+}
+const xmOk = (x, id) => x.ans[id] != null && x.perm[id][x.ans[id]] === XM_BY[id].a;
+function xmFinish() {
+  const x = xmCur(), c = XM_CONF[x.k], m = xmMock(x), r = { tot: 0, max: 0, sub: {} };
+  x.ids.forEach(id => { const q = XM_BY[id], mx = xmPts(c, q), p = xmOk(x, id) ? mx : 0;
+    r.tot += p; r.max += mx; const s = r.sub[q.sub] || [0, 0]; s[0] += p; s[1] += mx; r.sub[q.sub] = s; record(q, p === mx); });
+  r.rows = m.pass.map(b => { const v = b.subs ? b.subs.reduce((s, k) => s + (r.sub[k] || [0])[0], 0) : r.tot; return [b.label, v, b.subs ? b.subs.reduce((s, k) => s + (r.sub[k] || [0, 0])[1], 0) : r.max, b.need, v >= b.need]; });
+  r.pass = r.rows.every(z => z[4]);
+  r.min = Math.round(x.used / 60000);
+  x.res = r; x.step = "done";
+  const st = xmSt(c.key); st.hist = [...(st.hist || []), { day: x.day, mid: m.id, tot: r.tot, max: r.max, pass: r.pass, min: r.min }].slice(-20);
+  completeDay(); save(); xmResult();
+}
+function xmResult() {
+  const x = xmCur(), c = XM_CONF[x.k], m = xmMock(x), r = x.res;
+  $app.innerHTML = `<div class="chapter-head">${esc(c.short)}・${esc(m.name)}の結果</div>
+    <section class="win msg">
+      ${gyRes(r.pass, r.pass ? "合格ラインに届いています" : "合格ラインに届きませんでした", `<span class="tnum">${r.tot}点/${r.max}点・解答時間 ${r.min}分（制限 ${m.min}分）</span>`)}
+      <table class="gymr tnum"><tr><th></th><th>得点</th><th>合格ライン</th><th></th></tr>${r.rows.map(([n, v, mx, nd, ok]) => `<tr><th>${esc(n)}</th><td>${v}/${mx}点</td><td>${nd}点以上</td><td class="${ok ? "ok" : "ng"}">${ok ? "○" : "×"}</td></tr>`).join("")}</table>
+      ${r.min > m.min ? `<p class="note">制限時間を${r.min - m.min}分こえました。本番では時間内に解いた分だけが得点になります。</p>` : ""}
+      <h4>分野ごとの得点</h4>
+      <table class="gymr tnum">${c.subs.filter(k => r.sub[k]).map(k => { const [v, mx] = r.sub[k]; return `<tr><th>${esc(k)}</th><td>${v}/${mx}点</td><td>${Math.round(v / mx * 100)}%</td></tr>`; }).join("")}</table>
+      <p class="note">${esc(m.passNote)}</p>
+    </section>
+    <h2 class="section-label">1問ずつ見直す</h2>
+    <section class="win"><div class="gxgrid">${x.ids.map((id, i) => { const ok = xmOk(x, id), none = x.ans[id] == null;
+      return `<button data-i="${i}" class="${ok ? "ok" : "ng"}" aria-label="${xmNo(i)} ${ok ? "正解" : none ? "未解答" : "不正解"}">${i + 1}<small>${ok ? "○" : "×"}</small></button>`; }).join("")}</div></section>
+    <div class="row">${x.ids.some(id => !xmOk(x, id)) ? `<button class="btn-gold" id="gxRevW">まちがえた問題だけ見直す</button>` : ""}<button id="gxRev">問1から見直す</button><button id="gxBackG">${esc(c.short)}の対策にもどる</button></div>`;
+  $app.querySelectorAll(".gxgrid button").forEach(b => b.onclick = () => xmReview(+b.dataset.i));
+  document.getElementById("gxRev").onclick = () => xmReview(0);
+  const w = document.getElementById("gxRevW"); if (w) w.onclick = () => xmReview(x.ids.findIndex(id => !xmOk(x, id)), true);
+  document.getElementById("gxBackG").onclick = () => showXm(c.key);
+  document.getElementById("gxBackG").focus({ preventScroll: true });
+  toTop();
+}
+function xmReview(i, wrong) {
+  const x = xmCur(), c = XM_CONF[x.k], id = x.ids[i], q = XM_BY[id], a = x.ans[id], ok = xmOk(x, id), N = x.ids.length, perm = x.perm[id];
+  const miss = x.ids.map((d, j) => j).filter(j => !xmOk(x, x.ids[j]));
+  const prev = wrong ? miss.filter(j => j < i).pop() : i ? i - 1 : undefined, nxt = wrong ? miss.find(j => j > i) : i + 1 < N ? i + 1 : undefined;
+  $app.innerHTML = `<div class="chapter-head">${wrong ? `まちがえた問題の見直し（${miss.indexOf(i) + 1}/${miss.length}）` : "見直し"}</div>
+    <div class="qhead"><span class="tag">${xmNo(i)}</span><span class="tag" style="border-color:var(--muted);color:var(--muted)">${esc(q.sub)}・${esc(q.topic)}</span></div>
+    <section class="win msg gyq"><p class="question">${esc(q.q)}</p>
+      ${gyRes(ok, ok ? "せいかい" : a == null ? "未解答" : "ざんねん", `正解は <b class="tnum">${perm.indexOf(q.a) + 1}</b>${ok || a == null ? "" : `　あなたの解答は <span class="tnum">${a + 1}</span>`}`)}
+      ${gyPoint(q)}${xmChoices(q, perm, a)}${xmAfter(c, q, perm)}</section>
+    <div class="row gxnav"><button id="gxPrev"${prev == null ? " disabled" : ""}>‹ 前</button><button id="gxRes">結果にもどる</button><button class="btn-gold" id="gxNext"${nxt == null ? " disabled" : ""}>次 ›</button></div>`;
+  document.getElementById("gxPrev").onclick = () => xmReview(prev, wrong);
+  document.getElementById("gxNext").onclick = () => xmReview(nxt, wrong);
+  document.getElementById("gxRes").onclick = xmResult;
+  toTop();
+}
+// 試験の画面に置く模試の入口（1つの試験で解答中の模試は1つまで）
+function xmEntry(c, m) {
+  const x = xmSt(c.key).cur, mine = x && x.mid === m.id, live = mine && x.step !== "done", h = (xmSt(c.key).hist || []).filter(r => r.mid === m.id);
+  const other = x && x.step !== "done" && x.mid !== m.id;
+  const un = xmUnseen(c);
+  return `<section class="win gymock gyexam" data-m="${m.id}">
+      <h3>${esc(m.name)}</h3>
+      <p class="note">${esc(m.note)}${un ? `　まだ模試に出ていない問題：${un}問。` : ""}</p>
+      ${live ? `<p class="note tnum">${esc(x.day)}に始めた模試：解答 ${x.ids.filter(d => xmDone(x, d)).length}/${x.ids.length}・${xmLeft(x) >= 0 ? `残り ${gyClock(xmLeft(x))}` : "時間切れ"}</p>
+        <div class="row"><button class="btn-gold xmCont">続きから解く ▶</button><button class="xmNew">新しく始める</button></div>`
+      : `<div class="row"><button class="btn-gold xmNew">${esc(m.name)}を始める ▶</button>${mine && x.step === "done" ? `<button class="xmLast">前回の結果</button>` : ""}</div>${other ? `<p class="note">ほかの模試が途中です。始めると、途中の解答は消えます。</p>` : ""}`}
+      ${h.length ? `<ul class="gymh tnum">${h.slice(-5).reverse().map(r => `<li>${esc(r.day)}　${r.pass ? "合格ライン" : "ライン未満"}　${r.tot}/${r.max}点　${r.min}分</li>`).join("")}</ul>` : ""}
+    </section>`;
+}
+function xmBind(c) {
+  $app.querySelectorAll(".gyexam[data-m]").forEach(sec => { const m = c.mocks.find(z => z.id === sec.dataset.m);
+    const ct = sec.querySelector(".xmCont"); if (ct) ct.onclick = () => xmOpen(c);
+    const l = sec.querySelector(".xmLast"); if (l) l.onclick = () => xmOpen(c);
+    const n = sec.querySelector(".xmNew");
+    n.onclick = () => { const x = xmSt(c.key).cur;
+      if (x && x.step !== "done" && x.ids.some(d => xmDone(x, d)) && !n.dataset.sure) { n.dataset.sure = "1"; n.textContent = "途中の解答を消して始める（もう一度押す）"; return; }
+      xmOpen(c, m); }; });
+}
+
+// ===== 宅建士（宅地建物取引士資格試験）の問題 =====
+// 形式は不動産適正取引推進機構「試験の概要」による（50問・四肢択一・2時間。登録講習修了者は45問・1時間50分）。
+// 条文は e-Gov 法令検索の本文（LawCodex/jp の写し、2026年10月時点の現行法令）で確認。過去問の文章は使わず、すべて新しく作った問題。
+// d: くわしい解説（考え方・ひっかけ所・関連知識の3行）。art: 根拠（xm_laws.py が条文の本文を取り出す）。
+const TK_Q = [
+  // ---- 権利関係（問1〜14） ----
+  { id:"tk-1", sub:"権利関係", topic:"意思表示（詐欺・強迫・錯誤）", trap:true,
+    q:"Aが所有する甲土地をBに売却する契約を締結した場合に関する次の記述のうち、民法の規定によれば、正しいものはどれか。",
+    c:["AがBの詐欺によって契約し、その後Bが甲土地を詐欺の事実を知らないCに転売した場合、Cが知らないことに過失があっても、Aは詐欺による取消しをCに対抗することができない。",
+       "AがBの強迫によって契約した場合、Aは、強迫による取消しを、取消し前に甲土地を取得した善意無過失のCに対抗することができる。",
+       "Aが錯誤によって契約し、その錯誤がAの重大な過失によるものであったときは、BがAの錯誤を知っていた場合であっても、Aは契約を取り消すことができない。",
+       "第三者Dの詐欺によってAが契約した場合、Bがその事実を知らなかったときは、知らないことについて過失があっても、Aは契約を取り消すことができない。"],
+    a:1, ex:["詐欺取消しを対抗できないのは「善意でかつ過失がない」第三者だけです。過失のあるCには対抗できます（96条3項）。",
+       "96条3項が守るのは詐欺の場合の第三者だけです。強迫による取消しは、善意無過失の第三者にも対抗できます。",
+       "重過失があっても、相手方が錯誤を知り又は重大な過失で知らなかったときは取り消せます（95条3項1号）。",
+       "第三者の詐欺は、相手方Bが知り、又は「知ることができた」ときは取り消せます。過失があれば取消し可能です（96条2項）。"],
+    e:"詐欺の第三者保護は「善意無過失」、強迫は第三者にも対抗できる。錯誤の重過失には相手方の悪意・重過失などの例外がある。",
+    art:"民法95条3項・96条2項・3項",
+    d:[["考え方","取消しを第三者に対抗できるかは、詐欺と錯誤なら第三者が善意無過失かで決まり、強迫は第三者の主観を問いません。表意者の落ち度の大きさで保護の度合いが変わる、と覚えます。"],
+       ["ひっかけ所","肢1は「過失があっても」で善意無過失の要件を外し、肢4は「知ることができた」を落としています。肢3は95条3項各号の例外を消した言い切りです。"],
+       ["関連知識","心裡留保（93条）は相手方が悪意又は有過失なら無効で、その無効は善意の第三者に対抗できません（93条2項）。第三者の要件が「善意」だけである点が詐欺・錯誤と違います。"]] },
+  { id:"tk-2", sub:"権利関係", topic:"代理（無権代理）",
+    q:"代理権を有しないBが、Aの代理人と称して、A所有の乙建物をCに売却する契約を締結した。この場合に関する次の記述のうち、民法の規定によれば、正しいものはどれか。",
+    c:["Cが相当の期間を定めて追認をするかどうかを確答するようAに催告し、Aがその期間内に確答をしなかったときは、Aは追認をしたものとみなされる。",
+       "Cは、契約の時にBに代理権がないことを知っていた場合でも、Aが追認をしない間は、契約を取り消すことができる。",
+       "Cが契約の時にBに代理権がないことを過失によって知らなかった場合でも、Bが自己に代理権がないことを知っていたときは、Cは、Bに対して履行又は損害賠償を請求することができる。",
+       "Aが追認をしたときは、別段の意思表示がない限り、契約は追認をした時からその効力を生ずる。"],
+    a:2, ex:["期間内に確答がないときは、追認を「拒絶」したものとみなされます（114条）。",
+       "契約の時に代理権がないことを知っていた相手方は、取消しができません（115条ただし書）。",
+       "相手方に過失があっても、無権代理人が自分に代理権がないことを知っていたときは責任を免れません（117条2項2号ただし書）。",
+       "追認は、別段の意思表示がなければ「契約の時にさかのぼって」効力を生じます（116条）。"],
+    e:"催告への無回答は追認拒絶、取消権は善意の相手方だけ、無権代理人の責任は相手方が善意無過失なら当然、有過失でも無権代理人が悪意なら負う。",
+    art:"民法114条・115条・116条・117条2項2号",
+    d:[["考え方","無権代理の相手方の手段（催告・取消し・無権代理人の責任追及）は、相手方の主観で使えるものが変わります。催告は悪意でもでき、取消しは善意、責任追及は原則として善意無過失が必要です。"],
+       ["ひっかけ所","肢1は「拒絶」を「追認」に入れ替えています。肢4は遡及効を「追認の時から」に変えた型です。"],
+       ["関連知識","無権代理人が行為能力の制限を受けていたときは、117条1項の責任を負いません（117条2項3号）。"]] },
+  { id:"tk-3", sub:"権利関係", topic:"時効", trap:true,
+    q:"時効に関する次の記述のうち、民法の規定によれば、誤っているものはどれか。",
+    c:["所有の意思をもって、平穏に、かつ、公然と他人の土地を占有した者は、占有開始時に善意無過失であれば10年間、そうでなくても20年間の占有により、その所有権を取得する。",
+       "債権は、債権者が権利を行使することができることを知った時から5年間、又は権利を行使することができる時から10年間行使しないときは、時効によって消滅する。",
+       "債務者が債務の存在を承認したときは、時効は、その時から新たにその進行を始める。",
+       "債権者が裁判上の請求をしたときは、その後に訴えを取り下げた場合であっても、時効は、訴えを提起した時から新たにその進行を始める。"],
+    a:3, ex:["162条1項・2項のとおりです。",
+       "166条1項1号・2号のとおりです（主観的起算点5年・客観的起算点10年）。",
+       "承認は時効の更新事由です（152条1項）。",
+       "訴えの取下げなど権利が確定せずに終わったときは、終了の時から6か月を経過するまで完成が猶予されるだけで、更新はされません（147条1項・2項）。"],
+    e:"裁判上の請求は「完成猶予」、確定判決などで権利が確定して初めて「更新」。承認は直ちに更新。",
+    art:"民法147条1項・2項・152条1項・162条・166条1項",
+    d:[["考え方","完成猶予（時効が完成しない）と更新（ゼロから数え直す）を分けて覚えます。裁判上の請求は手続中は猶予、権利が確定すれば更新です。"],
+       ["ひっかけ所","肢4は「取下げ」の場合でも更新されるとしています。権利が確定しないまま終わった場合は、終了から6か月の猶予だけです。"],
+       ["関連知識","不法行為の損害賠償請求権は、損害及び加害者を知った時から3年（人の生命・身体の侵害は5年）、不法行為の時から20年で消滅します（724条・724条の2）。"]] },
+  { id:"tk-4", sub:"権利関係", topic:"不動産物権変動と登記",
+    q:"Aが所有する丙土地に関する次の記述のうち、民法の規定によれば、正しいものはどれか。",
+    c:["AがBに丙土地を売却した後、同じ丙土地をCにも売却し、Cが先に所有権移転登記をした場合、Bは、Cより先に契約したことを理由に、Cに所有権を対抗することができる。",
+       "Aが死亡し、遺産分割によって子Dが丙土地を単独で取得した場合、Dは、法定相続分を超える部分についても、登記をしないで第三者に対抗することができる。",
+       "AがBに丙土地を売却し、Bが所有権移転登記を備えた後に、AがCとの間でも丙土地の売買契約を締結した場合、Bは、Cに対し、所有権を対抗することができる。",
+       "AがBに丙土地を売却し、Bへの所有権移転登記をする前にAが死亡した場合、Aの唯一の相続人Eは、Bにとって「第三者」に当たるので、Bは、登記がなければEに所有権を対抗することができない。"],
+    a:2, ex:["不動産の二重譲渡は、契約の先後ではなく登記の先後で決まります（177条）。",
+       "相続による承継も、法定相続分を超える部分は登記などの対抗要件がなければ第三者に対抗できません（899条の2第1項）。",
+       "先に登記を備えたBは、後から買ったCに所有権を対抗できます（177条）。",
+       "相続人は被相続人の権利義務を一切承継する（896条）ので、売主Aの地位を引き継いだ当事者であり、177条の第三者に当たりません。"],
+    e:"二重譲渡は登記の先後で決まる。相続人は売主の地位をそのまま引き継ぐ当事者。法定相続分を超える取得は登記が必要。",
+    art:"民法177条・896条・899条の2第1項",
+    d:[["考え方","「第三者」は当事者とその包括承継人以外の者です。売主の相続人は売主と同じ立場なので、買主は登記がなくても所有権を主張できます。"],
+       ["ひっかけ所","肢2は平成30年改正前の考え方（遺産分割による取得は登記不要と誤解されやすい点）を突いています。法定相続分を超える部分は登記が必要です。"],
+       ["関連知識","相続で不動産を取得した人は、取得を知った日から3年以内に相続登記を申請する義務があります（不動産登記法76条の2）。"]] },
+  { id:"tk-5", sub:"権利関係", topic:"抵当権",
+    q:"抵当権に関する次の記述のうち、民法の規定によれば、正しいものはどれか。",
+    c:["土地に抵当権を設定した場合、抵当権の効力は、その土地の上に存する建物にも及ぶ。",
+       "抵当不動産が賃貸されている場合、抵当権者が賃料に物上代位をするには、その賃料が払い渡される前に差押えをしなければならない。",
+       "土地とその上の建物を同一人が所有している場合に、土地だけに抵当権を設定し、その実行により土地と建物の所有者が異なることになったときは、建物のための法定地上権は成立しない。",
+       "抵当権の設定後に抵当地に建物が築造された場合、抵当権者は、土地とともに建物を競売することができ、建物の代価からも優先して弁済を受けることができる。"],
+    a:1, ex:["土地の抵当権は「抵当地の上に存する建物を除き」付加一体物に及びます。建物には及びません（370条）。",
+       "物上代位には払渡し又は引渡し前の差押えが必要です（372条による304条1項の準用）。",
+       "土地と建物が同一所有者で、土地又は建物に抵当権が設定され、実行で所有者が別になれば法定地上権が成立します（388条）。",
+       "一括競売はできますが、優先弁済を受けられるのは土地の代価についてだけです（389条1項）。"],
+    e:"土地と建物は別の不動産。物上代位は払渡し前の差押え。一括競売の優先権は土地の代価だけ。",
+    art:"民法304条1項・370条・372条・388条・389条1項",
+    d:[["考え方","日本では土地と建物が別の不動産なので、土地の抵当権は建物に及ばず、所有者が分かれたときの調整として法定地上権や一括競売があります。"],
+       ["ひっかけ所","肢4は一括競売の「優先権は土地の代価のみ」を外しています。肢3は388条の「土地又は建物につき」を見落とさせる型です。"],
+       ["関連知識","抵当不動産の第三取得者は、抵当権消滅請求をすることができます（379条）。主たる債務者や保証人はできません。"]] },
+  { id:"tk-6", sub:"権利関係", topic:"保証", trap:true,
+    q:"保証に関する次の記述のうち、民法の規定によれば、誤っているものはどれか。",
+    c:["保証契約は、書面でしなければその効力を生じないが、その内容を記録した電磁的記録によってされたときは、書面によってされたものとみなされる。",
+       "連帯保証人は、債権者から履行の請求を受けたときに、まず主たる債務者に催告をすべき旨を請求することはできない。",
+       "保証人が法人でない根保証契約は、極度額を定めなければ、その効力を生じない。",
+       "主たる債務者が破産手続開始の決定を受けた場合でも、保証人は、債権者に対し、まず主たる債務者に催告をすべき旨を請求することができる。"],
+    a:3, ex:["446条2項・3項のとおりです。",
+       "連帯保証人には催告の抗弁・検索の抗弁がありません（454条）。",
+       "個人根保証契約は極度額の定めがなければ無効です（465条の2第2項）。",
+       "主たる債務者が破産手続開始の決定を受けたとき又は行方不明のときは、催告の抗弁は使えません（452条ただし書）。"],
+    e:"保証は書面（電磁的記録も可）。連帯保証人に催告・検索の抗弁なし。個人根保証は極度額必須。催告の抗弁は破産・行方不明で使えない。",
+    art:"民法446条2項・3項・452条・454条・465条の2第2項",
+    d:[["考え方","普通の保証人は「まず主たる債務者へ」と言える（催告・検索の抗弁）のが原則で、連帯保証人はそれが言えない、という対比が出題の中心です。"],
+       ["ひっかけ所","肢4は452条ただし書（破産・行方不明）を消した言い切りです。"],
+       ["関連知識","極度額の定めも書面又は電磁的記録でしなければ効力を生じません（465条の2第3項）。"]] },
+  { id:"tk-7", sub:"権利関係", topic:"売買（契約不適合責任）",
+    q:"宅地建物取引業者ではないAが、宅地建物取引業者ではないBに中古住宅を売却して引き渡したところ、雨漏りがあり、品質に関して契約の内容に適合しないものであった。この場合に関する次の記述のうち、民法の規定によれば、正しいものはどれか。なお、契約に特約はないものとする。",
+    c:["Bは、Aに対し、修補による履行の追完を請求することができるが、Aは、Bに不相当な負担を課するものでないときは、Bが請求した方法と異なる方法による履行の追完をすることができる。",
+       "Bは、Aに対し、追完の催告をすることなく、直ちに代金の減額を請求することが常にできる。",
+       "Bが不適合を知った時から1年以内にその旨をAに通知しなかったときは、Aが引渡しの時に不適合を知っていた場合であっても、Bは履行の追完を請求することができない。",
+       "雨漏りがBの責めに帰すべき事由によるものであっても、Bは、Aに対し、代金の減額を請求することができる。"],
+    a:0, ex:["562条1項のとおりです。",
+       "代金減額は、原則として相当の期間を定めた追完の催告をしてからです。催告なしでよいのは追完不能などの場合に限られます（563条1項・2項）。",
+       "売主が引渡し時に不適合を知り、又は重過失で知らなかったときは、1年の通知期間の制限は適用されません（566条ただし書）。",
+       "不適合が買主の責めに帰すべき事由によるときは、代金減額を請求できません（563条3項）。"],
+    e:"追完→（催告）→代金減額の順。種類・品質の不適合は知った時から1年以内に通知、ただし売主が悪意・重過失なら制限なし。",
+    art:"民法562条1項・563条1項〜3項・566条",
+    d:[["考え方","買主の手段は、追完請求・代金減額請求・損害賠償・解除の4つです（564条）。代金減額は追完の催告を経るのが原則です。"],
+       ["ひっかけ所","肢2は「常に」で563条2項の場面に限られることを隠し、肢3は566条ただし書を消しています。"],
+       ["関連知識","宅建業者が自ら売主で買主が業者でないときは、通知期間を引渡しから2年以上とする特約を除き、民法より買主に不利な特約は無効です（宅建業法40条）。"]] },
+  { id:"tk-8", sub:"権利関係", topic:"賃貸借（敷金・修繕・転貸）",
+    q:"AがBに建物を賃貸し、Bが敷金を交付している場合に関する次の記述のうち、民法の規定によれば、正しいものはどれか。",
+    c:["Bは、Aに対し、未払の賃料に敷金を充てるよう請求することができる。",
+       "賃貸借が終了したときは、Aは、建物の返還を受ける前であっても、敷金を返還しなければならない。",
+       "建物の修繕が必要である旨をBがAに通知したにもかかわらず、Aが相当の期間内に必要な修繕をしないときは、Bは、その修繕をすることができる。",
+       "BがAの承諾を得て建物をCに転貸した後、AとBが賃貸借を合意解除した場合、Aは、その解除の当時Bの債務不履行による解除権を有していなかったときでも、合意解除をCに対抗することができる。"],
+    a:2, ex:["敷金を債務の弁済に充てることができるのは賃貸人だけで、賃借人から充当を請求することはできません（622条の2第2項）。",
+       "敷金の返還は、賃貸借が終了し、かつ、賃貸物の返還を受けたときです。明渡しが先です（622条の2第1項1号）。",
+       "607条の2第1号のとおりです。急迫の事情があるときも賃借人が修繕できます（同条2号）。",
+       "合意解除は転借人に対抗できません。対抗できるのは、解除の当時、賃借人の債務不履行による解除権があったときだけです（613条3項）。"],
+    e:"敷金は明渡しが先、充当は賃貸人だけ。賃借人は通知しても直さないとき・急迫のとき修繕できる。合意解除は転借人に対抗できない。",
+    art:"民法607条の2・613条3項・622条の2",
+    d:[["考え方","敷金は賃借人の債務の担保なので、何に充てるかは賃貸人が決め、明渡し後に差し引いて返します。"],
+       ["ひっかけ所","肢4は613条3項ただし書（債務不履行解除権があった場合）を本文と入れ替えています。"],
+       ["関連知識","無断転貸は解除原因です（612条2項）。転借人は賃借人の債務の範囲を限度に賃貸人へ直接義務を負います（613条1項）。"]] },
+  { id:"tk-9", sub:"権利関係", topic:"借地借家法（借地）", trap:true,
+    q:"建物の所有を目的とする土地の賃貸借（借地権）に関する次の記述のうち、借地借家法の規定によれば、正しいものはどれか。",
+    c:["借地権の存続期間を20年と定めた場合、その存続期間は20年となる。",
+       "借地権者は、借地権の登記がなくても、その土地の上に借地権者が登記されている建物を所有するときは、借地権を第三者に対抗することができる。",
+       "借地契約を最初に更新する場合、当事者がこれより長い期間を定めない限り、更新後の期間は更新の日から10年となる。",
+       "存続期間を50年以上とする定期借地権では、契約の更新をしない旨などの特約を口頭で定めても有効である。"],
+    a:1, ex:["存続期間は30年で、契約でこれより長い期間を定めたときだけその期間です。20年の定めは30年になります（3条）。",
+       "10条1項のとおりです。",
+       "最初の更新は20年、2回目以降は10年です（4条）。",
+       "一般定期借地権の特約は、公正証書による等書面（電磁的記録を含む）でしなければなりません（22条）。"],
+    e:"借地は30年→最初の更新20年→以後10年。対抗力は借地上の登記建物。一般定期借地権は50年以上・書面。",
+    art:"借地借家法3条・4条・10条1項・22条1項",
+    d:[["考え方","借地借家法は借地人を守るための法律なので、短い期間の定めは無効にされ、法定の期間に置き換わります。"],
+       ["ひっかけ所","肢3は最初の更新（20年）と2回目以降（10年）を入れ替えています。"],
+       ["関連知識","建物が滅失しても、必要事項を土地の見やすい場所に掲示すれば、滅失の日から2年間は対抗力が続きます（10条2項）。"]] },
+  { id:"tk-10", sub:"権利関係", topic:"借地借家法（借家）", trap:true,
+    q:"AがBに対し、居住用建物を期間2年で賃貸した（定期建物賃貸借ではない）。この場合に関する次の記述のうち、借地借家法の規定によれば、正しいものはどれか。",
+    c:["Aが期間満了の1年前から6月前までの間にBに対して更新をしない旨の通知をしなかったときは、従前の契約と同一の条件で更新したものとみなされ、更新後の期間は2年となる。",
+       "Bは、建物の引渡しを受けていれば、賃借権の登記がなくても、その後に建物を買い受けたCに対し、賃借権を対抗することができる。",
+       "Aが更新拒絶の通知をするには正当の事由が必要であるが、その判断に当たり、Aが立退料の支払を申し出たことは考慮されない。",
+       "仮にAB間の契約で期間を6か月と定めていたとすれば、その賃貸借は、期間6か月の賃貸借として効力を有する。"],
+    a:1, ex:["法定更新された場合、更新後の期間は「定めがないもの」となります（26条1項ただし書）。",
+       "建物の引渡しがあれば、その後に物権を取得した者に対抗できます（31条）。",
+       "明渡しの条件として財産上の給付をする旨の申出（立退料）も、正当事由の判断で考慮されます（28条）。",
+       "期間を1年未満とする建物賃貸借は、期間の定めがないものとみなされます（29条1項）。"],
+    e:"借家の対抗力は引渡し。法定更新後は期間の定めなし。1年未満の期間は期間の定めなし。正当事由に立退料も考慮。",
+    art:"借地借家法26条1項・28条・29条1項・31条",
+    d:[["考え方","借家も借地と同じく借家人保護が基本で、賃貸人からの更新拒絶・解約には正当事由が必要です。"],
+       ["ひっかけ所","肢1は「更新後も2年」と思い込ませる型です。法定更新後は期間の定めのない賃貸借になります。"],
+       ["関連知識","定期建物賃貸借は、書面（電磁的記録を含む）で契約し、事前に更新がない旨の書面を交付して説明しなければ、更新がない旨の定めが無効になります（38条1項〜5項）。"]] },
+  { id:"tk-11", sub:"権利関係", topic:"区分所有法（令和8年4月施行の改正後）", trap:true,
+    q:"建物の区分所有等に関する法律に関する次の記述のうち、正しいものはどれか。なお、規約に別段の定めはないものとする。",
+    c:["規約の設定、変更又は廃止は、区分所有者全体の4分の3以上及び議決権の4分の3以上の多数による集会の決議によらなければならない。",
+       "集会の招集の通知は、会日より少なくとも1週間前に、会議の目的たる事項及び議案の要領を示して、各区分所有者に発しなければならない。",
+       "管理者は、少なくとも2年に1回、集会を招集しなければならない。",
+       "建替え決議は、建物が地震に対する安全性に係る基準に適合していない場合であっても、区分所有者及び議決権の各5分の4以上の多数によらなければならない。"],
+    a:1, ex:["令和8年4月施行の改正後は、区分所有者と議決権の各過半数が出席した集会で、出席者とその議決権の各4分の3以上で決します（31条1項）。全体の4分の3ではありません。",
+       "35条1項のとおりです。改正で「議案の要領」も示すことになりました。",
+       "管理者は、少なくとも毎年1回集会を招集しなければなりません（34条2項）。",
+       "耐震性の不足など62条2項各号に当たるときは、建替え決議は各4分の3以上でできます（62条2項）。"],
+    e:"改正後の特別決議は「過半数が出席した集会で、出席者の各4分の3」。建替えは原則5分の4、耐震性不足などは4分の3。",
+    art:"区分所有法31条1項・34条2項・35条1項・62条1項・2項",
+    d:[["考え方","令和7年法律第47号による改正（令和8年4月1日施行）で、集会の決議は「出席者の多数決」を基本とする仕組みに変わりました。出題は試験年度の4月1日現在の法令です。"],
+       ["ひっかけ所","肢1は改正前の「区分所有者及び議決権の各4分の3」をそのまま書いています。古い教材の知識で選ぶと誤ります。"],
+       ["関連知識","共用部分の変更（形状・効用の著しい変更を伴うもの）も、改正後は出席者の各4分の3で決します（17条1項）。"]] },
+  { id:"tk-12", sub:"権利関係", topic:"不動産登記法", trap:true,
+    q:"不動産の登記に関する次の記述のうち、不動産登記法の規定によれば、誤っているものはどれか。",
+    c:["建物を新築した者は、その所有権の取得の日から1月以内に、表題登記を申請しなければならない。",
+       "権利に関する登記の申請は、法令に別段の定めがある場合を除き、登記権利者及び登記義務者が共同してしなければならない。",
+       "相続により所有権を取得した者は、自己のために相続の開始があったことを知り、かつ、所有権を取得したことを知った日から3年以内に、所有権の移転の登記を申請しなければならない。",
+       "仮登記に基づいて本登記をした場合、その本登記の順位は、本登記をした時の順位による。"],
+    a:3, ex:["47条1項のとおりです（土地の表題登記も1月以内、36条）。",
+       "60条のとおりです（共同申請の原則）。",
+       "76条の2第1項のとおりです（相続登記の申請義務）。",
+       "仮登記に基づく本登記の順位は、「仮登記の順位」によります（106条）。これが仮登記をする意味です。"],
+    e:"表示の登記は1月以内の申請義務、権利の登記は共同申請が原則、相続登記は3年以内、本登記の順位は仮登記の順位。",
+    art:"不動産登記法47条1項・60条・76条の2第1項・106条",
+    d:[["考え方","仮登記は順位を確保しておくための登記です。本登記をすれば、仮登記の時点の順位で権利を主張できます。"],
+       ["ひっかけ所","肢4は仮登記の効果（順位保全）を逆にしています。"],
+       ["関連知識","権利に関する登記には原則として申請義務がありませんが、相続登記（76条の2）と住所等の変更登記は申請義務が設けられています。"]] },
+  { id:"tk-13", sub:"権利関係", topic:"相続", trap:true,
+    q:"Aが死亡し、相続人が妻B、子C及び子Dである場合に関する次の記述のうち、民法の規定によれば、正しいものはどれか。",
+    c:["Bの法定相続分は3分の2、C及びDの法定相続分はそれぞれ6分の1である。",
+       "Cが相続を放棄した場合、Cの子Eは、Cを代襲してAの相続人となる。",
+       "Dは、自己のために相続の開始があったことを知った時から3か月以内に、単純承認、限定承認又は放棄をしなければならないが、この期間は家庭裁判所において伸長することができる。",
+       "Aが全財産を第三者に遺贈していた場合、Bの遺留分は、遺留分を算定するための財産の価額の2分の1である。"],
+    a:2, ex:["配偶者と子が相続人のときは各2分の1で、子が2人なら各4分の1です（900条1号・4号）。3分の2は配偶者と直系尊属の場合です。",
+       "相続放棄をした者は初めから相続人とならなかったものとみなされ（939条）、代襲原因は死亡・欠格・廃除に限られます（887条2項）。放棄では代襲しません。",
+       "915条1項のとおりです。",
+       "全体の遺留分2分の1に、Bの法定相続分2分の1を掛けた4分の1です（1042条）。"],
+    e:"配偶者と子は各1/2。代襲は死亡・欠格・廃除だけで放棄は含まない。熟慮期間3か月は伸長できる。個々の遺留分は全体の割合×法定相続分。",
+    art:"民法887条2項・900条1号・4号・915条1項・939条・1042条",
+    d:[["考え方","相続分の計算は「誰と誰が相続人か」で決まります。配偶者＋子なら1/2ずつ、配偶者＋直系尊属なら2/3と1/3、配偶者＋兄弟姉妹なら3/4と1/4です。"],
+       ["ひっかけ所","肢2は放棄も代襲原因になると思わせる型、肢4は全体の遺留分と個々の遺留分を混同させる型です。"],
+       ["関連知識","兄弟姉妹には遺留分がありません（1042条1項）。直系尊属のみが相続人のときの全体の遺留分は3分の1です。"]] },
+  { id:"tk-14", sub:"権利関係", topic:"共有",
+    q:"A、B及びCが、持分を各3分の1として甲建物を共有している場合に関する次の記述のうち、民法の規定によれば、正しいものはどれか。",
+    c:["甲建物の形状を著しく変える大規模な改装工事をするには、A及びBの同意があれば足りる。",
+       "甲建物をDに期間2年で賃貸することは、各共有者の持分の価格に従い、その過半数で決することができる。",
+       "甲建物の雨漏りを修理する保存行為は、A、B及びC全員の同意がなければすることができない。",
+       "甲建物の管理者の選任は、A、B及びC全員の同意がなければすることができない。"],
+    a:1, ex:["形状又は効用の著しい変更を伴う変更には、他の共有者全員の同意が必要です（251条1項）。",
+       "建物の賃借権等で期間が3年を超えないものは、管理に関する事項として持分の価格の過半数で設定できます（252条1項・4項3号）。",
+       "保存行為は各共有者が単独でできます（252条5項）。",
+       "共有物の管理者の選任・解任も、持分の価格の過半数で決します（252条1項）。"],
+    e:"変更（軽微なものを除く）は全員、管理は持分の過半数、保存は各自。建物は3年以内の賃貸なら管理。",
+    art:"民法251条1項・252条1項・4項3号・5項",
+    d:[["考え方","共有物について何かするときは、変更・管理・保存のどれに当たるかで必要な同意が決まります。"],
+       ["ひっかけ所","肢2の賃貸は、期間が短ければ管理行為です。土地5年・建物3年など、期間の上限の数字がよく問われます。"],
+       ["関連知識","形状・効用の著しい変更を伴わない「軽微な変更」は、管理と同じく持分の価格の過半数で決します（251条1項かっこ書・252条1項）。"]] },
+
+  // ---- 法令上の制限（問15〜22） ----
+  { id:"tk-15", sub:"法令上の制限", topic:"都市計画法（開発許可）", trap:true,
+    q:"都市計画法の開発許可に関する次の記述のうち、正しいものはどれか。なお、許可を要する開発行為の面積について条例による定めはなく、この問において「都道府県知事」とは、指定都市等にあってはその長をいうものとする。",
+    c:["市街化区域内において行う開発行為で、その規模が1,000平方メートル未満であるものは、原則として開発許可を要しない。",
+       "市街化調整区域内において行う開発行為で、農業の用に供する畜舎の建築の用に供する目的で行うものは、開発許可を要する。",
+       "市街化調整区域内において行う開発行為で、図書館の建築の用に供する目的で行うものは、開発許可を要する。",
+       "都市計画区域及び準都市計画区域外の区域内においては、どのような規模の開発行為であっても開発許可を要しない。"],
+    a:0, ex:["29条1項1号と政令（都市計画法施行令19条1項）により、市街化区域では原則1,000平方メートル未満は許可不要です（三大都市圏の一部は500平方メートル未満）。",
+       "市街化調整区域でも、農林漁業用の政令で定める建築物や農林漁業者の住宅のための開発行為は許可不要です（29条1項2号）。",
+       "駅舎・図書館・公民館・変電所などの公益上必要な建築物のための開発行為は、区域を問わず許可不要です（29条1項3号）。",
+       "区域外でも、一定の市街地を形成すると見込まれる規模（政令で1ヘクタール）以上の開発行為は許可が必要です（29条2項）。"],
+    e:"許可不要の面積は市街化区域1,000㎡未満、非線引き・準都市計画区域3,000㎡未満、区域外1ha未満。農林漁業用と公益上必要な建築物は例外。",
+    art:"都市計画法29条1項1号・2号・3号・2項",
+    d:[["考え方","開発許可の例外は「小規模」「農林漁業」「公益上必要」「事業の施行として」「非常災害」などに分けて覚えます。市街化区域には農林漁業の例外がない点に注意します。"],
+       ["ひっかけ所","肢2・肢3は市街化調整区域なら必ず許可が要ると思わせる型です。例外は区域ごとに確かめます。"],
+       ["関連知識","市街化調整区域の開発許可は、29条の要件に加えて34条各号のいずれかに当たらなければ許可されません（立地基準）。"]] },
+  { id:"tk-16", sub:"法令上の制限", topic:"都市計画法（区域区分・用途地域）",
+    q:"都市計画法に関する次の記述のうち、正しいものはどれか。",
+    c:["市街化区域については、少なくとも用途地域を定めるものとされている。",
+       "市街化調整区域は、すでに市街地を形成している区域及びおおむね10年以内に優先的かつ計画的に市街化を図るべき区域である。",
+       "すべての都市計画区域について、市街化区域と市街化調整区域との区分を定めなければならない。",
+       "市街化調整区域については、用途地域を必ず定めなければならない。"],
+    a:0, ex:["13条1項7号のとおりです。",
+       "これは市街化区域の説明です（7条2項）。市街化調整区域は「市街化を抑制すべき区域」です（7条3項）。",
+       "区域区分は「定めることができる」もので、大都市圏など一定の都市計画区域でだけ定めなければなりません（7条1項）。",
+       "市街化調整区域には、原則として用途地域を定めません（13条1項7号）。"],
+    e:"市街化区域＝市街地＋10年以内に市街化。調整区域＝抑制。市街化区域には必ず用途地域、調整区域には原則定めない。",
+    art:"都市計画法7条1項〜3項・13条1項7号",
+    d:[["考え方","区域区分（線引き）は必要なときに定める任意のもので、定めない都市計画区域（非線引き区域）もあります。"],
+       ["ひっかけ所","肢2は市街化区域と市街化調整区域の定義を入れ替えています。"],
+       ["関連知識","市街化区域と非線引き区域では、都市施設として少なくとも道路・公園・下水道を定めます（13条1項11号）。"]] },
+  { id:"tk-17", sub:"法令上の制限", topic:"建築基準法（道路・接道）",
+    q:"建築基準法に関する次の記述のうち、正しいものはどれか。",
+    c:["建築物の敷地は、原則として、道路に2メートル以上接しなければならない。",
+       "自動車のみの交通の用に供する道路に2メートル以上接していれば、接道義務を満たす。",
+       "地方公共団体は、条例で、接道義務の制限を緩和することはできるが、制限を付加することはできない。",
+       "接道義務は、都市計画区域及び準都市計画区域外の建築物にも適用される。"],
+    a:0, ex:["43条1項のとおりです。",
+       "自動車専用道路は、接道義務の「道路」から除かれます（43条1項1号）。",
+       "特殊建築物や大規模な建築物などについて、条例で必要な制限を「付加」することができます（43条3項）。",
+       "接道義務を含む集団規定（第3章）は、都市計画区域及び準都市計画区域内に限り適用されます（41条の2）。"],
+    e:"接道は2m以上、自動車専用道路は数えない、条例で付加できる、集団規定は都市計画区域・準都市計画区域だけ。",
+    art:"建築基準法41条の2・43条1項・3項",
+    d:[["考え方","建築基準法は、全国で適用される単体規定（構造・防火など）と、都市計画区域等だけで適用される集団規定（道路・用途・建蔽率など）に分かれます。"],
+       ["ひっかけ所","肢3は条例で「緩和」と「付加」を入れ替えています。43条3項は付加です。"],
+       ["関連知識","幅員4m未満でも、集団規定の適用時に現に建築物が立ち並び特定行政庁が指定した道は道路とみなされ（いわゆる2項道路）、原則として中心線から2mの線が道路の境界線とみなされます（42条2項）。"]] },
+  { id:"tk-18", sub:"法令上の制限", topic:"建築基準法（建蔽率）", trap:true,
+    q:"建築基準法の建蔽率に関する次の記述のうち、正しいものはどれか。",
+    c:["商業地域内の建築物の建蔽率の限度は、10分の6である。",
+       "建蔽率の限度が10分の8とされている地域以外の防火地域内にある耐火建築物等は、都市計画で定められた建蔽率の限度に10分の1を加えた数値が限度となる。",
+       "街区の角にある敷地で特定行政庁が指定するものの内にある建築物であっても、建蔽率の限度は緩和されない。",
+       "巡査派出所や公衆便所にも、建蔽率の制限が適用される。"],
+    a:1, ex:["商業地域の建蔽率は10分の8です（53条1項4号）。",
+       "53条3項1号のとおりです。角地の指定（同項2号）にも当たれば10分の2を加えます。",
+       "特定行政庁が指定する角地は10分の1を加えます（53条3項2号）。",
+       "巡査派出所・公衆便所・公共用歩廊などには建蔽率の制限が適用されません（53条6項2号）。"],
+    e:"防火地域内の耐火建築物等（8/10地域以外）と特定行政庁指定の角地はそれぞれ+1/10、両方なら+2/10。8/10地域の防火地域内の耐火建築物等は制限なし。",
+    art:"建築基準法53条1項4号・3項・6項",
+    d:[["考え方","建蔽率の緩和は「燃えにくい建物」と「角地」の2つです。もともと8/10の地域の防火地域内の耐火建築物等は、制限そのものがなくなります（53条6項1号）。"],
+       ["ひっかけ所","肢1は近隣商業地域などの数値と取り違えさせる型です。商業地域は10分の8だけです。"],
+       ["関連知識","準防火地域内の耐火建築物等・準耐火建築物等も10分の1を加えます（53条3項1号）。"]] },
+  { id:"tk-19", sub:"法令上の制限", topic:"国土利用計画法（事後届出）",
+    q:"国土利用計画法第23条の届出（事後届出）に関する次の記述のうち、正しいものはどれか。",
+    c:["市街化区域内の3,000平方メートルの土地について売買契約を締結した場合、売主は、契約を締結した日から2週間以内に事後届出をしなければならない。",
+       "土地売買等の契約の当事者の一方が地方公共団体である場合には、事後届出をする必要はない。",
+       "事後届出があった場合、都道府県知事は、届出に係る土地の対価の額が著しく高いときは、その額について勧告をすることができる。",
+       "都市計画区域外の8,000平方メートルの土地について売買契約を締結した場合、買主は、事後届出をしなければならない。"],
+    a:1, ex:["届出をするのは権利取得者（買主）です（23条1項）。",
+       "当事者の一方又は双方が国等である場合は不要です（23条2項3号）。地方公共団体は国等に含まれます。",
+       "事後届出の勧告は土地の「利用目的」についてだけで、対価の額は勧告の対象ではありません（24条1項）。",
+       "都市計画区域外は10,000平方メートル以上が届出の対象です（23条2項1号）。8,000平方メートルなら不要です。"],
+    e:"事後届出は買主が2週間以内に。面積は市街化区域2,000㎡、その他の都市計画区域5,000㎡、区域外10,000㎡以上。勧告は利用目的だけ。",
+    art:"国土利用計画法23条1項・2項1号・3号・24条1項",
+    d:[["考え方","事後届出は契約した後の届出なので、価格は勧告の対象にならず、利用目的が計画に合っているかだけが問題になります。"],
+       ["ひっかけ所","肢1は届出義務者を売主に、肢3は勧告の対象に対価を混ぜています。"],
+       ["関連知識","勧告は届出があった日から3週間以内にします（24条2項）。勧告に従わなくても契約は無効になりません。"]] },
+  { id:"tk-20", sub:"法令上の制限", topic:"農地法", trap:true,
+    q:"農地法に関する次の記述のうち、正しいものはどれか。",
+    c:["相続により農地を取得する場合は、農地法第3条第1項の許可を受ける必要はないが、遅滞なく、農業委員会にその旨を届け出なければならない。",
+       "市街化区域内にある農地を住宅用地に転用する場合であっても、都道府県知事等の許可を受けなければならない。",
+       "農地を一時的に資材置場として利用し、利用後に農地に戻す場合には、農地法第4条第1項の許可を受ける必要はない。",
+       "農地法第3条第1項の許可を受けないでした農地の売買契約も、当事者間ではその効力を生ずる。"],
+    a:0, ex:["相続による取得は3条の許可は不要ですが、3条の3により農業委員会への届出が必要です。",
+       "市街化区域内の農地は、あらかじめ農業委員会に届け出れば、4条の許可は不要です（4条1項7号）。",
+       "一時的な転用でも、農地を農地以外のものにする以上は許可が必要です（4条1項）。",
+       "3条1項の許可を受けないでした行為は、その効力を生じません（3条6項）。"],
+    e:"3条は権利移動（農業委員会の許可）、4条は転用、5条は転用目的の権利移動。市街化区域は届出で足りる（4条・5条）。相続は届出。",
+    art:"農地法3条6項・3条の3・4条1項7号",
+    d:[["考え方","農地法は「農地を農地のまま他人へ」「自分で農地以外に」「農地以外にするため他人へ」の3つに分けて許可を求めます。"],
+       ["ひっかけ所","肢3は「一時的なら許可不要」と思わせる型です。一時転用でも許可が必要です。"],
+       ["関連知識","市街化区域の特例は4条・5条（転用）にはありますが、3条（権利移動）にはありません。"]] },
+  { id:"tk-21", sub:"法令上の制限", topic:"宅地造成及び特定盛土等規制法",
+    q:"宅地造成及び特定盛土等規制法に関する次の記述のうち、正しいものはどれか。なお、この問において「都道府県知事」とは、指定都市又は中核市の区域内にあっては、それぞれの長をいうものとする。",
+    c:["宅地造成等工事規制区域内において行われる宅地造成等に関する工事については、工事主は、当該工事に着手する前に、原則として都道府県知事の許可を受けなければならない。",
+       "宅地造成等工事規制区域の指定の際、当該区域内において既に行われている宅地造成等に関する工事については、工事主は何らの手続も要しない。",
+       "宅地造成等工事規制区域は、国土交通大臣が指定する。",
+       "宅地造成に関する工事について許可を受けた者は、当該工事を完了しても、都道府県知事の検査を受ける必要はない。"],
+    a:0, ex:["12条1項のとおりです。",
+       "指定があった日から21日以内に、都道府県知事に届け出なければなりません（21条1項）。",
+       "宅地造成等工事規制区域は、都道府県知事が指定します（10条1項）。",
+       "許可を受けた宅地造成又は特定盛土等の工事を完了したときは、都道府県知事の検査を受けなければなりません（17条1項）。"],
+    e:"規制区域は知事が指定、区域内の工事は知事の許可、指定時に工事中なら21日以内に届出、完了したら検査。",
+    art:"盛土規制法10条1項・12条1項・17条1項・21条1項",
+    d:[["考え方","令和5年5月に旧宅地造成等規制法を改めた法律です。宅地だけでなく、農地・森林での盛土や土石の堆積も規制対象になりました。"],
+       ["ひっかけ所","肢2は届出（21日以内）を、肢4は完了検査を消しています。"],
+       ["関連知識","規制区域内で擁壁等に関する工事をしようとする者（許可を受けた者などを除く）は、着手する日の14日前までに届け出ます（21条3項）。"]] },
+  { id:"tk-22", sub:"法令上の制限", topic:"土地区画整理法",
+    q:"土地区画整理法に関する次の記述のうち、正しいものはどれか。",
+    c:["仮換地が指定された場合、従前の宅地について権原に基づき使用収益できる者は、仮換地の指定の効力発生の日から換地処分の公告がある日まで、仮換地を使用収益することができ、従前の宅地については使用収益することができない。",
+       "換地処分の公告があった場合、換地計画において定められた換地は、その公告があった日から従前の宅地とみなされる。",
+       "施行地区内において事業の施行の障害となるおそれがある建築物の新築を行おうとする者は、許可を受ける必要はない。",
+       "換地処分は、換地計画に係る区域の全部について工事が完了した後でなければ、いかなる場合もすることができない。"],
+    a:0, ex:["99条1項のとおりです。",
+       "換地は、公告があった日の「翌日」から従前の宅地とみなされます（104条1項）。",
+       "一定の公告があった日後、換地処分の公告がある日までは、建築物の新築等に都道府県知事等の許可が必要です（76条1項）。",
+       "規準・規約・定款・施行規程に別段の定めがあれば、工事完了前でも換地処分ができます（103条2項ただし書）。"],
+    e:"仮換地の指定→仮換地を使い、従前の宅地は使えない。換地処分の公告の翌日に換地が従前の宅地とみなされる。権利の消滅は公告の日の終了時。",
+    art:"土地区画整理法76条1項・99条1項・103条2項・104条1項",
+    d:[["考え方","換地処分の公告で「その日の終わりに消える権利」と「翌日から始まる効果」が分かれます。日付の境目が問われます。"],
+       ["ひっかけ所","肢2は「翌日から」を「その日から」にしています。肢4は103条2項ただし書を消した言い切りです。"],
+       ["関連知識","地役権は、換地処分の公告の翌日以後も従前の宅地の上に存します（104条4項）。"]] },
+
+  // ---- 税・価格（問23〜25） ----
+  { id:"tk-23", sub:"税・価格", topic:"固定資産税", trap:true,
+    q:"固定資産税に関する次の記述のうち、正しいものはどれか。",
+    c:["年度の途中で土地の売買があった場合、その年度の固定資産税は、売主と買主がそれぞれの所有期間に応じて納める義務を負う。",
+       "固定資産税の標準税率は、100分の1.4である。",
+       "住宅用地のうち面積が200平方メートル以下であるものに対して課する固定資産税の課税標準は、価格の3分の1の額とされる。",
+       "同一の者が同一市町村内に所有する土地の課税標準となるべき額の合計が40万円である場合、固定資産税は課されない。"],
+    a:1, ex:["固定資産税の賦課期日は1月1日で（359条）、その日の所有者（登記簿等に所有者として登録されている者）が1年分を納めます（343条）。日割りの精算は当事者間の約束にすぎません。",
+       "350条1項のとおりです。",
+       "200平方メートル以下の小規模住宅用地は6分の1です（349条の3の2第2項）。3分の1はそれを超える部分（一般住宅用地）です。",
+       "免税点は土地30万円です（351条）。40万円なら課税されます。"],
+    e:"賦課期日は1月1日、標準税率1.4%、小規模住宅用地は1/6、免税点は土地30万円・家屋20万円。",
+    art:"地方税法343条1項・349条の3の2第2項・350条1項・351条・359条",
+    d:[["考え方","固定資産税は1月1日の所有者に1年分をかける市町村の税です。売買の日割り精算は税法上の義務ではありません。"],
+       ["ひっかけ所","肢3は小規模住宅用地（1/6）と一般住宅用地（1/3）を入れ替えています。"],
+       ["関連知識","標準税率は「標準」なので、市町村は条例でこれと異なる税率を定めることができます。"]] },
+  { id:"tk-24", sub:"税・価格", topic:"不動産取得税",
+    q:"不動産取得税に関する次の記述のうち、正しいものはどれか。",
+    c:["不動産取得税は、不動産の所在する市町村が、その不動産の取得者に課する。",
+       "相続（包括遺贈及び被相続人から相続人に対してなされた遺贈を含む。）による不動産の取得に対しては、不動産取得税は課されない。",
+       "家屋を改築したことによって家屋の価格が増加しても、新たに家屋を取得したわけではないので、不動産取得税は課されない。",
+       "不動産取得税は、不動産を取得した者が所有権移転登記をした場合に限り、課される。"],
+    a:1, ex:["不動産取得税は、不動産の所在する「道府県」が課します（73条の2第1項）。",
+       "73条の7第1号のとおりです（形式的な所有権の移転として非課税）。",
+       "改築で家屋の価格が増加したときは、改築を家屋の取得とみなして課税されます（73条の2第3項）。",
+       "登記の有無にかかわらず、不動産の取得に対して課されます（73条の2第1項）。"],
+    e:"不動産取得税は都道府県の税で、登記の有無を問わず取得に課す。相続・合併は非課税。改築で価格が増えれば課税。",
+    art:"地方税法73条の2第1項・3項・73条の7",
+    d:[["考え方","「取得」に着目した税なので、有償・無償や登記の有無は関係ありません。ただし相続のような形式的な移転は非課税です。"],
+       ["ひっかけ所","肢1は課税主体を固定資産税（市町村）と入れ替えています。肢3は改築のみなし取得を隠しています。"],
+       ["関連知識","贈与による取得は課税されます（相続人への遺贈は非課税、相続人以外への特定遺贈は課税）。"]] },
+  { id:"tk-25", sub:"税・価格", topic:"地価公示法",
+    q:"地価公示法に関する次の記述のうち、正しいものはどれか。",
+    c:["土地鑑定委員会は、標準地の正常な価格を判定するに当たり、1人の不動産鑑定士の鑑定評価を求めれば足りる。",
+       "標準地は、国土交通大臣が選定する。",
+       "正常な価格とは、土地に建物その他の定着物がある場合には、その定着物が存しないものとして通常成立すると認められる価格をいう。",
+       "公示区域は、都市計画区域内に限られる。"],
+    a:2, ex:["2人以上の不動産鑑定士の鑑定評価を求めます（2条1項）。",
+       "標準地は土地鑑定委員会が選定します（3条）。",
+       "2条2項のとおりです（定着物や使用収益を制限する権利がないものとした価格）。",
+       "公示区域は、都市計画区域「その他の土地取引が相当程度見込まれるものとして国土交通省令で定める区域」です（規制区域を除く、2条1項）。"],
+    e:"標準地の選定・価格の判定・公示は土地鑑定委員会。鑑定評価は2人以上。正常な価格は建物や借地権がないものとした価格。",
+    art:"地価公示法2条1項・2項・3条",
+    d:[["考え方","地価公示は、取引の指標となる更地の価格を毎年1回示す制度です。主語はほとんど「土地鑑定委員会」です。"],
+       ["ひっかけ所","肢2は主語を国土交通大臣に変え、肢1は「2人以上」を1人にしています。"],
+       ["関連知識","不動産鑑定士が標準地を鑑定評価するときは、取引事例比較法・収益還元法・原価法に当たる3つの価格を勘案します（4条）。"]] },
+
+  // ---- 宅建業法（問26〜45） ----
+  { id:"tk-26", sub:"宅建業法", topic:"宅建業の意味と免許の要否", trap:true,
+    q:"宅地建物取引業の免許に関する次の記述のうち、宅地建物取引業法の規定によれば、正しいものはどれか。",
+    c:["Aが、自ら所有するマンションを、不特定多数の者に反復継続して賃貸する場合、Aは免許を受けなければならない。",
+       "地方公共団体が宅地を分譲する場合でも、宅地建物取引業の免許を受けなければならない。",
+       "Bが、宅地の売買の媒介を不特定多数の者を相手に反復継続して行う場合、Bは免許を受けなければならない。",
+       "信託会社が宅地建物取引業を営もうとする場合、国土交通大臣の免許を受けなければならない。"],
+    a:2, ex:["自ら貸借することは「宅地建物取引業」に当たりません（2条2号）。転貸も同じです。",
+       "宅建業法は国及び地方公共団体には適用されません（78条1項）。",
+       "売買の媒介を業として行うことは宅地建物取引業です（2条2号・3条1項）。",
+       "信託会社には免許の規定が適用されず、国土交通大臣に届け出れば、国土交通大臣の免許を受けた業者とみなされます（77条）。"],
+    e:"宅建業＝売買・交換を自ら、又は売買・交換・貸借の代理・媒介を業として行うこと。自ら貸借は含まない。国・地方公共団体は適用外、信託会社は届出。",
+    art:"宅建業法2条2号・3条1項・77条・78条1項",
+    d:[["考え方","「取引」になるのは8通り（自ら売買・交換、代理で売買・交換・貸借、媒介で売買・交換・貸借）で、自ら貸借は入りません。"],
+       ["ひっかけ所","肢1は規模の大きさで免許が要るように見せる型です。何戸貸しても、自ら貸借は宅建業ではありません。"],
+       ["関連知識","国や地方公共団体から依頼を受けて代理・媒介する業者は、免許が必要です（依頼者が適用外でも、業者自身は宅建業を営むため）。"]] },
+  { id:"tk-27", sub:"宅建業法", topic:"免許の基準（欠格事由）", trap:true,
+    q:"宅地建物取引業の免許の基準に関する次の記述のうち、宅地建物取引業法の規定によれば、正しいものはどれか。",
+    c:["破産手続開始の決定を受けた者は、復権を得ても、その後5年を経過しなければ免許を受けることができない。",
+       "拘禁刑に処せられ、その刑の執行を終わった日から5年を経過しない者は、免許を受けることができない。",
+       "宅地建物取引業法の規定に違反して罰金の刑に処せられた者は、刑の執行を終わった日から3年を経過すれば、免許を受けることができる。",
+       "法人の役員のうちに欠格事由に該当する者がいても、法人自体に欠格事由がなければ、その法人は免許を受けることができる。"],
+    a:1, ex:["破産者は「復権を得ない者」が欠格事由で、復権を得れば直ちに免許を受けられます（5条1項1号）。",
+       "5条1項5号のとおりです（令和7年6月から懲役・禁錮は拘禁刑に一本化）。",
+       "宅建業法違反などによる罰金刑は、執行を終わった日から5年を経過しない間は欠格事由です（5条1項6号）。",
+       "役員や政令で定める使用人に欠格事由に該当する者がいる法人は、免許を受けられません（5条1項12号）。"],
+    e:"破産は復権で直ちにOK。拘禁刑以上は罪名を問わず5年。罰金は宅建業法違反・暴力的犯罪・背任などに限り5年。役員の欠格は法人に影響。",
+    art:"宅建業法5条1項1号・5号・6号・12号",
+    d:[["考え方","欠格事由は「本人に問題がある」「過去に処分・刑罰を受けた」「周りの人（役員・法定代理人）に問題がある」の3つに分けて覚えます。"],
+       ["ひっかけ所","肢1は破産に5年の待機期間をつけ、肢3は5年を3年にしています。"],
+       ["関連知識","刑の全部の執行猶予の期間が満了すれば、その翌日から免許を受けられます（刑の言渡しが効力を失うため）。"]] },
+  { id:"tk-28", sub:"宅建業法", topic:"免許の手続（更新・届出）", trap:true,
+    q:"宅地建物取引業の免許の手続に関する次の記述のうち、宅地建物取引業法の規定によれば、正しいものはどれか。",
+    c:["免許の有効期間は3年である。",
+       "免許の更新を受けようとする者は、免許の有効期間満了の日の90日前から30日前までの間に免許申請書を提出しなければならない。",
+       "個人である宅地建物取引業者が死亡した場合、その相続人は、死亡の日から30日以内に、その旨を免許権者に届け出なければならない。",
+       "法人である宅地建物取引業者の役員の氏名に変更があっても、変更の届出をする必要はない。"],
+    a:1, ex:["免許の有効期間は5年です（3条2項）。",
+       "施行規則3条のとおりです。",
+       "死亡の場合は、相続人が「その事実を知った日」から30日以内に届け出ます（11条1項1号）。",
+       "役員の氏名は免許申請書の記載事項で、変更があれば30日以内に届け出なければなりません（9条）。"],
+    e:"有効期間5年、更新は90日前〜30日前、変更・廃業等の届出は30日以内（死亡は知った日から）。",
+    art:"宅建業法3条2項・9条・11条1項1号・宅建業法施行規則3条",
+    d:[["考え方","届出の期限はほぼ30日で統一されています。起算点（変更の日・死亡を知った日など）の違いが問われます。"],
+       ["ひっかけ所","肢3は「死亡の日から」と書いて起算点をずらしています。"],
+       ["関連知識","更新の申請をしたのに有効期間満了までに処分がないときは、処分があるまで従前の免許が効力を持ちます（3条4項）。"]] },
+  { id:"tk-29", sub:"宅建業法", topic:"宅地建物取引士", trap:true,
+    q:"宅地建物取引士に関する次の記述のうち、宅地建物取引業法の規定によれば、正しいものはどれか。",
+    c:["宅地建物取引士証の有効期間は3年である。",
+       "宅地建物取引士は、重要事項の説明をするときは、説明の相手方から請求がなくても、宅地建物取引士証を提示しなければならない。",
+       "宅地建物取引士は、事務の禁止の処分を受けたときは、速やかに、宅地建物取引士証をその処分をした都道府県知事に提出しなければならない。",
+       "登録を受けている者は、他の都道府県に所在する宅地建物取引業者の事務所の業務に従事することになったときは、登録の移転を申請しなければならない。"],
+    a:1, ex:["宅地建物取引士証の有効期間は5年です（22条の2第3項）。",
+       "35条4項のとおりです。",
+       "提出先は「その交付を受けた都道府県知事」です（22条の2第7項）。処分をした知事とは限りません。",
+       "登録の移転は「申請することができる」もので、義務ではありません（19条の2）。"],
+    e:"士証は5年、重説では請求がなくても提示、事務禁止なら交付を受けた知事へ提出、登録の移転は任意。",
+    art:"宅建業法19条の2・22条の2第3項・7項・35条4項",
+    d:[["考え方","宅建士の手続は「登録（知事）」と「宅建士証（登録をしている知事が交付）」の2段階です。提出先・返納先は交付を受けた知事です。"],
+       ["ひっかけ所","肢3は他県で事務禁止処分を受けた場面を想定し、提出先を処分をした知事にすり替えています。"],
+       ["関連知識","取引の関係者から請求があったときも、宅建士証を提示しなければなりません（22条の4）。"]] },
+  { id:"tk-30", sub:"宅建業法", topic:"営業保証金",
+    q:"営業保証金に関する次の記述のうち、宅地建物取引業法の規定によれば、正しいものはどれか。",
+    c:["主たる事務所のほかに従たる事務所を2か所設けて事業を開始する宅地建物取引業者は、営業保証金として合計2,000万円を供託しなければならない。",
+       "宅地建物取引業者は、営業保証金を、各事務所のもよりの供託所にそれぞれ供託しなければならない。",
+       "宅地建物取引業者は、営業保証金を供託すれば、その旨を免許権者に届け出る前であっても、事業を開始することができる。",
+       "宅地建物取引業者と宅地建物取引業に関し取引をした宅地建物取引業者は、その取引により生じた債権に関し、営業保証金から還付を受けることができる。"],
+    a:0, ex:["主たる事務所1,000万円、その他の事務所ごとに500万円なので、1,000万円＋500万円×2＝2,000万円です（25条2項・施行令2条の4）。",
+       "営業保証金は、主たる事務所のもよりの供託所にまとめて供託します（25条1項）。",
+       "供託した旨を届け出た後でなければ、事業を開始してはなりません（25条5項）。",
+       "還付を受けられる者から、宅地建物取引業者は除かれています（27条1項）。"],
+    e:"主たる事務所1,000万円＋その他500万円ずつ、主たる事務所のもよりの供託所、届出の後に事業開始、業者は還付を受けられない。",
+    art:"宅建業法25条1項・2項・5項・27条1項・宅建業法施行令2条の4",
+    d:[["考え方","営業保証金は、取引の相手方（一般の消費者）を守るためのお金です。そのため還付を受けられるのは宅建業者以外の者に限られます。"],
+       ["ひっかけ所","肢3は「供託」と「届出」を同じものと思わせる型です。開始できるのは届出の後です。"],
+       ["関連知識","免許をした日から3月以内に届出がないときは免許権者が催告し、催告が到達した日から1月以内に届出がないときは免許を取り消すことができます（25条6項・7項）。"]] },
+  { id:"tk-31", sub:"宅建業法", topic:"保証協会（弁済業務保証金）", trap:true,
+    q:"宅地建物取引業保証協会（以下「保証協会」という。）に関する次の記述のうち、宅地建物取引業法の規定によれば、正しいものはどれか。",
+    c:["保証協会に加入しようとする宅地建物取引業者は、加入した日から1週間以内に、弁済業務保証金分担金を保証協会に納付しなければならない。",
+       "本店と支店1か所を有する宅地建物取引業者が保証協会に加入する場合、納付すべき弁済業務保証金分担金の額は90万円である。",
+       "保証協会から還付充当金を納付すべき旨の通知を受けた社員は、その通知を受けた日から1か月以内に納付しなければならない。",
+       "保証協会の社員の地位を失った宅地建物取引業者は、その地位を失った日から2週間以内に、営業保証金を供託しなければならない。"],
+    a:1, ex:["分担金は、保証協会に「加入しようとする日まで」に納付します（64条の9第1項1号）。",
+       "主たる事務所60万円、その他の事務所ごとに30万円なので、60万円＋30万円＝90万円です（施行令7条）。",
+       "還付充当金は、通知を受けた日から2週間以内に納付します（64条の10第2項）。",
+       "社員の地位を失ったときは、その日から1週間以内に営業保証金を供託しなければなりません（64条の15）。"],
+    e:"分担金は主60万・その他30万で加入しようとする日までに。還付充当金は2週間以内。社員でなくなったら1週間以内に営業保証金。",
+    art:"宅建業法64条の9第1項1号・64条の10第2項・64条の15・宅建業法施行令7条",
+    d:[["考え方","保証協会の期限は「加入前に」「2週間」「1週間」の組合せで出ます。どの場面がどの期限かを表にして覚えます。"],
+       ["ひっかけ所","肢1は納付の時期を加入後にずらし、肢4は1週間を2週間にしています。"],
+       ["関連知識","新たに事務所を設置したときは、その日から2週間以内に分担金を追加で納付します（64条の9第2項）。"]] },
+  { id:"tk-32", sub:"宅建業法", topic:"事務所（専任の宅建士・帳簿・従業者名簿）", trap:true,
+    q:"宅地建物取引業者の事務所に関する次の記述のうち、宅地建物取引業法の規定によれば、正しいものはどれか。",
+    c:["宅地建物取引業者は、事務所ごとに、業務に従事する者10名に1名以上の割合で、専任の宅地建物取引士を置かなければならない。",
+       "宅地建物取引業者は、事務所ごとに帳簿を備え、各事業年度の末日に閉鎖し、閉鎖後5年間（自ら売主となる新築住宅に係るものは10年間）保存しなければならない。",
+       "宅地建物取引業者は、事務所ごとに従業者名簿を備え、最終の記載をした日から5年間保存しなければならない。",
+       "宅地建物取引業者は、従業者に従業者証明書を携帯させれば、取引の関係者から請求があっても、従業者にこれを提示させる必要はない。"],
+    a:1, ex:["事務所は、業務に従事する者5名に1名以上の割合です（31条の3第1項・施行規則15条の5の3）。",
+       "49条・施行規則18条3項のとおりです。",
+       "従業者名簿の保存期間は、最終の記載をした日から10年間です（施行規則17条の2第4項）。",
+       "従業者は、取引の関係者の請求があったときは、証明書を提示しなければなりません（48条2項）。"],
+    e:"専任の宅建士は5人に1人、帳簿は閉鎖後5年（自ら売主の新築住宅は10年）、従業者名簿は10年。",
+    art:"宅建業法31条の3第1項・48条2項・49条・宅建業法施行規則15条の5の3・17条の2第4項・18条3項",
+    d:[["考え方","保存期間は「帳簿5年（新築住宅10年）」「従業者名簿10年」の組合せです。数字の入れ替えがよく出ます。"],
+       ["ひっかけ所","肢3は帳簿の5年を従業者名簿にあてはめています。"],
+       ["関連知識","専任の宅建士が足りなくなったときは、2週間以内に必要な措置をとらなければなりません（31条の3第3項）。"]] },
+  { id:"tk-33", sub:"宅建業法", topic:"広告と契約締結の時期", trap:true,
+    q:"宅地建物取引業者の広告等に関する次の記述のうち、宅地建物取引業法の規定によれば、正しいものはどれか。",
+    c:["著しく事実に相違する表示をした広告であっても、それによって実際に損害を受けた者がいなければ、誇大広告等の禁止に違反しない。",
+       "未完成の建物について、建築基準法の建築確認を受ける前であっても、確認申請中である旨を表示すれば、売買の広告をすることができる。",
+       "建築確認を受ける前の未完成の建物について、貸借の媒介の広告をすることはできないが、貸借の媒介の契約を締結することはできる。",
+       "広告をする際に取引態様の別を明示していれば、その後に注文を受けたときに改めて取引態様の別を明示する必要はない。"],
+    a:2, ex:["誇大広告等は、表示をすること自体が禁止されています（32条）。実害は要件ではありません。",
+       "建築確認などの処分があった後でなければ、売買その他の業務に関する広告をしてはなりません（33条）。申請中の表示でも同じです。",
+       "広告の開始時期の制限（33条）は貸借にも及びますが、契約締結の時期の制限（36条）は売買・交換だけで、貸借は対象外です。",
+       "取引態様の別は、広告をするときと、注文を受けたときの両方で明示しなければなりません（34条）。"],
+    e:"広告の開始時期の制限は売買・交換・貸借すべて、契約締結時期の制限は売買・交換だけ。取引態様は広告時と注文時の両方で明示。",
+    art:"宅建業法32条・33条・34条・36条",
+    d:[["考え方","33条（広告）と36条（契約）は似ていますが、対象の取引が違います。貸借の契約は工事完了前でも結べます。"],
+       ["ひっかけ所","肢3は「広告はできないのに契約はできる」という一見おかしな結論ですが、条文どおりで正しいという型です。"],
+       ["関連知識","誇大広告等の禁止に違反すると、監督処分だけでなく罰則（6月以下の拘禁刑又は100万円以下の罰金など）の対象にもなります。"]] },
+  { id:"tk-34", sub:"宅建業法", topic:"媒介契約（専任媒介）", trap:true,
+    q:"宅地建物取引業者Aが、宅地建物取引業者ではないBから宅地の売却の媒介を依頼され、専任媒介契約（専属専任媒介契約ではないものとする。）を締結した。この場合に関する次の記述のうち、宅地建物取引業法の規定によれば、正しいものはどれか。",
+    c:["有効期間を6か月と定めた場合、その専任媒介契約は無効となる。",
+       "Aは、Bに対し、業務の処理状況を2週間に1回以上報告しなければならない。",
+       "Aは、契約締結の日から10日以内（休業日を除く。）に、宅地を指定流通機構に登録しなければならない。",
+       "Bからの申出がなくても有効期間は自動的に更新される旨の特約は、有効である。"],
+    a:1, ex:["3か月を超える有効期間を定めたときは、その期間は3か月となります（34条の2第3項）。契約全体が無効になるわけではありません。",
+       "34条の2第9項のとおりです（専属専任媒介契約は1週間に1回以上）。",
+       "指定流通機構への登録は、休業日を除き7日以内です（施行規則15条の10。専属専任は5日以内）。",
+       "更新は依頼者の申出によってだけでき、これに反する特約は無効です（34条の2第4項・10項）。"],
+    e:"専任媒介は有効期間3か月まで・報告2週間に1回・登録7日以内。専属専任は報告1週間に1回・登録5日以内。自動更新は無効。",
+    art:"宅建業法34条の2第3項・4項・5項・9項・10項・宅建業法施行規則15条の10",
+    d:[["考え方","専任媒介は依頼者が他の業者に頼めない分、業者に重い義務（期間・報告・登録）が課されます。"],
+       ["ひっかけ所","肢1は「無効」と書いて、3か月に短縮される効果を隠しています。"],
+       ["関連知識","媒介契約書面（34条の2第1項）は、依頼者が宅建業者であっても作成・交付が必要です。"]] },
+  { id:"tk-35", sub:"宅建業法", topic:"重要事項の説明（35条）", trap:true,
+    q:"宅地建物取引業法第35条の規定による重要事項の説明に関する次の記述のうち、正しいものはどれか。",
+    c:["重要事項の説明は、契約が成立した後、遅滞なく行えば足りる。",
+       "重要事項の説明は、宅地建物取引士でない従業者が行っても、宅地建物取引士が書面に記名していれば足りる。",
+       "買主が宅地建物取引業者である場合、重要事項説明書の交付は必要であるが、宅地建物取引士にその内容を説明させる必要はない。",
+       "建物の貸借の媒介を行う場合、私道に関する負担に関する事項を説明しなければならない。"],
+    a:2, ex:["重要事項の説明は、契約が成立するまでの間に行います（35条1項）。",
+       "説明は宅地建物取引士がしなければなりません（35条1項）。",
+       "相手方等が宅建業者のときは、書面の交付（宅建士の記名つき）で足り、説明は不要です（35条6項）。",
+       "私道に関する負担は、建物の貸借の契約以外のときに説明する事項です（35条1項3号）。"],
+    e:"重説は契約成立前に、宅建士が、宅建士証を示して説明。相手が業者なら交付だけ。建物の貸借では私道負担は不要。",
+    art:"宅建業法35条1項3号・4項・5項・6項",
+    d:[["考え方","重要事項の説明は、契約するかどうかを決めるための情報なので、契約の前に宅建士が行います。"],
+       ["ひっかけ所","肢4は貸借で不要な事項を説明事項に入れています。建物の貸借では私道負担は不要、土地の貸借では必要です。"],
+       ["関連知識","テレビ会議等のITを使った説明も、一定の要件のもとで認められています（国土交通省の解釈・運用の考え方）。"]] },
+  { id:"tk-36", sub:"宅建業法", topic:"37条書面",
+    q:"宅地建物取引業法第37条の規定により交付すべき書面（以下「37条書面」という。）に関する次の記述のうち、正しいものはどれか。",
+    c:["37条書面には宅地建物取引士が記名しなければならないが、その内容を宅地建物取引士に説明させる必要はない。",
+       "売買契約の当事者がいずれも宅地建物取引業者である場合、37条書面の交付は不要である。",
+       "宅地の売買において、移転登記の申請の時期は、その定めがある場合に限り、37条書面に記載すれば足りる。",
+       "建物の貸借の媒介において、天災その他不可抗力による損害の負担に関する定めがある場合であっても、37条書面にその内容を記載する必要はない。"],
+    a:0, ex:["37条3項は記名を求めていますが、説明は求めていません。",
+       "業者間取引で適用されないのは33条の2と37条の2から43条までで（78条2項）、37条は業者間でも適用されます。",
+       "移転登記の申請の時期は、売買・交換では必ず記載する事項です（37条1項5号）。",
+       "貸借でも、不可抗力による損害の負担の定めがあれば記載します（37条2項1号が1項10号を挙げている）。"],
+    e:"37条書面は宅建士の記名が必要で説明は不要、業者間でも省略できない。代金・引渡し時期・移転登記の時期は必ず記載。",
+    art:"宅建業法37条1項5号・2項1号・3項・78条2項",
+    d:[["考え方","35条書面は「契約前の情報（説明が必要）」、37条書面は「契約内容の確認（説明不要）」と性格が違います。"],
+       ["ひっかけ所","肢2は8種制限（業者間で適用されない規定）と37条を混同させる型です。"],
+       ["関連知識","37条書面は、相手方の承諾を得て電磁的方法で提供することもできます（37条4項・5項）。"]] },
+  { id:"tk-37", sub:"宅建業法", topic:"クーリング・オフ", trap:true,
+    q:"宅地建物取引業者Aが自ら売主として、宅地建物取引業者ではないBとの間で建物の売買契約を締結した場合の、宅地建物取引業法第37条の2の規定による売買契約の解除（クーリング・オフ）に関する次の記述のうち、正しいものはどれか。",
+    c:["BがAの事務所で買受けの申込みをし、後日、喫茶店で売買契約を締結した場合、Bはクーリング・オフにより契約を解除することができる。",
+       "Bが喫茶店で買受けの申込みをし、Aからクーリング・オフができる旨及びその方法を書面で告げられた日から起算して8日を経過したときは、Bはクーリング・オフにより契約を解除することができない。",
+       "Bの申出により、Bの勤務先で売買契約に関する説明を受けて買受けの申込みをした場合でも、Bはクーリング・オフにより契約を解除することができる。",
+       "クーリング・オフによる契約の解除は、BがAにその旨の書面を発した時ではなく、Aに到達した時に効力を生ずる。"],
+    a:1, ex:["クーリング・オフができるかは申込みをした場所で判断します。事務所で申し込んだのでできません（37条の2第1項）。",
+       "37条の2第1項1号のとおりです。",
+       "相手方が自ら申し出た自宅や勤務先は「事務所等」に当たり、クーリング・オフはできません（施行規則16条の5第2号）。",
+       "書面を発した時に効力を生じます（発信主義、37条の2第2項）。"],
+    e:"場所は申込みの場所で判断。告げられた日から8日、引渡し＋代金全額支払でも不可。相手方が申し出た自宅・勤務先は事務所等。書面は発信主義。",
+    art:"宅建業法37条の2第1項1号・2号・2項・宅建業法施行規則16条の5第2号",
+    d:[["考え方","クーリング・オフは、落ち着いて判断できない場所で申し込んだ買主を守る制度です。自分から呼んだ場所や事務所は除かれます。"],
+       ["ひっかけ所","肢1は契約の場所（喫茶店）に目を向けさせる型、肢4は民法の到達主義を持ち込む型です。"],
+       ["関連知識","宅建業者が買主の場合（業者間取引）には適用されません（78条2項）。"]] },
+  { id:"tk-38", sub:"宅建業法", topic:"手付・損害賠償額の予定", trap:true,
+    q:"宅地建物取引業者Aが自ら売主として、宅地建物取引業者ではないBとの間で代金3,000万円の宅地の売買契約を締結する場合に関する次の記述のうち、宅地建物取引業法の規定によれば、正しいものはどれか。",
+    c:["Aは、Bから手付として700万円を受領することができる。",
+       "当事者の債務不履行を理由とする契約の解除に伴う損害賠償の予定額を800万円とする特約をした場合、その特約は全体として無効となる。",
+       "「Aが契約の履行に着手した後であっても、Bは手付を放棄して契約を解除することができる」旨の特約は、有効である。",
+       "手付について「解約手付としての性質を有しない」旨の特約をすれば、Bは、手付を放棄しても契約を解除することができない。"],
+    a:2, ex:["手付は代金の10分の2（600万円）を超えて受領できません（39条1項）。",
+       "10分の2を超える部分（200万円）だけが無効で、600万円の予定として有効です（38条2項）。",
+       "手付解除は相手方が履行に着手するまでですが、買主に有利な特約は有効です（39条2項・3項）。",
+       "手付は解約手付とされ、これに反する特約で買主に不利なものは無効です（39条2項・3項）。"],
+    e:"手付も損害賠償の予定（違約金と合算）も代金の2/10まで。超えた部分だけ無効。手付は解約手付とみなされ、買主に不利な特約は無効。",
+    art:"宅建業法38条・39条",
+    d:[["考え方","8種制限は「一般の買主を守る」ためのものなので、買主に有利な特約は有効、不利な特約は無効という判断が基本です。"],
+       ["ひっかけ所","肢2は「全体として無効」とし、超える部分だけ無効という効果を変えています。"],
+       ["関連知識","損害賠償の予定と違約金を両方定めたときは、合計額が10分の2を超えてはなりません（38条1項）。"]] },
+  { id:"tk-39", sub:"宅建業法", topic:"手付金等の保全", trap:true,
+    q:"宅地建物取引業者Aが自ら売主として、宅地建物取引業者ではないBとの間で、建築工事完了前のマンション（代金5,000万円）の売買契約を締結した。この場合に関する次の記述のうち、宅地建物取引業法の規定によれば、正しいものはどれか。",
+    c:["Aが手付金として200万円を受領しようとする場合、Aは手付金等の保全措置を講じなければならない。",
+       "Aが手付金として300万円を受領しようとする場合、Aは手付金等の保全措置を講じた後でなければ、これを受領してはならない。",
+       "Bが当該マンションについて所有権移転の登記をした後であっても、Aは、中間金を受領する前に保全措置を講じなければならない。",
+       "Aは、保全措置として、指定保管機関との間で手付金等寄託契約を締結する方法をとることができる。"],
+    a:1, ex:["未完成物件は代金の5%以下かつ1,000万円以下なら保全措置は不要です（41条1項ただし書・施行令3条の5）。200万円は5%（250万円）以下です。",
+       "300万円は代金の5%を超えるので、保全措置を講じた後でなければ受領できません（41条1項）。",
+       "買主が所有権の登記をしたときは保全措置は不要です（41条1項ただし書）。",
+       "指定保管機関による保管（41条の2）は完成物件の方法で、未完成物件では銀行等の保証か保険事業者の保証保険に限られます（41条1項）。"],
+    e:"未完成は5%超又は1,000万円超、完成は10%超又は1,000万円超で保全措置。登記をすれば不要。未完成に指定保管機関は使えない。",
+    art:"宅建業法41条1項・41条の2第1項・宅建業法施行令3条の5",
+    d:[["考え方","保全措置は、業者が倒産しても買主が前払いしたお金を取り戻せるようにする仕組みです。工事完了前の方がリスクが高いので基準が厳しくなっています。"],
+       ["ひっかけ所","肢1は「受領する額があれば必ず保全」と思わせる型、肢4は完成物件だけの方法を混ぜています。"],
+       ["関連知識","すでに受け取った手付金等があるときは、その額を加えた合計額で5%・1,000万円を判断します（41条1項ただし書かっこ書）。"]] },
+  { id:"tk-40", sub:"宅建業法", topic:"自ら売主の制限（担保責任の特約・他人物売買）", trap:true,
+    q:"宅地建物取引業者Aが自ら売主として、宅地建物取引業者ではないBとの間で建物の売買契約を締結する場合に関する次の記述のうち、宅地建物取引業法の規定によれば、正しいものはどれか。",
+    c:["種類又は品質に関する契約不適合の通知期間を「引渡しの日から1年」とする特約は、有効である。",
+       "種類又は品質に関する契約不適合の通知期間を「引渡しの日から2年」とする特約は、有効である。",
+       "「Aは、契約不適合について一切責任を負わない」旨の特約は、Bが承諾すれば有効である。",
+       "Aは、建物の所有者Cとの間で建物を取得する契約（予約を含む。）を締結していなくても、Bとの間で売買契約を締結することができる。"],
+    a:1, ex:["民法（知った時から1年）より買主に不利な特約は、通知期間を引渡しから2年以上とするものを除き無効です（40条）。1年では無効です。",
+       "40条1項のとおり、引渡しから2年以上とする特約は有効です。",
+       "責任を負わない特約は買主に不利なので、承諾があっても無効です（40条2項）。",
+       "自己の所有に属しない物件は、取得する契約（予約を含み、停止条件付きは除く）がなければ売買契約を締結できません（33条の2）。"],
+    e:"契約不適合責任の特約は「引渡しから2年以上の通知期間」だけ許される。他人物は取得契約がなければ売れない。",
+    art:"宅建業法33条の2・40条",
+    d:[["考え方","40条は、民法の「知った時から1年」を「引渡しから2年以上」に短くすることだけを特別に認めた規定です。"],
+       ["ひっかけ所","肢1は1年でも民法並みに見せる型です。起算点が「引渡し」になる以上、2年以上が必要です。"],
+       ["関連知識","40条に反して無効になった特約部分は、民法の規定（知った時から1年以内の通知）に戻ります。"]] },
+  { id:"tk-41", sub:"宅建業法", topic:"報酬の上限（売買の媒介）", trap:true,
+    q:"宅地建物取引業者A（消費税課税事業者）が、売主B及び買主Cの双方から依頼を受けて、代金2,000万円の宅地（消費税は課されない。）の売買を媒介した。Aが受領できる報酬の上限額に関する次の記述のうち、宅地建物取引業法の規定によれば、正しいものはどれか。",
+    c:["Aは、Bから最大で660,000円を受領することができる。",
+       "Aは、Bから最大で726,000円を、Cから最大で726,000円を、それぞれ受領することができる。",
+       "Aは、B及びCの双方から、合計で最大726,000円までしか受領することができない。",
+       "Aは、Bの依頼によらずに行った通常の広告の料金に相当する額を、報酬とは別に受領することができる。"],
+    a:1, ex:["2,000万円×3%＋6万円＝66万円に、消費税10%を加えた726,000円が上限です。",
+       "媒介の報酬は依頼者ごとに計算するので、B・Cそれぞれから726,000円まで受領できます（46条と国土交通大臣の告示）。",
+       "双方から依頼を受けた媒介では、それぞれの依頼者から上限額まで受け取れます。合計の制限は代理の場合の考え方です。",
+       "報酬とは別に受け取れるのは、依頼者の依頼によって行う広告の料金などに限られます（告示）。"],
+    e:"400万円超の売買の媒介は3%＋6万円（課税事業者は＋10%）を依頼者ごとに。代理は2倍まで、双方合計も2倍以内。",
+    art:"宅建業法46条",
+    d:[["考え方","報酬の上限は「昭和45年建設省告示第1552号」で定められています。速算式は、200万円以下5%、400万円以下4%＋2万円、400万円超3%＋6万円です。"],
+       ["ひっかけ所","肢1は消費税を加え忘れ、肢3は代理の「合計2倍まで」と媒介を混同させています。"],
+       ["関連知識","代金800万円以下の低廉な空家等の売買の媒介では、一定の要件のもとで30万円の1.1倍まで受領できる特例があります（告示）。"]] },
+  { id:"tk-42", sub:"宅建業法", topic:"業務上の規制（守秘義務・手付の信用供与）",
+    q:"宅地建物取引業者の業務に関する次の記述のうち、宅地建物取引業法の規定によれば、正しいものはどれか。",
+    c:["宅地建物取引業者は、手付金が不足している買主に手付金を貸し付けることにより、契約の締結を誘引してもよい。",
+       "宅地建物取引業者は、手付金の分割払いを認めることにより契約の締結を誘引しても、手付金の額が代金の10分の2以下であれば、宅地建物取引業法に違反しない。",
+       "宅地建物取引業者は、裁判で証人として証言を求められた場合など正当な理由がある場合には、業務上取り扱ったことについて知り得た秘密を他に漏らしても、宅地建物取引業法に違反しない。",
+       "宅地建物取引業者は、宅地建物取引業を営まなくなった後は、業務上取り扱ったことについて知り得た秘密を他に漏らしても、宅地建物取引業法に違反しない。"],
+    a:2, ex:["手付について貸付けその他信用の供与をして契約の締結を誘引することは禁止です（47条3号）。",
+       "分割払いも信用の供与に当たり、手付の額にかかわらず禁止です（47条3号）。",
+       "守秘義務は「正当な理由がある場合でなければ」秘密を漏らしてはならないというものです（45条）。",
+       "宅建業を営まなくなった後も守秘義務を負います（45条後段）。"],
+    e:"手付の貸付け・分割・後払いなどの信用供与による誘引は禁止。守秘義務は正当な理由があれば除外、廃業後も続く。",
+    art:"宅建業法45条・47条3号",
+    d:[["考え方","47条3号は「手付を用意できない人を無理に契約させない」ための規定です。お金を貸す以外の方法（分割・後払い）も同じく禁止されます。"],
+       ["ひっかけ所","肢2は手付の額の制限（39条）と信用供与の禁止（47条3号）を混ぜています。"],
+       ["関連知識","手付の「減額」は信用の供与に当たらないとされています（国土交通省の解釈・運用の考え方）。"]] },
+  { id:"tk-43", sub:"宅建業法", topic:"監督処分", trap:true,
+    q:"宅地建物取引業者に対する監督処分に関する次の記述のうち、宅地建物取引業法の規定によれば、正しいものはどれか。",
+    c:["甲県知事の免許を受けた宅地建物取引業者が乙県内で業務に関し取引の公正を害する行為をした場合、乙県知事は、その業者に対して必要な指示をすることができる。",
+       "乙県知事は、甲県知事の免許を受けた宅地建物取引業者が乙県内で不正な行為をした場合、その業者の免許を取り消すことができる。",
+       "都道府県知事は、その免許を受けた宅地建物取引業者に対して、2年以内の期間を定めて業務の全部又は一部の停止を命ずることができる。",
+       "都道府県知事は、宅地建物取引業者に対して指示処分をしたときは、その旨を公告しなければならない。"],
+    a:0, ex:["業務地の知事も、指示処分（65条3項）や業務停止処分（65条4項）をすることができます。",
+       "免許の取消しは、免許をした国土交通大臣又は都道府県知事だけができます（66条1項）。",
+       "業務停止は1年以内の期間を定めて命じます（65条2項）。",
+       "公告が必要なのは業務停止処分と免許取消処分で、指示処分は公告されません（70条1項）。"],
+    e:"指示・業務停止は免許権者と業務地の知事、免許取消しは免許権者だけ。業務停止は1年以内。公告は業務停止と免許取消し。",
+    art:"宅建業法65条2項・3項・4項・66条1項・70条1項",
+    d:[["考え方","免許を与えた者だけが免許を奪える、という原則で整理すると、取消しは免許権者だけになります。"],
+       ["ひっかけ所","肢4は指示処分にも公告があるように見せています。"],
+       ["関連知識","監督処分をするには、あらかじめ聴聞を行わなければなりません（69条）。"]] },
+  { id:"tk-44", sub:"宅建業法", topic:"住宅瑕疵担保履行法", trap:true,
+    q:"宅地建物取引業者Aが自ら売主として、宅地建物取引業者ではない買主Bに新築住宅を販売する場合における、特定住宅瑕疵担保責任の履行の確保等に関する法律に基づく住宅販売瑕疵担保保証金の供託等に関する次の記述のうち、正しいものはどれか。",
+    c:["Aが基準日に係る供託及び届出をしなかった場合、Aは、その基準日の翌日から起算して50日を経過した日以後は、原則として、新たに自ら売主となる新築住宅の売買契約を締結してはならない。",
+       "住宅販売瑕疵担保保証金は、Bの住所のもよりの供託所に供託しなければならない。",
+       "Aは、供託所の所在地等について、Bとの売買契約を締結した後、遅滞なく、書面を交付して説明すれば足りる。",
+       "基準日は、毎年3月31日と9月30日の年2回である。"],
+    a:0, ex:["13条のとおりです。",
+       "Aの主たる事務所のもよりの供託所に供託します（11条6項）。",
+       "供託所の所在地等の説明は、売買契約を締結するまでに、書面を交付して行います（15条1項）。",
+       "基準日は毎年3月31日の年1回です（3条1項）。"],
+    e:"基準日は3月31日、基準日から3週間以内に供託・保険の状況を届出。怠ると基準日の翌日から50日を経過した日以後は新規の売買契約禁止。",
+    art:"住宅瑕疵担保履行法3条1項・11条6項・13条・15条1項",
+    d:[["考え方","新築住宅の売主業者が倒産しても、構造耐力上主要な部分や雨水の浸入を防止する部分の瑕疵の補修費用が出るように、保証金の供託か保険への加入を義務づけた法律です。"],
+       ["ひっかけ所","肢4は令和3年の改正前（年2回）の知識を問う型です。現在は年1回です。"],
+       ["関連知識","買主が宅地建物取引業者である場合は、資力確保措置は不要です。"]] },
+  { id:"tk-45", sub:"宅建業法", topic:"宅地の定義",
+    q:"宅地建物取引業法に規定する「宅地」に関する次の記述のうち、正しいものはどれか。",
+    c:["用途地域内の土地であっても、現に建物が建っていなければ、宅地に当たらない。",
+       "用途地域内の土地で、現に道路、公園、河川、広場又は水路の用に供せられているものは、宅地に当たらない。",
+       "用途地域外の土地は、建物の敷地に供する目的で取引される場合であっても、宅地に当たらない。",
+       "建物の敷地に供せられる土地であっても、登記簿上の地目が田であれば、宅地に当たらない。"],
+    a:1, ex:["用途地域内の土地は、道路・公園・河川・広場・水路以外であれば、建物がなくても宅地です（2条1号）。",
+       "2条1号・施行令1条のとおりです。",
+       "用途地域外でも、建物の敷地に供せられる土地（その目的で取引される土地を含む）は宅地です（2条1号）。",
+       "宅地かどうかは現況や取引の目的で判断し、登記簿上の地目は関係ありません。"],
+    e:"宅地＝建物の敷地に供せられる土地（目的を含む）＋用途地域内の土地（道路・公園・河川・広場・水路を除く）。",
+    art:"宅建業法2条1号・宅建業法施行令1条",
+    d:[["考え方","宅地には「建物の敷地として使う土地（場所を問わない）」と「用途地域内の土地」の2種類があります。"],
+       ["ひっかけ所","肢4は登記の地目で判断させる型です。現況や目的で判断します。"],
+       ["関連知識","「建物」には建物の一部（マンションの一室など）も含まれます（2条2号）。"]] },
+
+  // ---- 免除科目（問46〜50。登録講習修了者は免除） ----
+  { id:"tk-46", sub:"免除科目", topic:"住宅金融支援機構",
+    q:"独立行政法人住宅金融支援機構（以下「機構」という。）の業務に関する次の記述のうち、誤っているものはどれか。",
+    c:["機構は、住宅の建設又は購入に必要な資金の貸付けに係る金融機関の貸付債権の譲受けを業務として行っている。",
+       "機構は、災害復興建築物の建設又は購入に必要な資金の貸付けを業務として行っている。",
+       "機構は、マンションの共用部分の改良に必要な資金の貸付けを業務として行っている。",
+       "機構が譲受けの対象とする貸付債権には、住宅の改良に必要な資金の貸付けに係るものが、借主が誰であるかを問わず広く含まれる。"],
+    a:3, ex:["13条1項1号のとおりです（証券化支援事業）。",
+       "13条1項5号のとおりです（災害復興の直接融資）。",
+       "13条1項7号のとおりです。",
+       "改良の資金で譲受けの対象となるのは、高齢者など主務省令で定める者が居住性能・居住環境の確保又は向上を主な目的として行うものに限られます（13条1項1号かっこ書）。"],
+    e:"機構は民間の住宅ローンを買い取る（証券化支援）のが中心で、直接の融資は災害復興・マンション共用部分の改良など政策的なものに限られる。",
+    art:"住宅金融支援機構法13条1項1号・5号・7号",
+    d:[["考え方","機構は「民間が貸しにくいところを補う」役割です。一般の住宅ローンは民間が貸し、機構はその債権を買い取ります。"],
+       ["ひっかけ所","肢4は1号かっこ書の限定（高齢者等の改良）を消しています。"],
+       ["関連知識","機構は、住宅の建設・購入に付随する土地や借地権の取得の資金も、譲受けの対象に含めています（13条1項1号かっこ書・政令）。"]] },
+  { id:"tk-47", sub:"免除科目", topic:"景品表示法",
+    q:"不当景品類及び不当表示防止法に関する次の記述のうち、正しいものはどれか。",
+    c:["事業者は、自己の供給する商品の取引条件について、実際のものよりも取引の相手方に著しく有利であると一般消費者に誤認される表示であって、不当に顧客を誘引し、一般消費者の自主的かつ合理的な選択を阻害するおそれがあると認められるものをしてはならない。",
+       "不当表示をした事業者に対しては、その行為が既になくなっている場合には、措置命令をすることができない。",
+       "「景品類」とは、くじの方法によって提供される経済上の利益に限られる。",
+       "事業者が自己の商品について実際のものよりも著しく優良であると示す表示をしても、競争事業者の商品より優良であると示していなければ、不当表示に当たらない。"],
+    a:0, ex:["5条2号（有利誤認表示）のとおりです。",
+       "措置命令は、違反行為が既になくなっている場合でもすることができます（7条1項）。",
+       "景品類は、くじの方法によるかどうかを問わず、取引に付随して提供する経済上の利益です（2条3項）。",
+       "実際のものより著しく優良であると示す表示は、それだけで優良誤認表示に当たります（5条1号）。"],
+    e:"不当表示は優良誤認（内容）と有利誤認（取引条件）。措置命令は違反行為がなくなった後でもできる。",
+    art:"景品表示法2条3項・5条1号・2号・7条1項",
+    d:[["考え方","景品表示法は、消費者が商品を正しく選べるように、過大な景品と誤解させる表示を規制する法律です。"],
+       ["ひっかけ所","肢4は「実際のもの」との比較と「他の事業者」との比較が「又は」でつながっていることを隠しています。"],
+       ["関連知識","不動産の広告の細かいルール（徒歩所要時間は道路距離80mを1分として計算する等）は、業界の公正競争規約で定められています。"]] },
+  { id:"tk-48", sub:"免除科目", topic:"土地（地形と宅地としての適否）",
+    q:"土地に関する次の記述のうち、最も不適当なものはどれか。",
+    c:["台地や段丘は、一般に水はけがよく地盤も安定しており、宅地に適している。",
+       "旧河道は、地盤が軟弱であることが多く、地震時に液状化が生じやすい。",
+       "後背湿地は、自然堤防に比べて地盤が強固であり、宅地に適している。",
+       "地形図において等高線の間隔が狭い所は、傾斜が急である。"],
+    a:2, ex:["適当です。台地・段丘は宅地に向く代表例です。",
+       "適当です。旧河道は軟弱で、液状化や地盤沈下のおそれがあります。",
+       "不適当です。後背湿地は自然堤防の背後の低い湿地で、軟弱地盤のため宅地に向きません。自然堤防の方が比較的良好です。",
+       "適当です。等高線の間隔が狭いほど急傾斜、広いほど緩やかです。"],
+    e:"台地・段丘・自然堤防は比較的良好、後背湿地・旧河道・埋立地は軟弱になりやすい。",
+    art:"",
+    d:[["考え方","土地の問題は「高くて乾いた所は良い、低くて湿った所は悪い」が基本です。"],
+       ["ひっかけ所","肢3は自然堤防と後背湿地の性質を入れ替えています。"],
+       ["関連知識","台地でも、縁辺部の崖や、台地上の浅い谷（谷底を埋めた所）は、崖崩れや地盤沈下に注意が必要です。"]] },
+  { id:"tk-49", sub:"免除科目", topic:"土地（災害と地盤）",
+    q:"土地に関する次の記述のうち、最も適当なものはどれか。",
+    c:["扇状地の谷の出口付近は、土石流の被害を受けにくい。",
+       "干拓地は、一般に海面よりも低いことが多く、埋立地に比べて水害に対する危険性が高い。",
+       "崖錐（がいすい）堆積物は、安定しているため、宅地造成に適している。",
+       "丘陵地を切り盛りして造成した宅地では、切土部分の方が盛土部分よりも地盤沈下を起こしやすい。"],
+    a:1, ex:["不適当です。扇状地の谷の出口付近は土石流の通り道になりやすく、被害を受けやすい場所です。",
+       "適当です。干拓地は海面下のことが多く、一般に埋立地より水害の危険性が高いとされます。",
+       "不適当です。崖錐は崖の下に崩れた土砂などがたまった所で、不安定で崩れやすい地盤です。",
+       "不適当です。地盤沈下や不同沈下を起こしやすいのは盛土部分です。"],
+    e:"干拓地は海面下で水害に弱い、埋立地は比較的高い。崖錐・谷の出口・盛土部分は危険。",
+    art:"",
+    d:[["考え方","干拓地（水を抜いた土地）と埋立地（土を盛った土地）の違いは、海面との高さの関係で考えます。"],
+       ["ひっかけ所","肢4は切土と盛土を入れ替えています。盛土は締め固めが不十分だと沈下します。"],
+       ["関連知識","切土と盛土の境目にまたがって建物を建てると、不同沈下（傾き）が起きやすくなります。"]] },
+  { id:"tk-50", sub:"免除科目", topic:"建物（構造）",
+    q:"建物の構造に関する次の記述のうち、最も不適当なものはどれか。",
+    c:["鉄筋コンクリート造では、コンクリートがアルカリ性であるため、内部の鉄筋が錆びにくい。",
+       "木造建築物の土台は、一般に、基礎にアンカーボルトで緊結する。",
+       "鉄骨造は、自重が軽く靱性が大きいが、鋼材は熱に弱いため、耐火構造とするには耐火被覆が必要である。",
+       "免震構造は、柱や梁を太くするなどして建物自体の強さで地震の揺れに耐える構造である。"],
+    a:3, ex:["適当です。中性化が進むと鉄筋が錆びやすくなります。",
+       "適当です。土台と基礎をアンカーボルトでつなぎます。",
+       "適当です。鋼材は高温で強度が下がるため、耐火被覆が必要です。",
+       "不適当です。それは耐震構造の説明です。免震構造は積層ゴムなどの免震装置で揺れを建物に伝わりにくくします。"],
+    e:"耐震＝強さで耐える、制震＝ダンパーで揺れを吸収、免震＝装置で揺れを伝えにくくする。",
+    art:"",
+    d:[["考え方","地震対策の3つの構造（耐震・制震・免震）の違いを、仕組みで区別します。"],
+       ["ひっかけ所","肢4は耐震構造の説明を免震構造として書いています。"],
+       ["関連知識","既存の建物の耐震改修にも、免震や制震の技術が使われることがあります。"]] },
+];
+
+xmAdd({
+  key: "takken", name: "宅建士試験", short: "宅建", icon: "宅", form: "4肢択一", pts: 1, qs: TK_Q,
+  date: [2027, 10, 17],
+  lawNote: "宅建試験は、試験を実施する年度の4月1日現在施行されている法令で出題されます。",
+  subs: ["権利関係", "法令上の制限", "税・価格", "宅建業法", "免除科目"],
+  intro: "本試験と同じ4肢択一で、配点の大きい宅建業法と権利関係を中心に練習します。次の本試験（令和9年度）の日程は未発表のため、例年どおり10月第3日曜日（10月17日）として日数を数えています。出題は試験年度の4月1日現在の法令です。",
+  mocks: [
+    { id: "full", name: "本番形式模試（50問・2時間）", min: 120,
+      plan: [["権利関係", 14], ["法令上の制限", 8, ["都市計画法", "建築基準法", "国土利用計画法", "農地法", "盛土", "区画整理"]], ["税・価格", 3, ["不動産取得税", "固定資産税", "地価公示"]], ["宅建業法", 20], ["免除科目", 5, ["機構", "景品", "土地", "建物"]]],
+      note: "本番の問題冊子と同じ順（権利関係→法令上の制限→税・価格→宅建業法→免除科目）に50問を出します。途中では正誤を見せず、最後にまとめて採点します。時間はこの画面を開いている間だけ進み、中断して続きから再開できます。統計の問題は年ごとの数字で変わるため、かわりに土地の問題を出します。",
+      pass: [{ label: "合計", need: 36 }],
+      passNote: "合格ラインは、最近6回の合格基準点（令和2年度10月38点・3年度10月34点・4年度36点・5年度36点・6年度37点・7年度33点、50点満点）の平均に近い36点にしています（不動産適正取引推進機構の公表資料）。" },
+    { id: "menjo", name: "5問免除の模試（45問・1時間50分）", min: 110,
+      plan: [["権利関係", 14], ["法令上の制限", 8, ["都市計画法", "建築基準法", "国土利用計画法", "農地法", "盛土", "区画整理"]], ["税・価格", 3, ["不動産取得税", "固定資産税", "地価公示"]], ["宅建業法", 20]],
+      note: "登録講習修了者向けです。免除科目（問46〜50）を除いた45問を、1時間50分で解きます。",
+      pass: [{ label: "合計", need: 31 }],
+      passNote: "合格ラインは、登録講習修了者の最近6回の合格基準点（45点満点で28〜33点）の平均に近い31点にしています（不動産適正取引推進機構の公表資料）。" },
+  ],
+  about: [
+    "出題：50問・四肢択一式（登録講習修了者は45問）。試験時間は2時間（午後1時〜3時。登録講習修了者は午後1時10分〜3時）。毎年1回、10月の第3日曜日に行われます",
+    "出題範囲（宅建業法施行規則8条）：土地・建物の形質など／権利と権利の変動に関する法令／法令上の制限／税／需給に関する法令と実務／価格の評定／宅建業法と関係法令。登録講習修了者は、1号（土地・建物）と5号（需給・実務）の5問が免除されます",
+    "出題は、試験を実施する年度の4月1日現在施行されている法令によります",
+    "合格基準点（50点満点）：令和7年度33点・6年度37点・5年度36点・4年度36点、合格率はおおむね17〜19%（令和7年度は受験者245,462人・合格率18.7%）",
+    "出典：一般財団法人不動産適正取引推進機構「試験の概要」「試験結果の概要（過去10年）」",
+    "問題はすべてこのアプリのために作ったもので、過去問の文章は使っていません。条文はe-Gov法令検索の本文で確認しています",
+  ],
+});
+
+// ほかの資格試験の根拠条文の本文（xm_laws.py で作る。手で直さない）。行政書士の GY_JOBUN / GY_JB に足して、同じ表示（gyJobun）を使う。
+Object.assign(GY_JOBUN, {"民法95条":{"n":"民法第九十五条","c":"（錯誤）","p":[["意思表示は、次に掲げる錯誤に基づくものであって、その錯誤が法律行為の目的及び取引上の社会通念に照らして重要なものであるときは、取り消すことができる。","- 一　意思表示に対応する意思を欠く錯誤","- 二　表意者が法律行為の基礎とした事情についてのその認識が真実に反する錯誤"],["２　前項第二号の規定による意思表示の取消しは、その事情が法律行為の基礎とされていることが表示されていたときに限り、することができる。"],["３　錯誤が表意者の重大な過失によるものであった場合には、次に掲げる場合を除き、第一項の規定による意思表示の取消しをすることができない。","- 一　相手方が表意者に錯誤があることを知り、又は重大な過失によって知らなかったとき。","- 二　相手方が表意者と同一の錯誤に陥っていたとき。"],["４　第一項の規定による意思表示の取消しは、善意でかつ過失がない第三者に対抗することができない。"]]},"民法96条":{"n":"民法第九十六条","c":"（詐欺又は強迫）","p":[["詐欺又は強迫による意思表示は、取り消すことができる。"],["２　相手方に対する意思表示について第三者が詐欺を行った場合においては、相手方がその事実を知り、又は知ることができたときに限り、その意思表示を取り消すことができる。"],["３　前二項の規定による詐欺による意思表示の取消しは、善意でかつ過失がない第三者に対抗することができない。"]]},"民法114条":{"n":"民法第百十四条","c":"（無権代理の相手方の催告権）","p":[["前条の場合において、相手方は、本人に対し、相当の期間を定めて、その期間内に追認をするかどうかを確答すべき旨の催告をすることができる。この場合において、本人がその期間内に確答をしないときは、追認を拒絶したものとみなす。"]]},"民法115条":{"n":"民法第百十五条","c":"（無権代理の相手方の取消権）","p":[["代理権を有しない者がした契約は、本人が追認をしない間は、相手方が取り消すことができる。ただし、契約の時において代理権を有しないことを相手方が知っていたときは、この限りでない。"]]},"民法116条":{"n":"民法第百十六条","c":"（無権代理行為の追認）","p":[["追認は、別段の意思表示がないときは、契約の時にさかのぼってその効力を生ずる。ただし、第三者の権利を害することはできない。"]]},"民法117条":{"n":"民法第百十七条","c":"（無権代理人の責任）","p":[["他人の代理人として契約をした者は、自己の代理権を証明したとき、又は本人の追認を得たときを除き、相手方の選択に従い、相手方に対して履行又は損害賠償の責任を負う。"],["２　前項の規定は、次に掲げる場合には、適用しない。","- 一　他人の代理人として契約をした者が代理権を有しないことを相手方が知っていたとき。","- 二　他人の代理人として契約をした者が代理権を有しないことを相手方が過失によって知らなかったとき。ただし、他人の代理人として契約をした者が自己に代理権がないことを知っていたときは、この限りでない。","- 三　他人の代理人として契約をした者が行為能力の制限を受けていたとき。"]]},"民法147条":{"n":"民法第百四十七条","c":"（裁判上の請求等による時効の完成猶予及び更新）","p":[["次に掲げる事由がある場合には、その事由が終了する（確定判決又は確定判決と同一の効力を有するものによって権利が確定することなくその事由が終了した場合にあっては、その終了の時から六箇月を経過する）までの間は、時効は、完成しない。","- 一　裁判上の請求","- 二　支払督促","- 三　民事訴訟法第二百七十五条第一項の和解又は民事調停法（昭和二十六年法律第二百二十二号）若しくは家事事件手続法（平成二十三年法律第五十二号）による調停","- 四　破産手続参加、再生手続参加又は更生手続参加"],["２　前項の場合において、確定判決又は確定判決と同一の効力を有するものによって権利が確定したときは、時効は、同項各号に掲げる事由が終了した時から新たにその進行を始める。"]]},"民法152条":{"n":"民法第百五十二条","c":"（承認による時効の更新）","p":[["時効は、権利の承認があったときは、その時から新たにその進行を始める。"],["２　前項の承認をするには、相手方の権利についての処分につき行為能力の制限を受けていないこと又は権限があることを要しない。"]]},"民法162条":{"n":"民法第百六十二条","c":"（所有権の取得時効）","p":[["二十年間、所有の意思をもって、平穏に、かつ、公然と他人の物を占有した者は、その所有権を取得する。"],["２　十年間、所有の意思をもって、平穏に、かつ、公然と他人の物を占有した者は、その占有の開始の時に、善意であり、かつ、過失がなかったときは、その所有権を取得する。"]]},"民法166条":{"n":"民法第百六十六条","c":"（債権等の消滅時効）","p":[["債権は、次に掲げる場合には、時効によって消滅する。","- 一　債権者が権利を行使することができることを知った時から五年間行使しないとき。","- 二　権利を行使することができる時から十年間行使しないとき。"],["２　債権又は所有権以外の財産権は、権利を行使することができる時から二十年間行使しないときは、時効によって消滅する。"],["３　前二項の規定は、始期付権利又は停止条件付権利の目的物を占有する第三者のために、その占有の開始の時から取得時効が進行することを妨げない。ただし、権利者は、その時効を更新するため、いつでも占有者の承認を求めることができる。"]]},"民法177条":{"n":"民法第百七十七条","c":"（不動産に関する物権の変動の対抗要件）","p":[["不動産に関する物権の得喪及び変更は、不動産登記法（平成十六年法律第百二十三号）その他の登記に関する法律の定めるところに従いその登記をしなければ、第三者に対抗することができない。"]]},"民法896条":{"n":"民法第八百九十六条","c":"（相続の一般的効力）","p":[["相続人は、相続開始の時から、被相続人の財産に属した一切の権利義務を承継する。ただし、被相続人の一身に専属したものは、この限りでない。"]]},"民法899条の2":{"n":"民法第八百九十九条の二","c":"（共同相続における権利の承継の対抗要件）","p":[["相続による権利の承継は、遺産の分割によるものかどうかにかかわらず、次条及び第九百一条の規定により算定した相続分を超える部分については、登記、登録その他の対抗要件を備えなければ、第三者に対抗することができない。"],["２　前項の権利が債権である場合において、次条及び第九百一条の規定により算定した相続分を超えて当該債権を承継した共同相続人が当該債権に係る遺言の内容（遺産の分割により当該債権を承継した場合にあっては、当該債権に係る遺産の分割の内容）を明らかにして債務者にその承継の通知をしたときは、共同相続人の全員が債務者に通知をしたものとみなして、同項の規定を適用する。"]]},"民法304条":{"n":"民法第三百四条","c":"（物上代位）","p":[["先取特権は、その目的物の売却、賃貸、滅失又は損傷によって債務者が受けるべき金銭その他の物に対しても、行使することができる。ただし、先取特権者は、その払渡し又は引渡しの前に差押えをしなければならない。"],["２　債務者が先取特権の目的物につき設定した物権の対価についても、前項と同様とする。"]]},"民法370条":{"n":"民法第三百七十条","c":"（抵当権の効力の及ぶ範囲）","p":[["抵当権は、抵当地の上に存する建物を除き、その目的である不動産（以下「抵当不動産」という。）に付加して一体となっている物に及ぶ。ただし、設定行為に別段の定めがある場合及び債務者の行為について第四百二十四条第三項に規定する詐害行為取消請求をすることができる場合は、この限りでない。"]]},"民法372条":{"n":"民法第三百七十二条","c":"（留置権等の規定の準用）","p":[["第二百九十六条、第三百四条及び第三百五十一条の規定は、抵当権について準用する。"]]},"民法388条":{"n":"民法第三百八十八条","c":"（法定地上権）","p":[["土地及びその上に存する建物が同一の所有者に属する場合において、その土地又は建物につき抵当権が設定され、その実行により所有者を異にするに至ったときは、その建物について、地上権が設定されたものとみなす。この場合において、地代は、当事者の請求により、裁判所が定める。"]]},"民法389条":{"n":"民法第三百八十九条","c":"（抵当地の上の建物の競売）","p":[["抵当権の設定後に抵当地に建物が築造されたときは、抵当権者は、土地とともにその建物を競売することができる。ただし、その優先権は、土地の代価についてのみ行使することができる。"],["２　前項の規定は、その建物の所有者が抵当地を占有するについて抵当権者に対抗することができる権利を有する場合には、適用しない。"]]},"民法446条":{"n":"民法第四百四十六条","c":"（保証人の責任等）","p":[["保証人は、主たる債務者がその債務を履行しないときに、その履行をする責任を負う。"],["２　保証契約は、書面でしなければ、その効力を生じない。"],["３　保証契約がその内容を記録した電磁的記録によってされたときは、その保証契約は、書面によってされたものとみなして、前項の規定を適用する。"]]},"民法452条":{"n":"民法第四百五十二条","c":"（催告の抗弁）","p":[["債権者が保証人に債務の履行を請求したときは、保証人は、まず主たる債務者に催告をすべき旨を請求することができる。ただし、主たる債務者が破産手続開始の決定を受けたとき、又はその行方が知れないときは、この限りでない。"]]},"民法454条":{"n":"民法第四百五十四条","c":"（連帯保証の場合の特則）","p":[["保証人は、主たる債務者と連帯して債務を負担したときは、前二条の権利を有しない。"]]},"民法465条の2":{"n":"民法第四百六十五条の二","c":"（個人根保証契約の保証人の責任等）","p":[["一定の範囲に属する不特定の債務を主たる債務とする保証契約（以下「根保証契約」という。）であって保証人が法人でないもの（以下「個人根保証契約」という。）の保証人は、主たる債務の元本、主たる債務に関する利息、違約金、損害賠償その他その債務に従たる全てのもの及びその保証債務について約定された違約金又は損害賠償の額について、その全部に係る極度額を限度として、その履行をする責任を負う。"],["２　個人根保証契約は、前項に規定する極度額を定めなければ、その効力を生じない。"],["３　第四百四十六条第二項及び第三項の規定は、個人根保証契約における第一項に規定する極度額の定めについて準用する。"]]},"民法562条":{"n":"民法第五百六十二条","c":"（買主の追完請求権）","p":[["引き渡された目的物が種類、品質又は数量に関して契約の内容に適合しないものであるときは、買主は、売主に対し、目的物の修補、代替物の引渡し又は不足分の引渡しによる履行の追完を請求することができる。ただし、売主は、買主に不相当な負担を課するものでないときは、買主が請求した方法と異なる方法による履行の追完をすることができる。"],["２　前項の不適合が買主の責めに帰すべき事由によるものであるときは、買主は、同項の規定による履行の追完の請求をすることができない。"]]},"民法563条":{"n":"民法第五百六十三条","c":"（買主の代金減額請求権）","p":[["前条第一項本文に規定する場合において、買主が相当の期間を定めて履行の追完の催告をし、その期間内に履行の追完がないときは、買主は、その不適合の程度に応じて代金の減額を請求することができる。"],["２　前項の規定にかかわらず、次に掲げる場合には、買主は、同項の催告をすることなく、直ちに代金の減額を請求することができる。","- 一　履行の追完が不能であるとき。","- 二　売主が履行の追完を拒絶する意思を明確に表示したとき。","- 三　契約の性質又は当事者の意思表示により、特定の日時又は一定の期間内に履行をしなければ契約をした目的を達することができない場合において、売主が履行の追完をしないでその時期を経過したとき。","- 四　前三号に掲げる場合のほか、買主が前項の催告をしても履行の追完を受ける見込みがないことが明らかであるとき。"],["３　第一項の不適合が買主の責めに帰すべき事由によるものであるときは、買主は、前二項の規定による代金の減額の請求をすることができない。"]]},"民法566条":{"n":"民法第五百六十六条","c":"（目的物の種類又は品質に関する担保責任の期間の制限）","p":[["売主が種類又は品質に関して契約の内容に適合しない目的物を買主に引き渡した場合において、買主がその不適合を知った時から一年以内にその旨を売主に通知しないときは、買主は、その不適合を理由として、履行の追完の請求、代金の減額の請求、損害賠償の請求及び契約の解除をすることができない。ただし、売主が引渡しの時にその不適合を知り、又は重大な過失によって知らなかったときは、この限りでない。"]]},"民法607条の2":{"n":"民法第六百七条の二","c":"（賃借人による修繕）","p":[["賃借物の修繕が必要である場合において、次に掲げるときは、賃借人は、その修繕をすることができる。","- 一　賃借人が賃貸人に修繕が必要である旨を通知し、又は賃貸人がその旨を知ったにもかかわらず、賃貸人が相当の期間内に必要な修繕をしないとき。","- 二　急迫の事情があるとき。"]]},"民法613条":{"n":"民法第六百十三条","c":"（転貸の効果）","p":[["賃借人が適法に賃借物を転貸したときは、転借人は、賃貸人と賃借人との間の賃貸借に基づく賃借人の債務の範囲を限度として、賃貸人に対して転貸借に基づく債務を直接履行する義務を負う。この場合においては、賃料の前払をもって賃貸人に対抗することができない。"],["２　前項の規定は、賃貸人が賃借人に対してその権利を行使することを妨げない。"],["３　賃借人が適法に賃借物を転貸した場合には、賃貸人は、賃借人との間の賃貸借を合意により解除したことをもって転借人に対抗することができない。ただし、その解除の当時、賃貸人が賃借人の債務不履行による解除権を有していたときは、この限りでない。"]]},"民法622条の2":{"n":"民法第六百二十二条の二","c":"","p":[["賃貸人は、敷金（いかなる名目によるかを問わず、賃料債務その他の賃貸借に基づいて生ずる賃借人の賃貸人に対する金銭の給付を目的とする債務を担保する目的で、賃借人が賃貸人に交付する金銭をいう。以下この条において同じ。）を受け取っている場合において、次に掲げるときは、賃借人に対し、その受け取った敷金の額から賃貸借に基づいて生じた賃借人の賃貸人に対する金銭の給付を目的とする債務の額を控除した残額を返還しなければならない。","- 一　賃貸借が終了し、かつ、賃貸物の返還を受けたとき。","- 二　賃借人が適法に賃借権を譲り渡したとき。"],["２　賃貸人は、賃借人が賃貸借に基づいて生じた金銭の給付を目的とする債務を履行しないときは、敷金をその債務の弁済に充てることができる。この場合において、賃借人は、賃貸人に対し、敷金をその債務の弁済に充てることを請求することができない。"]]},"借地借家法3条":{"n":"借地借家法第三条","c":"（借地権の存続期間）","p":[["借地権の存続期間は、三十年とする。ただし、契約でこれより長い期間を定めたときは、その期間とする。"]]},"借地借家法4条":{"n":"借地借家法第四条","c":"（借地権の更新後の期間）","p":[["当事者が借地契約を更新する場合においては、その期間は、更新の日から十年（借地権の設定後の最初の更新にあっては、二十年）とする。ただし、当事者がこれより長い期間を定めたときは、その期間とする。"]]},"借地借家法10条":{"n":"借地借家法第十条","c":"（借地権の対抗力）","p":[["借地権は、その登記がなくても、土地の上に借地権者が登記されている建物を所有するときは、これをもって第三者に対抗することができる。"],["２　前項の場合において、建物の滅失があっても、借地権者が、その建物を特定するために必要な事項、その滅失があった日及び建物を新たに築造する旨を土地の上の見やすい場所に掲示するときは、借地権は、なお同項の効力を有する。ただし、建物の滅失があった日から二年を経過した後にあっては、その前に建物を新たに築造し、かつ、その建物につき登記した場合に限る。"]]},"借地借家法22条":{"n":"借地借家法第二十二条","c":"（定期借地権）","p":[["存続期間を五十年以上として借地権を設定する場合においては、第九条及び第十六条の規定にかかわらず、契約の更新（更新の請求及び土地の使用の継続によるものを含む。次条第一項において同じ。）及び建物の築造による存続期間の延長がなく、並びに第十三条の規定による買取りの請求をしないこととする旨を定めることができる。この場合においては、その特約は、公正証書による等書面によってしなければならない。"],["２　前項前段の特約がその内容を記録した電磁的記録（電子的方式、磁気的方式その他人の知覚によっては認識することができない方式で作られる記録であって、電子計算機による情報処理の用に供されるものをいう。第三十八条第二項及び第三十九条第三項において同じ。）によってされたときは、その特約は、書面によってされたものとみなして、前項後段の規定を適用する。"]]},"借地借家法26条":{"n":"借地借家法第二十六条","c":"（建物賃貸借契約の更新等）","p":[["建物の賃貸借について期間の定めがある場合において、当事者が期間の満了の一年前から六月前までの間に相手方に対して更新をしない旨の通知又は条件を変更しなければ更新をしない旨の通知をしなかったときは、従前の契約と同一の条件で契約を更新したものとみなす。ただし、その期間は、定めがないものとする。"],["２　前項の通知をした場合であっても、建物の賃貸借の期間が満了した後建物の賃借人が使用を継続する場合において、建物の賃貸人が遅滞なく異議を述べなかったときも、同項と同様とする。"],["３　建物の転貸借がされている場合においては、建物の転借人がする建物の使用の継続を建物の賃借人がする建物の使用の継続とみなして、建物の賃借人と賃貸人との間について前項の規定を適用する。"]]},"借地借家法28条":{"n":"借地借家法第二十八条","c":"（建物賃貸借契約の更新拒絶等の要件）","p":[["建物の賃貸人による第二十六条第一項の通知又は建物の賃貸借の解約の申入れは、建物の賃貸人及び賃借人（転借人を含む。以下この条において同じ。）が建物の使用を必要とする事情のほか、建物の賃貸借に関する従前の経過、建物の利用状況及び建物の現況並びに建物の賃貸人が建物の明渡しの条件として又は建物の明渡しと引換えに建物の賃借人に対して財産上の給付をする旨の申出をした場合におけるその申出を考慮して、正当の事由があると認められる場合でなければ、することができない。"]]},"借地借家法29条":{"n":"借地借家法第二十九条","c":"（建物賃貸借の期間）","p":[["期間を一年未満とする建物の賃貸借は、期間の定めがない建物の賃貸借とみなす。"],["２　民法（明治二十九年法律第八十九号）第六百四条の規定は、建物の賃貸借については、適用しない。"]]},"借地借家法31条":{"n":"借地借家法第三十一条","c":"（建物賃貸借の対抗力）","p":[["建物の賃貸借は、その登記がなくても、建物の引渡しがあったときは、その後その建物について物権を取得した者に対し、その効力を生ずる。"]]},"区分所有法31条":{"n":"建物の区分所有等に関する法律第三十一条","c":"（規約の設定、変更及び廃止）","p":[["規約の設定、変更又は廃止は、集会において、区分所有者（議決権を有しないものを除く。以下この項前段において同じ。）の過半数（これを上回る割合を規約で定めた場合にあつては、その割合以上）の者であつて議決権の過半数（これを上回る割合を規約で定めた場合にあつては、その割合以上）を有するものが出席し、出席した区分所有者及びその議決権の各四分の三以上の多数による決議によつてする。この場合において、規約の設定、変更又は廃止が一部の区分所有者の権利に特別の影響を及ぼすべきときは、その承諾を得なければならない。"],["２　前条第二項に規定する事項についての区分所有者全員の規約の設定、変更又は廃止は、当該一部共用部分を共用すべき区分所有者（議決権を有しないものを除く。）の四分の一を超える者又はその議決権の四分の一を超える議決権を有する者が反対したときは、することができない。"]]},"区分所有法34条":{"n":"建物の区分所有等に関する法律第三十四条","c":"（集会の招集）","p":[["集会は、管理者が招集する。"],["２　管理者は、少なくとも毎年一回集会を招集しなければならない。"],["３　区分所有者（議決権を有しないものを除く。第五項において同じ。）の五分の一以上の者であつて議決権の五分の一以上を有するものは、管理者に対し、会議の目的たる事項を示して、集会の招集を請求することができる。ただし、この定数は、規約で減ずることができる。"],["４　前項の規定による請求がされた場合において、二週間以内にその請求の日から四週間以内の日を会日とする集会の招集の通知が発せられなかつたときは、その請求をした区分所有者は、集会を招集することができる。"],["５　管理者がないときは、区分所有者の五分の一以上の者であつて議決権の五分の一以上を有するものは、集会を招集することができる。ただし、この定数は、規約で減ずることができる。"]]},"区分所有法35条":{"n":"建物の区分所有等に関する法律第三十五条","c":"（招集の通知）","p":[["集会の招集の通知は、会日より少なくとも一週間前に、会議の目的たる事項及び議案の要領を示して、各区分所有者（議決権を有しないものを除く。）に発しなければならない。ただし、この期間は、規約で伸長することができる。"],["２　専有部分が数人の共有に属するときは、前項の通知は、第四十条の規定により定められた議決権を行使すべき者（その者がないときは、共有者の一人）にすれば足りる。"],["３　第一項の通知は、区分所有者が管理者に対して通知を受けるべき場所を通知したときはその場所に、これを通知しなかつたときは区分所有者の所有する専有部分が所在する場所にあててすれば足りる。この場合には、同項の通知は、通常それが到達すべき時に到達したものとみなす。"],["４　建物内に住所を有する区分所有者又は前項の通知を受けるべき場所を通知しない区分所有者に対する第一項の通知は、規約に特別の定めがあるときは、建物内の見やすい場所に掲示してすることができる。この場合には、同項の通知は、その掲示をした時に到達したものとみなす。"]]},"区分所有法62条":{"n":"建物の区分所有等に関する法律第六十二条","c":"（建替え決議）","p":[["集会においては、区分所有者（議決権を有しないものを除く。）及び議決権の各五分の四以上の多数で、建物を取り壊し、かつ、当該建物の敷地若しくはその一部の土地又は当該建物の敷地の全部若しくは一部を含む土地に新たに建物を建築する旨の決議（以下「建替え決議」という。）をすることができる。"],["２　建物が次の各号のいずれかに該当する場合における前項の規定の適用については、同項中「五分の四」とあるのは、「四分の三」とする。","- 一　地震に対する安全性に係る建築基準法（昭和二十五年法律第二百一号）又はこれに基づく命令若しくは条例の規定に準ずるものとして法務大臣が定める基準に適合していないとき。","- 二　火災に対する安全性に係る建築基準法又はこれに基づく命令若しくは条例の規定に準ずるものとして法務大臣が定める基準に適合していないとき。","- 三　外壁、外装材その他これらに類する建物の部分が剝離し、落下することにより周辺に危害を生ずるおそれがあるものとして法務大臣が定める基準に該当するとき。","- 四　給水、排水その他の配管設備（その改修に関する工事を行うことが著しく困難なものとして法務省令で定めるものに限る。）の損傷、腐食その他の劣化により著しく衛生上有害となるおそれがあるものとして法務大臣が定める基準に該当するとき。","- 五　高齢者、障害者等の移動等の円滑化の促進に関する法律第十四条第五項に規定する建築物移動等円滑化基準に準ずるものとして法務大臣が定める基準に適合していないとき。"],["３　法務大臣は、前項各号の基準を定め、又はこれを変更するときは、あらかじめ、国土交通大臣と協議するものとする。"],["４　建替え決議においては、次の事項を定めなければならない。","- 一　新たに建築する建物（以下この項において「再建建物」という。）の設計の概要","- 二　建物の取壊し及び再建建物の建築に要する費用の概算額","- 三　前号に規定する費用の分担に関する事項","- 四　再建建物の区分所有権の帰属に関する事項"],["５　前項第三号及び第四号の事項は、各区分所有者の衡平を害しないように定めなければならない。"],["６　建替え決議を会議の目的とする集会を招集するときは、第三十五条第一項の通知は、同項の規定にかかわらず、当該集会の会日より少なくとも二月前に発しなければならない。ただし、この期間は、規約で伸長することができる。"],["７　前項に規定する場合において、第三十五条第一項の通知をするときは、会議の目的たる事項及び議案の要領のほか、次の事項をも通知しなければならない。","- 一　建物の建替えを必要とする理由","- 二　建物の建替えをしないとした場合における当該建物の効用の維持又は回復（建物が通常有すべき効用の確保を含む。）をするのに要する費用の額及びその内訳","- 三　建物の修繕に関する計画が定められているときは、当該計画の内容","- 四　建物につき修繕積立金として積み立てられている金額"],["８　第六項の集会を招集した者は、当該集会の会日より少なくとも一月前までに、当該招集の際に通知すべき事項について区分所有者に対し説明を行うための説明会を開催しなければならない。"],["９　第三十五条及び第三十六条の規定は、前項の説明会の開催について準用する。"],["１０　前条第六項の規定は、建替え決議をした集会の議事録について準用する。"]]},"不動産登記法47条":{"n":"不動産登記法第四十七条","c":"（建物の表題登記の申請）","p":[["新築した建物又は区分建物以外の表題登記がない建物の所有権を取得した者は、その所有権の取得の日から一月以内に、表題登記を申請しなければならない。"],["２　区分建物である建物を新築した場合において、その所有者について相続その他の一般承継があったときは、相続人その他の一般承継人も、被承継人を表題部所有者とする当該建物についての表題登記を申請することができる。"]]},"不動産登記法60条":{"n":"不動産登記法第六十条","c":"（共同申請）","p":[["権利に関する登記の申請は、法令に別段の定めがある場合を除き、登記権利者及び登記義務者が共同してしなければならない。"]]},"不動産登記法76条の2":{"n":"不動産登記法第七十六条の二","c":"（相続等による所有権の移転の登記の申請）","p":[["所有権の登記名義人について相続の開始があったときは、当該相続により所有権を取得した者は、自己のために相続の開始があったことを知り、かつ、当該所有権を取得したことを知った日から三年以内に、所有権の移転の登記を申請しなければならない。遺贈（相続人に対する遺贈に限る。）により所有権を取得した者も、同様とする。"],["２　前項前段の規定による登記（民法第九百条及び第九百一条の規定により算定した相続分に応じてされたものに限る。次条第四項において同じ。）がされた後に遺産の分割があったときは、当該遺産の分割によって当該相続分を超えて所有権を取得した者は、当該遺産の分割の日から三年以内に、所有権の移転の登記を申請しなければならない。"],["３　前二項の規定は、代位者その他の者の申請又は嘱託により、当該各項の規定による登記がされた場合には、適用しない。"]]},"不動産登記法106条":{"n":"不動産登記法第百六条","c":"（仮登記に基づく本登記の順位）","p":[["仮登記に基づいて本登記（仮登記がされた後、これと同一の不動産についてされる同一の権利についての権利に関する登記であって、当該不動産に係る登記記録に当該仮登記に基づく登記であることが記録されているものをいう。以下同じ。）をした場合は、当該本登記の順位は、当該仮登記の順位による。"]]},"民法887条":{"n":"民法第八百八十七条","c":"（子及びその代襲者等の相続権）","p":[["被相続人の子は、相続人となる。"],["２　被相続人の子が、相続の開始以前に死亡したとき、又は第八百九十一条の規定に該当し、若しくは廃除によって、その相続権を失ったときは、その者の子がこれを代襲して相続人となる。ただし、被相続人の直系卑属でない者は、この限りでない。"],["３　前項の規定は、代襲者が、相続の開始以前に死亡し、又は第八百九十一条の規定に該当し、若しくは廃除によって、その代襲相続権を失った場合について準用する。"]]},"民法900条":{"n":"民法第九百条","c":"（法定相続分）","p":[["同順位の相続人が数人あるときは、その相続分は、次の各号の定めるところによる。","- 一　子及び配偶者が相続人であるときは、子の相続分及び配偶者の相続分は、各二分の一とする。","- 二　配偶者及び直系尊属が相続人であるときは、配偶者の相続分は、三分の二とし、直系尊属の相続分は、三分の一とする。","- 三　配偶者及び兄弟姉妹が相続人であるときは、配偶者の相続分は、四分の三とし、兄弟姉妹の相続分は、四分の一とする。","- 四　子、直系尊属又は兄弟姉妹が数人あるときは、各自の相続分は、相等しいものとする。ただし、父母の一方のみを同じくする兄弟姉妹の相続分は、父母の双方を同じくする兄弟姉妹の相続分の二分の一とする。"]]},"民法915条":{"n":"民法第九百十五条","c":"（相続の承認又は放棄をすべき期間）","p":[["相続人は、自己のために相続の開始があったことを知った時から三箇月以内に、相続について、単純若しくは限定の承認又は放棄をしなければならない。ただし、この期間は、利害関係人又は検察官の請求によって、家庭裁判所において伸長することができる。"],["２　相続人は、相続の承認又は放棄をする前に、相続財産の調査をすることができる。"]]},"民法939条":{"n":"民法第九百三十九条","c":"（相続の放棄の効力）","p":[["相続の放棄をした者は、その相続に関しては、初めから相続人とならなかったものとみなす。"]]},"民法1042条":{"n":"民法第千四十二条","c":"（遺留分の帰属及びその割合）","p":[["兄弟姉妹以外の相続人は、遺留分として、次条第一項に規定する遺留分を算定するための財産の価額に、次の各号に掲げる区分に応じてそれぞれ当該各号に定める割合を乗じた額を受ける。","- 一　直系尊属のみが相続人である場合　三分の一","- 二　前号に掲げる場合以外の場合　二分の一"],["２　相続人が数人ある場合には、前項各号に定める割合は、これらに第九百条及び第九百一条の規定により算定したその各自の相続分を乗じた割合とする。"]]},"民法251条":{"n":"民法第二百五十一条","c":"（共有物の変更）","p":[["各共有者は、他の共有者の同意を得なければ、共有物に変更（その形状又は効用の著しい変更を伴わないものを除く。次項において同じ。）を加えることができない。"],["２　共有者が他の共有者を知ることができず、又はその所在を知ることができないときは、裁判所は、共有者の請求により、当該他の共有者以外の他の共有者の同意を得て共有物に変更を加えることができる旨の裁判をすることができる。"]]},"民法252条":{"n":"民法第二百五十二条","c":"（共有物の管理）","p":[["共有物の管理に関する事項（次条第一項に規定する共有物の管理者の選任及び解任を含み、共有物に前条第一項に規定する変更を加えるものを除く。次項において同じ。）は、各共有者の持分の価格に従い、その過半数で決する。共有物を使用する共有者があるときも、同様とする。"],["２　裁判所は、次の各号に掲げるときは、当該各号に規定する他の共有者以外の共有者の請求により、当該他の共有者以外の共有者の持分の価格に従い、その過半数で共有物の管理に関する事項を決することができる旨の裁判をすることができる。","- 一　共有者が他の共有者を知ることができず、又はその所在を知ることができないとき。","- 二　共有者が他の共有者に対し相当の期間を定めて共有物の管理に関する事項を決することについて賛否を明らかにすべき旨を催告した場合において、当該他の共有者がその期間内に賛否を明らかにしないとき。"],["３　前二項の規定による決定が、共有者間の決定に基づいて共有物を使用する共有者に特別の影響を及ぼすべきときは、その承諾を得なければならない。"],["４　共有者は、前三項の規定により、共有物に、次の各号に掲げる賃借権その他の使用及び収益を目的とする権利（以下この項において「賃借権等」という。）であって、当該各号に定める期間を超えないものを設定することができる。","- 一　樹木の栽植又は伐採を目的とする山林の賃借権等　十年","- 二　前号に掲げる賃借権等以外の土地の賃借権等　五年","- 三　建物の賃借権等　三年","- 四　動産の賃借権等　六箇月"],["５　各共有者は、前各項の規定にかかわらず、保存行為をすることができる。"]]},"都市計画法29条":{"n":"都市計画法第二十九条","c":"（開発行為の許可）","p":[["都市計画区域又は準都市計画区域内において開発行為をしようとする者は、あらかじめ、国土交通省令で定めるところにより、都道府県知事（地方自治法（昭和二十二年法律第六十七号）第二百五十二条の十九第一項の指定都市又は同法第二百五十二条の二十二第一項の中核市（以下「指定都市等」という。）の区域内にあつては、当該指定都市等の長。以下この節において同じ。）の許可を受けなければならない。ただし、次に掲げる開発行為については、この限りでない。","- 一　市街化区域、区域区分が定められていない都市計画区域又は準都市計画区域内において行う開発行為で、その規模が、それぞれの区域の区分に応じて政令で定める規模未満であるもの","- 二　市街化調整区域、区域区分が定められていない都市計画区域又は準都市計画区域内において行う開発行為で、農業、林業若しくは漁業の用に供する政令で定める建築物又はこれらの業務を営む者の居住の用に供する建築物の建築の用に供する目的で行うもの","- 三　駅舎その他の鉄道の施設、図書館、公民館、変電所その他これらに類する公益上必要な建築物のうち開発区域及びその周辺の地域における適正かつ合理的な土地利用及び環境の保全を図る上で支障がないものとして政令で定める建築物の建築の用に供する目的で行う開発行為","- 四　都市計画事業の施行として行う開発行為","- 五　土地区画整理事業の施行として行う開発行為","- 六　市街地再開発事業の施行として行う開発行為","- 七　住宅街区整備事業の施行として行う開発行為","- 八　防災街区整備事業の施行として行う開発行為","- 九　公有水面埋立法（大正十年法律第五十七号）第二条第一項の免許を受けた埋立地であつて、まだ同法第二十二条第二項の告示がないものにおいて行う開発行為","- 十　非常災害のため必要な応急措置として行う開発行為","- 十一　通常の管理行為、軽易な行為その他の行為で政令で定めるもの"],["２　都市計画区域及び準都市計画区域外の区域内において、それにより一定の市街地を形成すると見込まれる規模として政令で定める規模以上の開発行為をしようとする者は、あらかじめ、国土交通省令で定めるところにより、都道府県知事の許可を受けなければならない。ただし、次に掲げる開発行為については、この限りでない。","- 一　農業、林業若しくは漁業の用に供する政令で定める建築物又はこれらの業務を営む者の居住の用に供する建築物の建築の用に供する目的で行う開発行為","- 二　前項第三号、第四号及び第九号から第十一号までに掲げる開発行為"],["３　開発区域が、市街化区域、区域区分が定められていない都市計画区域、準都市計画区域又は都市計画区域及び準都市計画区域外の区域のうち二以上の区域にわたる場合における第一項第一号及び前項の規定の適用については、政令で定める。"]]},"都市計画法7条":{"n":"都市計画法第七条","c":"（区域区分）","p":[["都市計画区域について無秩序な市街化を防止し、計画的な市街化を図るため必要があるときは、都市計画に、市街化区域と市街化調整区域との区分（以下「区域区分」という。）を定めることができる。ただし、次に掲げる都市計画区域については、区域区分を定めるものとする。","- 一　次に掲げる土地の区域の全部又は一部を含む都市計画区域","-- イ　首都圏整備法第二条第三項に規定する既成市街地又は同条第四項に規定する近郊整備地帯","-- ロ　近畿圏整備法第二条第三項に規定する既成都市区域又は同条第四項に規定する近郊整備区域","-- ハ　中部圏開発整備法第二条第三項に規定する都市整備区域","- 二　前号に掲げるもののほか、大都市に係る都市計画区域として政令で定めるもの"],["２　市街化区域は、すでに市街地を形成している区域及びおおむね十年以内に優先的かつ計画的に市街化を図るべき区域とする。"],["３　市街化調整区域は、市街化を抑制すべき区域とする。"]]},"都市計画法13条":{"n":"都市計画法第十三条","c":"（都市計画基準）","p":[["都市計画区域について定められる都市計画（区域外都市施設に関するものを含む。次項において同じ。）は、国土形成計画、首都圏整備計画、近畿圏整備計画、中部圏開発整備計画、北海道総合開発計画、沖縄振興計画その他の国土計画又は地方計画に関する法律に基づく計画（当該都市について公害防止計画が定められているときは、当該公害防止計画を含む。第三項において同じ。）及び道路、河川、鉄道、港湾、空港等の施設に関する国の計画に適合するとともに、当該都市の特質及び当該都市における自然的環境の整備又は保全の重要性を考慮して、次に掲げるところに従つて、土地利用、都市施設の整備及び市街地開発事業に関する事項で当該都市の健全な発展と秩序ある整備を図るため必要なものを、一体的かつ総合的に定めなければならない。","- 一　都市計画区域の整備、開発及び保全の方針は、当該都市の発展の動向、当該都市計画区域における人口及び産業の現状及び将来の見通し等を勘案して、当該都市計画区域を一体の都市として総合的に整備し、開発し、及び保全することを目途として、当該方針に即して都市計画が適切に定められることとなるように定めること。","- 二　区域区分は、当該都市の発展の動向、当該都市計画区域における人口及び産業の将来の見通し等を勘案して、産業活動の利便と居住環境の保全との調和を図りつつ、国土の合理的利用を確保し、効率的な公共投資を行うことができるように定めること。","- 三　都市再開発の方針は、市街化区域内において、計画的な再開発が必要な市街地について定めること。","- 四　住宅市街地の開発整備の方針は、大都市地域における住宅及び住宅地の供給の促進に関する特別措置法第四条第一項に規定する都市計画区域について、良好な住宅市街地の開発整備が図られるように定めること。","- 五　拠点業務市街地の開発整備の方針は、地方拠点都市地域の整備及び産業業務施設の再配置の促進に関する法律第八条第一項の同意基本計画において定められた同法第二条第二項の拠点地区に係る市街化区域について、当該同意基本計画の達成に資するように定めること。","- 六　防災街区整備方針は、市街化区域内において、密集市街地整備法第二条第一号の密集市街地内の各街区について同条第二号の防災街区としての整備が図られるように定めること。","- 七　地域地区は、土地の自然的条件及び土地利用の動向を勘案して、住居、商業、工業その他の用途を適正に配分することにより、都市機能を維持増進し、かつ、住居の環境を保護し、商業、工業等の利便を増進し、良好な景観を形成し、風致を維持し、公害を防止する等適正な都市環境を保持するように定めること。この場合において、市街化区域については、少なくとも用途地域を定めるものとし、市街化調整区域については、原則として用途地域を定めないものとする。","- 八　促進区域は、市街化区域又は区域区分が定められていない都市計画区域内において、主として関係権利者による市街地の計画的な整備又は開発を促進する必要があると認められる土地の区域について定めること。","- 九　遊休土地転換利用促進地区は、主として関係権利者による有効かつ適切な利用を促進する必要があると認められる土地の区域について定めること。","- 十　被災市街地復興推進地域は、大規模な火災、震災その他の災害により相当数の建築物が滅失した市街地の計画的な整備改善を推進して、その緊急かつ健全な復興を図る必要があると認められる土地の区域について定めること。","- 十一　都市施設は、土地利用、交通等の現状及び将来の見通しを勘案して、適切な規模で必要な位置に配置することにより、円滑な都市活動を確保し、良好な都市環境を保持するように定めること。この場合において、市街化区域及び区域区分が定められていない都市計画区域については、少なくとも道路、公園及び下水道を定めるものとし、第一種低層住居専用地域、第二種低層住居専用地域、第一種中高層住居専用地域、第二種中高層住居専用地域、第一種住居地域、第二種住居地域、準住居地域及び田園住居地域については、義務教育施設をも定めるものとする。","- 十二　一団地の都市安全確保拠点施設については、前号に定めるもののほか、次に掲げるところに従つて定めること。","-- イ　溢水、湛水、津波、高潮その他の自然現象による災害の発生のおそれが著しく、かつ、当該災害が発生した場合に居住者等の安全を確保する必要性が高いと認められる区域（当該区域に隣接し、又は近接する区域を含む。）について定めること。","-- ロ　第十一条第四項第一号に規定する施設は、溢水、湛水、津波、高潮その他の自然現象による災害が発生した場合においてイに規定する区域内における同条第一項第十号に規定する機能が一体的に発揮されるよう、必要な位置に適切な規模で配置すること。","-- ハ　第十一条第四項第二号に掲げる事項は、溢水、湛水、津波、高潮その他の自然現象による災害が発生した場合においてイに規定する区域内における居住者等の安全の確保が図られるよう定めること。","- 十三　市街地開発事業は、市街化区域又は区域区分が定められていない都市計画区域内において、一体的に開発し、又は整備する必要がある土地の区域について定めること。","- 十四　市街地開発事業等予定区域は、市街地開発事業に係るものにあつては市街化区域又は区域区分が定められていない都市計画区域内において、一体的に開発し、又は整備する必要がある土地の区域について、都市施設に係るものにあつては当該都市施設が第十一号前段の基準に合致することとなるような土地の区域について定めること。","- 十五　地区計画は、公共施設の整備、建築物の建築その他の土地利用の現状及び将来の見通しを勘案し、当該区域の各街区における防災、安全、衛生等に関する機能が確保され、かつ、その良好な環境の形成又は保持のためその区域の特性に応じて合理的な土地利用が行われることを目途として、当該計画に従つて秩序ある開発行為、建築又は施設の整備が行われることとなるように定めること。この場合において、次のイからハまでに掲げる地区計画については、当該イからハまでに定めるところによること。","-- イ　市街化調整区域における地区計画　市街化区域における市街化の状況等を勘案して、地区計画の区域の周辺における市街化を促進することがない等当該都市計画区域における計画的な市街化を図る上で支障がないように定めること。","-- ロ　再開発等促進区を定める地区計画　土地の合理的かつ健全な高度利用と都市機能の増進とが図られることを目途として、一体的かつ総合的な市街地の再開発又は開発整備が実施されることとなるように定めること。この場合において、第一種低層住居専用地域、第二種低層住居専用地域及び田園住居地域については、再開発等促進区の周辺の低層住宅に係る良好な住居の環境の保護に支障がないように定めること。","-- ハ　開発整備促進区を定める地区計画　特定大規模建築物の整備による商業その他の業務の利便の増進が図られることを目途として、一体的かつ総合的な市街地の開発整備が実施されることとなるように定めること。この場合において、第二種住居地域及び準住居地域については、開発整備促進区の周辺の住宅に係る住居の環境の保護に支障がないように定めること。","- 十六　防災街区整備地区計画は、当該区域の各街区が火事又は地震が発生した場合の延焼防止上及び避難上確保されるべき機能を備えるとともに、土地の合理的かつ健全な利用が図られることを目途として、一体的かつ総合的な市街地の整備が行われることとなるように定めること。","- 十七　歴史的風致維持向上地区計画は、地域におけるその固有の歴史及び伝統を反映した人々の活動とその活動が行われる歴史上価値の高い建造物及びその周辺の市街地とが一体となつて形成してきた良好な市街地の環境の維持及び向上並びに土地の合理的かつ健全な利用が図られるように定めること。","- 十八　沿道地区計画は、道路交通騒音により生ずる障害を防止するとともに、適正かつ合理的な土地利用が図られるように定めること。この場合において、沿道再開発等促進区（幹線道路の沿道の整備に関する法律第九条第三項の規定による沿道再開発等促進区をいう。以下同じ。）を定める沿道地区計画については、土地の合理的かつ健全な高度利用と都市機能の増進とが図られることを目途として、一体的かつ総合的な市街地の再開発又は開発整備が実施されることとなるように定めることとし、そのうち第一種低層住居専用地域、第二種低層住居専用地域及び田園住居地域におけるものについては、沿道再開発等促進区の周辺の低層住宅に係る良好な住居の環境の保護に支障がないように定めること。","- 十九　集落地区計画は、営農条件と調和のとれた居住環境を整備するとともに、適正な土地利用が図られるように定めること。","- 二十　前各号の基準を適用するについては、第六条第一項の規定による都市計画に関する基礎調査の結果に基づき、かつ、政府が法律に基づき行う人口、産業、住宅、建築、交通、工場立地その他の調査の結果について配慮すること。"],["２　都市計画区域について定められる都市計画は、当該都市の住民が健康で文化的な都市生活を享受することができるように、住宅の建設及び居住環境の整備に関する計画を定めなければならない。"],["３　準都市計画区域について定められる都市計画は、第一項に規定する国土計画若しくは地方計画又は施設に関する国の計画に適合するとともに、地域の特質及び当該地域における自然的環境の整備又は保全の重要性を考慮して、次に掲げるところに従つて、土地利用の整序又は環境の保全を図るため必要な事項を定めなければならない。この場合においては、当該地域における農林漁業の生産条件の整備に配慮しなければならない。","- 一　地域地区は、土地の自然的条件及び土地利用の動向を勘案して、住居の環境を保護し、良好な景観を形成し、風致を維持し、公害を防止する等地域の環境を適正に保持するように定めること。","- 二　前号の基準を適用するについては、第六条第二項の規定による都市計画に関する基礎調査の結果に基づくこと。"],["４　都市再開発方針等、第八条第一項第四号の二、第五号の二、第六号、第八号及び第十号から第十六号までに掲げる地域地区、促進区域、被災市街地復興推進地域、流通業務団地、一団地の津波防災拠点市街地形成施設、一団地の復興再生拠点市街地形成施設、一団地の復興拠点市街地形成施設、市街地開発事業、市街地開発事業等予定区域（第十二条の二第一項第四号及び第五号に掲げるものを除く。）、防災街区整備地区計画、歴史的風致維持向上地区計画、沿道地区計画並びに集落地区計画に関する都市計画の策定に関し必要な基準は、前三項に定めるもののほか、別に法律で定める。"],["５　地区計画を都市計画に定めるについて必要な基準は、第一項及び第二項に定めるもののほか、政令で定める。"],["６　都市計画の策定に関し必要な技術的基準は、政令で定める。"]]},"建築基準法41条の2":{"n":"建築基準法第四十一条の二","c":"（適用区域）","p":[["この章（第八節を除く。）の規定は、都市計画区域及び準都市計画区域内に限り、適用する。"]]},"建築基準法43条":{"n":"建築基準法第四十三条","c":"（敷地等と道路との関係）","p":[["建築物の敷地は、道路（次に掲げるものを除く。第四十四条第一項を除き、以下同じ。）に二メートル以上接しなければならない。","- 一　自動車のみの交通の用に供する道路","- 二　地区計画の区域（地区整備計画が定められている区域のうち都市計画法第十二条の十一の規定により建築物その他の工作物の敷地として併せて利用すべき区域として定められている区域に限る。）内の道路"],["２　前項の規定は、次の各号のいずれかに該当する建築物については、適用しない。","- 一　その敷地が幅員四メートル以上の道（道路に該当するものを除き、避難及び通行の安全上必要な国土交通省令で定める基準に適合するものに限る。）に二メートル以上接する建築物のうち、利用者が少数であるものとしてその用途及び規模に関し国土交通省令で定める基準に適合するもので、特定行政庁が交通上、安全上、防火上及び衛生上支障がないと認めるもの","- 二　その敷地の周囲に広い空地を有する建築物その他の国土交通省令で定める基準に適合する建築物で、特定行政庁が交通上、安全上、防火上及び衛生上支障がないと認めて建築審査会の同意を得て許可したもの"],["３　地方公共団体は、次の各号のいずれかに該当する建築物について、その用途、規模又は位置の特殊性により、第一項の規定によつては避難又は通行の安全の目的を十分に達成することが困難であると認めるときは、条例で、その敷地が接しなければならない道路の幅員、その敷地が道路に接する部分の長さその他その敷地又は建築物と道路との関係に関して必要な制限を付加することができる。","- 一　特殊建築物","- 二　階数が三以上である建築物","- 三　政令で定める窓その他の開口部を有しない居室を有する建築物","- 四　延べ面積（同一敷地内に二以上の建築物がある場合にあつては、その延べ面積の合計。次号、第四節、第七節及び別表第三において同じ。）が千平方メートルを超える建築物","- 五　その敷地が袋路状道路（その一端のみが他の道路に接続したものをいう。）にのみ接する建築物で、延べ面積が百五十平方メートルを超えるもの（一戸建ての住宅を除く。）"]]},"建築基準法53条":{"n":"建築基準法第五十三条","c":"（建蔽率）","p":[["建築物の建築面積（同一敷地内に二以上の建築物がある場合においては、その建築面積の合計）の敷地面積に対する割合（以下「建蔽率」という。）は、次の各号に掲げる区分に従い、当該各号に定める数値を超えてはならない。","- 一　第一種低層住居専用地域、第二種低層住居専用地域、第一種中高層住居専用地域、第二種中高層住居専用地域、田園住居地域又は工業専用地域内の建築物　十分の三、十分の四、十分の五又は十分の六のうち当該地域に関する都市計画において定められたもの","- 二　第一種住居地域、第二種住居地域、準住居地域又は準工業地域内の建築物　十分の五、十分の六又は十分の八のうち当該地域に関する都市計画において定められたもの","- 三　近隣商業地域内の建築物　十分の六又は十分の八のうち当該地域に関する都市計画において定められたもの","- 四　商業地域内の建築物　十分の八","- 五　工業地域内の建築物　十分の五又は十分の六のうち当該地域に関する都市計画において定められたもの","- 六　用途地域の指定のない区域内の建築物　十分の三、十分の四、十分の五、十分の六又は十分の七のうち、特定行政庁が土地利用の状況等を考慮し当該区域を区分して都道府県都市計画審議会の議を経て定めるもの"],["２　建築物の敷地が前項の規定による建築物の建蔽率に関する制限を受ける地域又は区域の二以上にわたる場合においては、当該建築物の建蔽率は、同項の規定による当該各地域又は区域内の建築物の建蔽率の限度にその敷地の当該地域又は区域内にある各部分の面積の敷地面積に対する割合を乗じて得たものの合計以下でなければならない。"],["３　前二項の規定の適用については、第一号又は第二号のいずれかに該当する建築物にあつては第一項各号に定める数値に十分の一を加えたものをもつて当該各号に定める数値とし、第一号及び第二号に該当する建築物にあつては同項各号に定める数値に十分の二を加えたものをもつて当該各号に定める数値とする。","- 一　防火地域（第一項第二号から第四号までの規定により建蔽率の限度が十分の八とされている地域を除く。）内にあるイに該当する建築物又は準防火地域内にあるイ若しくはロのいずれかに該当する建築物","-- イ　耐火建築物又はこれと同等以上の延焼防止性能（通常の火災による周囲への延焼を防止するために壁、柱、床その他の建築物の部分及び防火戸その他の政令で定める防火設備に必要とされる性能をいう。ロにおいて同じ。）を有するものとして政令で定める建築物（以下この条及び第六十七条第一項において「耐火建築物等」という。）","-- ロ　準耐火建築物又はこれと同等以上の延焼防止性能を有するものとして政令で定める建築物（耐火建築物等を除く。第八項及び第六十七条第一項において「準耐火建築物等」という。）","- 二　街区の角にある敷地又はこれに準ずる敷地で特定行政庁が指定するものの内にある建築物"],["４　隣地境界線から後退して壁面線の指定がある場合又は第六十八条の二第一項の規定に基づく条例で定める壁面の位置の制限（隣地境界線に面する建築物の壁又はこれに代わる柱の位置及び隣地境界線に面する高さ二メートルを超える門又は塀の位置を制限するものに限る。）がある場合において、当該壁面線又は壁面の位置の制限として定められた限度の線を越えない建築物（ひさしその他の建築物の部分で政令で定めるものを除く。次項において同じ。）で、特定行政庁が安全上、防火上及び衛生上支障がないと認めて許可したものの建蔽率は、前三項の規定にかかわらず、その許可の範囲内において、前三項の規定による限度を超えるものとすることができる。"],["５　次の各号のいずれかに該当する建築物で、特定行政庁が安全上、防火上及び衛生上支障がないと認めて許可したものの建蔽率は、第一項から第三項までの規定にかかわらず、その許可の範囲内において、これらの規定による限度を超えるものとすることができる。","- 一　特定行政庁が街区における避難上及び消火上必要な機能の確保を図るため必要と認めて前面道路の境界線から後退して壁面線を指定した場合における、当該壁面線を越えない建築物","- 二　特定防災街区整備地区に関する都市計画において特定防災機能（密集市街地整備法第二条第三号に規定する特定防災機能をいう。次号において同じ。）の確保を図るため必要な壁面の位置の制限（道路に面する建築物の壁又はこれに代わる柱の位置及び道路に面する高さ二メートルを超える門又は塀の位置を制限するものに限る。同号において同じ。）が定められた場合における、当該壁面の位置の制限として定められた限度の線を越えない建築物","- 三　第六十八条の二第一項の規定に基づく条例において防災街区整備地区計画の区域（特定建築物地区整備計画又は防災街区整備地区整備計画が定められている区域に限る。）における特定防災機能の確保を図るため必要な壁面の位置の制限が定められた場合における、当該壁面の位置の制限として定められた限度の線を越えない建築物","- 四　建築物のエネルギー消費性能の向上のため必要な外壁に関する工事その他の屋外に面する建築物の部分に関する工事を行う建築物で構造上やむを得ないものとして国土交通省令で定めるもの"],["６　前各項の規定は、次の各号のいずれかに該当する建築物については、適用しない。","- 一　防火地域（第一項第二号から第四号までの規定により建蔽率の限度が十分の八とされている地域に限る。）内にある耐火建築物等","- 二　巡査派出所、公衆便所、公共用歩廊その他これらに類するもの","- 三　公園、広場、道路、川その他これらに類するものの内にある建築物で特定行政庁が安全上、防火上及び衛生上支障がないと認めて許可したもの"],["７　建築物の敷地が防火地域の内外にわたる場合において、その敷地内の建築物の全部が耐火建築物等であるときは、その敷地は、全て防火地域内にあるものとみなして、第三項第一号又は前項第一号の規定を適用する。"],["８　建築物の敷地が準防火地域と防火地域及び準防火地域以外の区域とにわたる場合において、その敷地内の建築物の全部が耐火建築物等又は準耐火建築物等であるときは、その敷地は、全て準防火地域内にあるものとみなして、第三項第一号の規定を適用する。"],["９　第四十四条第二項の規定は、第四項、第五項又は第六項第三号の規定による許可をする場合に準用する。"]]},"国土利用計画法23条":{"n":"国土利用計画法第二十三条","c":"（土地に関する権利の移転又は設定後における利用目的等の届出）","p":[["土地売買等の契約を締結した場合には、当事者のうち当該土地売買等の契約により土地に関する権利の移転又は設定を受けることとなる者（次項において「権利取得者」という。）は、その契約を締結した日から起算して二週間以内に、次に掲げる事項を、国土交通省令で定めるところにより、当該土地が所在する市町村の長を経由して、都道府県知事に届け出なければならない。","- 一　土地売買等の契約の当事者の氏名又は名称及び住所並びに法人にあつては、その代表者の氏名","- 二　土地売買等の契約を締結した年月日","- 三　土地売買等の契約に係る土地の所在及び面積","- 四　土地売買等の契約に係る土地に関する権利の種別及び内容","- 五　土地売買等の契約による土地に関する権利の移転又は設定後における土地の利用目的","- 六　土地売買等の契約に係る土地の土地に関する権利の移転又は設定の対価の額（対価が金銭以外のものであるときは、これを時価を基準として金銭に見積つた額）","- 七　前各号に掲げるもののほか、国土交通省令で定める事項"],["２　前項の規定は、次の各号のいずれかに該当する場合には、適用しない。","- 一　次のイからハまでに規定する区域に応じそれぞれその面積が次のイからハまでに規定する面積未満の土地について土地売買等の契約を締結した場合（権利取得者が当該土地を含む一団の土地で次のイからハまでに規定する区域に応じそれぞれその面積が次のイからハまでに規定する面積以上のものについて土地に関する権利の移転又は設定を受けることとなる場合を除く。）","-- イ　都市計画法第七条第一項の規定による市街化区域にあつては、二千平方メートル","-- ロ　都市計画法第四条第二項に規定する都市計画区域（イに規定する区域を除く。）にあつては、五千平方メートル","-- ハ　イ及びロに規定する区域以外の区域にあつては、一万平方メートル","- 二　第十二条第一項の規定により指定された規制区域、第二十七条の三第一項の規定により指定された注視区域又は第二十七条の六第一項の規定により指定された監視区域に所在する土地について、土地売買等の契約を締結した場合","- 三　前二号に定めるもののほか、民事調停法による調停に基づく場合、当事者の一方又は双方が国等である場合その他政令で定める場合"],["３　第十五条第二項の規定は、第一項の規定による届出のあつた場合について準用する。"]]},"国土利用計画法24条":{"n":"国土利用計画法第二十四条","c":"（土地の利用目的に関する勧告）","p":[["都道府県知事は、前条第一項の規定による届出があつた場合において、その届出に係る土地に関する権利の移転又は設定後における土地の利用目的に従つた土地利用が土地利用基本計画その他の土地利用に関する計画（国土交通省令で定めるところにより、公表されているものに限る。）に適合せず、当該土地を含む周辺の地域の適正かつ合理的な土地利用を図るために著しい支障があると認めるときは、土地利用審査会の意見を聴いて、その届出をした者に対し、その届出に係る土地の利用目的について必要な変更をすべきことを勧告することができる。"],["２　前項の規定による勧告は、前条第一項の規定による届出があつた日から起算して三週間以内にしなければならない。"],["３　都道府県知事は、前条第一項の規定による届出があつた場合において、実地の調査を行うため必要があるときその他前項の期間内にその届出をした者に対し第一項の規定による勧告をすることができない合理的な理由があるときは、三週間の範囲内において、前項の期間を延長することができる。この場合においては、その届出をした者に対し、同項の期間内に、その延長する期間及びその期間を延長する理由を通知しなければならない。"]]},"農地法3条":{"n":"農地法第三条","c":"（農地又は採草放牧地の権利移動の制限）","p":[["農地又は採草放牧地について所有権を移転し、又は地上権、永小作権、質権、使用貸借による権利、賃借権若しくはその他の使用及び収益を目的とする権利を設定し、若しくは移転する場合には、政令で定めるところにより、当事者が農業委員会の許可を受けなければならない。ただし、次の各号のいずれかに該当する場合及び第五条第一項本文に規定する場合は、この限りでない。","- 一　第四十六条第一項又は第四十七条の規定によつて所有権が移転される場合","- 二　削除","- 三　第三十七条から第四十条までの規定によつて農地中間管理権（農地中間管理事業の推進に関する法律第二条第五項に規定する農地中間管理権をいう。以下同じ。）が設定される場合","- 四　第四十一条の規定によつて同条第一項に規定する利用権が設定される場合","- 五　これらの権利を取得する者が国又は都道府県である場合","- 六　土地改良法（昭和二十四年法律第百九十五号）、農業振興地域の整備に関する法律（昭和四十四年法律第五十八号）、集落地域整備法（昭和六十二年法律第六十三号）又は市民農園整備促進法（平成二年法律第四十四号）による交換分合によつてこれらの権利が設定され、又は移転される場合","- 七　農地中間管理事業の推進に関する法律第十八条第七項の規定による公告があつた農用地利用集積等促進計画の定めるところによつて同条第一項の権利が設定され、又は移転される場合","- 八　特定農山村地域における農林業等の活性化のための基盤整備の促進に関する法律（平成五年法律第七十二号）第九条第一項の規定による公告があつた所有権移転等促進計画の定めるところによつて同法第二条第三項第三号の権利が設定され、又は移転される場合","- 九　農山漁村の活性化のための定住等及び地域間交流の促進に関する法律（平成十九年法律第四十八号）第九条第一項の規定による公告があつた所有権移転等促進計画の定めるところによつて同法第五条第十項の権利が設定され、又は移転される場合","- 九の二　農林漁業の健全な発展と調和のとれた再生可能エネルギー電気の発電の促進に関する法律（平成二十五年法律第八十一号）第十七条の規定による公告があつた所有権移転等促進計画の定めるところによつて同法第五条第四項の権利が設定され、又は移転される場合","- 十　民事調停法（昭和二十六年法律第二百二十二号）による農事調停によつてこれらの権利が設定され、又は移転される場合","- 十一　土地収用法（昭和二十六年法律第二百十九号）その他の法律によつて農地若しくは採草放牧地又はこれらに関する権利が収用され、又は使用される場合","- 十二　遺産の分割、民法（明治二十九年法律第八十九号）第七百六十八条第二項（同法第七百四十九条及び第七百七十一条において準用する場合を含む。）の規定による財産の分与に関する裁判若しくは調停又は同法第九百五十八条の二の規定による相続財産の分与に関する裁判によつてこれらの権利が設定され、又は移転される場合","- 十三　農地中間管理機構が、農林水産省令で定めるところによりあらかじめ農業委員会に届け出て、農業経営基盤強化促進法第七条第一号に掲げる事業の実施によりこれらの権利を取得する場合","- 十四　農業協同組合法第十条第三項の信託の引受けの事業又は農業経営基盤強化促進法第七条第二号に掲げる事業（以下これらを「信託事業」という。）を行う農業協同組合又は農地中間管理機構が信託事業による信託の引受けにより所有権を取得する場合及び当該信託の終了によりその委託者又はその一般承継人が所有権を取得する場合","- 十四の二　農地中間管理機構が、農林水産省令で定めるところによりあらかじめ農業委員会に届け出て、農地中間管理事業（農地中間管理事業の推進に関する法律第二条第三項に規定する農地中間管理事業をいう。以下同じ。）の実施により農地中間管理権又は経営受託権（同法第八条第三項第三号ロに規定する経営受託権をいう。）を取得する場合","- 十四の三　農地中間管理機構が引き受けた農地貸付信託（農地中間管理事業の推進に関する法律第二条第五項第二号に規定する農地貸付信託をいう。）の終了によりその委託者又はその一般承継人が所有権を取得する場合","- 十五　地方自治法（昭和二十二年法律第六十七号）第二百五十二条の十九第一項の指定都市（以下単に「指定都市」という。）が古都における歴史的風土の保存に関する特別措置法（昭和四十一年法律第一号）第二十条の規定に基づいてする同法第十二条第一項の規定による買入れによつて所有権を取得する場合","- 十六　その他農林水産省令で定める場合"],["２　前項の許可は、次の各号のいずれかに該当する場合には、することができない。ただし、民法第二百六十九条の二第一項の地上権又はこれと内容を同じくするその他の権利が設定され、又は移転されるとき、農業協同組合法第十条第二項に規定する事業を行う農業協同組合又は農業協同組合連合会が農地又は採草放牧地の所有者から同項の委託を受けることにより第一号に掲げる権利が取得されることとなるとき、同法第十一条の五十第一項第一号に掲げる場合において農業協同組合又は農業協同組合連合会が使用貸借による権利又は賃借権を取得するとき、並びに第一号、第二号及び第四号に掲げる場合において政令で定める相当の事由があるときは、この限りでない。","- 一　所有権、地上権、永小作権、質権、使用貸借による権利、賃借権若しくはその他の使用及び収益を目的とする権利を取得しようとする者又はその世帯員等の耕作又は養畜の事業に必要な機械の所有の状況、農作業に従事する者の数及び配置の状況、この法律その他の農業に関する法令の遵守の状況等からみて、これらの者がその取得後において耕作又は養畜の事業に供すべき農地及び採草放牧地の全てを効率的に利用して耕作又は養畜の事業を行うと認められない場合","- 二　農地所有適格法人以外の法人が前号に掲げる権利を取得しようとする場合","- 二の二　農業経営基盤強化促進法第十六条の三第一項に規定する認定経営発展法人（第五条第二項第九号において単に「認定経営発展法人」という。）から第一号に掲げる権利を取得しようとする場合（当該認定経営発展法人がその農業経営発展計画（同法第十六条の二第一項に規定する農業経営発展計画をいう。第五条第二項第九号において同じ。）に記載する同法第十六条の二第二項第五号イ及びロに掲げる事項としてこれらの権利の設定又は移転について同条第一項又は同法第十六条の三第一項の認定を受けている場合を除く。）","- 三　信託の引受けにより第一号に掲げる権利が取得される場合","- 四　第一号に掲げる権利を取得しようとする者（農地所有適格法人を除く。）又はその世帯員等がその取得後において行う耕作又は養畜の事業に必要な農作業に常時従事すると認められない場合","- 五　農地又は採草放牧地につき所有権以外の権原に基づいて耕作又は養畜の事業を行う者がその土地を貸し付け、又は質入れしようとする場合（当該事業を行う者又はその世帯員等の死亡又は第二条第二項各号に掲げる事由によりその土地について耕作、採草又は家畜の放牧をすることができないため一時貸し付けようとする場合、当該事業を行う者がその土地をその世帯員等に貸し付けようとする場合、その土地を水田裏作（田において稲を通常栽培する期間以外の期間稲以外の作物を栽培することをいう。以下同じ。）の目的に供するため貸し付けようとする場合及び農地所有適格法人の常時従事者たる構成員がその土地をその法人に貸し付けようとする場合を除く。）","- 六　第一号に掲げる権利を取得しようとする者又はその世帯員等がその取得後において行う耕作又は養畜の事業の内容並びにその農地又は採草放牧地の位置及び規模からみて、農地の集団化、農作業の効率化その他周辺の地域における農地又は採草放牧地の農業上の効率的かつ総合的な利用の確保に支障を生ずるおそれがあると認められる場合"],["３　農業委員会は、農地又は採草放牧地について使用貸借による権利又は賃借権が設定される場合において、次に掲げる要件の全てを満たすときは、前項（第二号及び第四号に係る部分に限る。）の規定にかかわらず、第一項の許可をすることができる。","- 一　これらの権利を取得しようとする者がその取得後においてその農地又は採草放牧地を適正に利用していないと認められる場合に使用貸借又は賃貸借の解除をする旨の条件が書面による契約において付されていること。","- 二　これらの権利を取得しようとする者が地域の農業における他の農業者との適切な役割分担の下に継続的かつ安定的に農業経営を行うと見込まれること。","- 三　これらの権利を取得しようとする者が法人である場合にあつては、その法人の業務を執行する役員又は農林水産省令で定める使用人（次条第一項第三号において「業務執行役員等」という。）のうち、一人以上の者がその法人の行う耕作又は養畜の事業に常時従事すると認められること。"],["４　農業委員会は、前項の規定により第一項の許可をしようとするときは、あらかじめ、その旨を市町村長に通知するものとする。この場合において、当該通知を受けた市町村長は、市町村の区域における農地又は採草放牧地の農業上の適正かつ総合的な利用を確保する見地から必要があると認めるときは、意見を述べることができる。"],["５　第一項の許可は、条件をつけてすることができる。"],["６　第一項の許可を受けないでした行為は、その効力を生じない。"]]},"農地法3条の3":{"n":"農地法第三条の三","c":"（農地又は採草放牧地についての権利取得の届出）","p":[["農地又は採草放牧地について第三条第一項本文に掲げる権利を取得した者は、同項の許可を受けてこれらの権利を取得した場合、同項各号（第十二号及び第十六号を除く。）のいずれかに該当する場合その他農林水産省令で定める場合を除き、遅滞なく、農林水産省令で定めるところにより、その農地又は採草放牧地の存する市町村の農業委員会にその旨を届け出なければならない。"]]},"農地法4条":{"n":"農地法第四条","c":"（農地の転用の制限）","p":[["農地を農地以外のものにする者は、都道府県知事（農地又は採草放牧地の農業上の効率的かつ総合的な利用の確保に関する施策の実施状況を考慮して農林水産大臣が指定する市町村（以下「指定市町村」という。）の区域内にあつては、指定市町村の長。以下「都道府県知事等」という。）の許可を受けなければならない。ただし、次の各号のいずれかに該当する場合は、この限りでない。","- 一　次条第一項の許可に係る農地をその許可に係る目的に供する場合","- 二　国又は都道府県等（都道府県又は指定市町村をいう。以下同じ。）が、道路、農業用用排水施設その他の地域振興上又は農業振興上の必要性が高いと認められる施設であつて農林水産省令で定めるものの用に供するため、農地を農地以外のものにする場合","- 三　農地中間管理事業の推進に関する法律第十八条第七項の規定による公告があつた農用地利用集積等促進計画の定めるところによつて設定され、又は移転された同条第一項の権利に係る農地を当該農用地利用集積等促進計画に定める利用目的に供する場合","- 四　特定農山村地域における農林業等の活性化のための基盤整備の促進に関する法律第九条第一項の規定による公告があつた所有権移転等促進計画の定めるところによつて設定され、又は移転された同法第二条第三項第三号の権利に係る農地を当該所有権移転等促進計画に定める利用目的に供する場合","- 五　農山漁村の活性化のための定住等及び地域間交流の促進に関する法律第五条第一項の規定により作成された活性化計画（同条第四項各号に掲げる事項が記載されたものに限る。）に従つて農地を同条第二項第二号に規定する活性化事業の用に供する場合又は同法第九条第一項の規定による公告があつた所有権移転等促進計画の定めるところによつて設定され、若しくは移転された同法第五条第十項の権利に係る農地を当該所有権移転等促進計画に定める利用目的に供する場合","- 六　土地収用法その他の法律によつて収用し、又は使用した農地をその収用又は使用に係る目的に供する場合","- 七　市街化区域（都市計画法（昭和四十三年法律第百号）第七条第一項の市街化区域と定められた区域（同法第二十三条第一項の規定による協議を要する場合にあつては、当該協議が調つたものに限る。）をいう。）内にある農地を、政令で定めるところによりあらかじめ農業委員会に届け出て、農地以外のものにする場合","- 八　その他農林水産省令で定める場合"],["２　前項の許可を受けようとする者は、農林水産省令で定めるところにより、農林水産省令で定める事項を記載した申請書を、農業委員会を経由して、都道府県知事等に提出しなければならない。"],["３　農業委員会は、前項の規定により申請書の提出があつたときは、農林水産省令で定める期間内に、当該申請書に意見を付して、都道府県知事等に送付しなければならない。"],["４　農業委員会は、前項の規定により意見を述べようとするとき（同項の申請書が同一の事業の目的に供するため三十アールを超える農地を農地以外のものにする行為に係るものであるときに限る。）は、あらかじめ、農業委員会等に関する法律（昭和二十六年法律第八十八号）第四十三条第一項に規定する都道府県機構（以下「都道府県機構」という。）の意見を聴かなければならない。ただし、同法第四十二条第一項の規定による都道府県知事の指定がされていない場合は、この限りでない。"],["５　前項に規定するもののほか、農業委員会は、第三項の規定により意見を述べるため必要があると認めるときは、都道府県機構の意見を聴くことができる。"],["６　第一項の許可は、次の各号のいずれかに該当する場合には、することができない。ただし、第一号及び第二号に掲げる場合において、土地収用法第二十六条第一項の規定による告示（他の法律の規定による告示又は公告で同項の規定による告示とみなされるものを含む。次条第二項において同じ。）に係る事業の用に供するため農地を農地以外のものにしようとするとき、第一号イに掲げる農地を農業振興地域の整備に関する法律第八条第四項に規定する農用地利用計画（以下単に「農用地利用計画」という。）において指定された用途に供するため農地以外のものにしようとするときその他政令で定める相当の事由があるときは、この限りでない。","- 一　次に掲げる農地を農地以外のものにしようとする場合","-- イ　農用地区域（農業振興地域の整備に関する法律第八条第二項第一号に規定する農用地区域をいう。以下同じ。）内にある農地","-- ロ　イに掲げる農地以外の農地で、集団的に存在する農地その他の良好な営農条件を備えている農地として政令で定めるもの（市街化調整区域（都市計画法第七条第一項の市街化調整区域をいう。以下同じ。）内にある政令で定める農地以外の農地にあつては、次に掲げる農地を除く。）","--- （１）　市街地の区域内又は市街地化の傾向が著しい区域内にある農地で政令で定めるもの","--- （２）　（１）の区域に近接する区域その他市街地化が見込まれる区域内にある農地で政令で定めるもの","- 二　前号イ及びロに掲げる農地（同号ロ（１）に掲げる農地を含む。）以外の農地を農地以外のものにしようとする場合において、申請に係る農地に代えて周辺の他の土地を供することにより当該申請に係る事業の目的を達成することができると認められるとき。","- 三　申請者に申請に係る農地を農地以外のものにする行為を行うために必要な資力及び信用があると認められないこと、申請に係る農地を農地以外のものにする行為の妨げとなる権利を有する者の同意を得ていないことその他農林水産省令で定める事由により、申請に係る農地の全てを住宅の用、事業の用に供する施設の用その他の当該申請に係る用途に供することが確実と認められない場合","- 四　申請に係る農地を農地以外のものにすることにより、土砂の流出又は崩壊その他の災害を発生させるおそれがあると認められる場合、農業用用排水施設の有する機能に支障を及ぼすおそれがあると認められる場合その他の周辺の農地に係る営農条件に支障を生ずるおそれがあると認められる場合","- 五　申請に係る農地を農地以外のものにすることにより、地域における効率的かつ安定的な農業経営を営む者に対する農地の利用の集積に支障を及ぼすおそれがあると認められる場合その他の地域における農地の農業上の効率的かつ総合的な利用の確保に支障を生ずるおそれがあると認められる場合として政令で定める場合","- 六　仮設工作物の設置その他の一時的な利用に供するため農地を農地以外のものにしようとする場合において、その利用に供された後にその土地が耕作の目的に供されることが確実と認められないとき。"],["７　第一項の許可は、申請に係る農地を農地以外のものにする行為が完了するまでの間において当該行為の実施状況について農業委員会を経由して都道府県知事等に報告することその他の必要な条件を付けてしなければならない。"],["８　国又は都道府県等が農地を農地以外のものにしようとする場合（第一項各号のいずれかに該当する場合を除く。）においては、国又は都道府県等と都道府県知事等との協議が成立することをもつて同項の許可があつたものとみなす。"],["９　都道府県知事等は、前項の協議を成立させようとするときは、あらかじめ、農業委員会の意見を聴かなければならない。"],["１０　第四項及び第五項の規定は、農業委員会が前項の規定により意見を述べようとする場合について準用する。"],["１１　第一項に規定するもののほか、指定市町村の指定及びその取消しに関し必要な事項は、政令で定める。"]]},"盛土規制法10条":{"n":"宅地造成及び特定盛土等規制法第十条","c":"","p":[["都道府県知事は、基本方針に基づき、かつ、基礎調査の結果を踏まえ、宅地造成、特定盛土等又は土石の堆積（以下この章及び次章において「宅地造成等」という。）に伴い災害が生ずるおそれが大きい市街地若しくは市街地となろうとする土地の区域又は集落の区域（これらの区域に隣接し、又は近接する土地の区域を含む。第五項及び第二十六条第一項において「市街地等区域」という。）であつて、宅地造成等に関する工事について規制を行う必要があるものを、宅地造成等工事規制区域として指定することができる。"],["２　都道府県知事は、前項の規定により宅地造成等工事規制区域を指定しようとするときは、関係市町村長の意見を聴かなければならない。"],["３　第一項の指定は、この法律の目的を達成するため必要な最小限度のものでなければならない。"],["４　都道府県知事は、第一項の指定をするときは、主務省令で定めるところにより、当該宅地造成等工事規制区域を公示するとともに、その旨を関係市町村長に通知しなければならない。"],["５　市町村長は、宅地造成等に伴い市街地等区域において災害が生ずるおそれが大きいため第一項の指定をする必要があると認めるときは、その旨を都道府県知事に申し出ることができる。"],["６　第一項の指定は、第四項の公示によつてその効力を生ずる。"]]},"盛土規制法12条":{"n":"宅地造成及び特定盛土等規制法第十二条","c":"（宅地造成等に関する工事の許可）","p":[["宅地造成等工事規制区域内において行われる宅地造成等に関する工事については、工事主は、当該工事に着手する前に、主務省令で定めるところにより、都道府県知事の許可を受けなければならない。ただし、宅地造成等に伴う災害の発生のおそれがないと認められるものとして政令で定める工事については、この限りでない。"],["２　都道府県知事は、前項の許可の申請が次に掲げる基準に適合しないと認めるとき、又はその申請の手続がこの法律若しくはこの法律に基づく命令の規定に違反していると認めるときは、同項の許可をしてはならない。","- 一　当該申請に係る宅地造成等に関する工事の計画が次条の規定に適合するものであること。","- 二　工事主に当該宅地造成等に関する工事を行うために必要な資力及び信用があること。","- 三　工事施行者に当該宅地造成等に関する工事を完成するために必要な能力があること。","- 四　当該宅地造成等に関する工事（土地区画整理法（昭和二十九年法律第百十九号）第二条第一項に規定する土地区画整理事業その他の公共施設の整備又は土地利用の増進を図るための事業として政令で定めるものの施行に伴うものを除く。）をしようとする土地の区域内の土地について所有権、地上権、質権、賃借権、使用貸借による権利又はその他の使用及び収益を目的とする権利を有する者の全ての同意を得ていること。"],["３　都道府県知事は、第一項の許可に、工事の施行に伴う災害を防止するため必要な条件を付することができる。"],["４　都道府県知事は、第一項の許可をしたときは、速やかに、主務省令で定めるところにより、工事主の氏名又は名称、宅地造成等に関する工事が施行される土地の所在地その他主務省令で定める事項を公表するとともに、関係市町村長に通知しなければならない。"]]},"盛土規制法17条":{"n":"宅地造成及び特定盛土等規制法第十七条","c":"（完了検査等）","p":[["宅地造成又は特定盛土等に関する工事について第十二条第一項の許可を受けた者は、当該許可に係る工事を完了したときは、主務省令で定める期間内に、主務省令で定めるところにより、その工事が第十三条第一項の規定に適合しているかどうかについて、都道府県知事の検査を申請しなければならない。"],["２　都道府県知事は、前項の検査の結果、工事が第十三条第一項の規定に適合していると認めた場合においては、主務省令で定める様式の検査済証を第十二条第一項の許可を受けた者に交付しなければならない。"],["３　第十五条第二項の規定により第十二条第一項の許可を受けたものとみなされた宅地造成又は特定盛土等に関する工事に係る都市計画法第三十六条第一項の規定による届出又は同条第二項の規定により交付された検査済証は、当該工事に係る第一項の規定による申請又は前項の規定により交付された検査済証とみなす。"],["４　土石の堆積に関する工事について第十二条第一項の許可を受けた者は、当該許可に係る工事（堆積した全ての土石を除却するものに限る。）を完了したときは、主務省令で定める期間内に、主務省令で定めるところにより、堆積されていた全ての土石の除却が行われたかどうかについて、都道府県知事の確認を申請しなければならない。"],["５　都道府県知事は、前項の確認の結果、堆積されていた全ての土石が除却されたと認めた場合においては、主務省令で定める様式の確認済証を第十二条第一項の許可を受けた者に交付しなければならない。"]]},"盛土規制法21条":{"n":"宅地造成及び特定盛土等規制法第二十一条","c":"（工事等の届出）","p":[["宅地造成等工事規制区域の指定の際、当該宅地造成等工事規制区域内において行われている宅地造成等に関する工事の工事主は、その指定があつた日から二十一日以内に、主務省令で定めるところにより、当該工事について都道府県知事に届け出なければならない。"],["２　都道府県知事は、前項の規定による届出を受理したときは、速やかに、主務省令で定めるところにより、工事主の氏名又は名称、宅地造成等に関する工事が施行される土地の所在地その他主務省令で定める事項を公表するとともに、関係市町村長に通知しなければならない。"],["３　宅地造成等工事規制区域内の土地（公共施設用地を除く。以下この章において同じ。）において、擁壁等に関する工事その他の工事で政令で定めるものを行おうとする者（第十二条第一項若しくは第十六条第一項の許可を受け、又は同条第二項の規定による届出をした者を除く。）は、その工事に着手する日の十四日前までに、主務省令で定めるところにより、その旨を都道府県知事に届け出なければならない。"],["４　宅地造成等工事規制区域内において、公共施設用地を宅地又は農地等に転用した者（第十二条第一項若しくは第十六条第一項の許可を受け、又は同条第二項の規定による届出をした者を除く。）は、その転用した日から十四日以内に、主務省令で定めるところにより、その旨を都道府県知事に届け出なければならない。"]]},"土地区画整理法76条":{"n":"土地区画整理法第七十六条","c":"（建築行為等の制限）","p":[["次に掲げる公告があつた日後、第百三条第四項の公告がある日までは、施行地区内において、土地区画整理事業の施行の障害となるおそれがある土地の形質の変更若しくは建築物その他の工作物の新築、改築若しくは増築を行い、又は政令で定める移動の容易でない物件の設置若しくは堆積を行おうとする者は、国土交通大臣が施行する土地区画整理事業にあつては国土交通大臣の、その他の者が施行する土地区画整理事業にあつては都道府県知事（市の区域内において個人施行者、組合若しくは区画整理会社が施行し、又は市が第三条第四項の規定により施行する土地区画整理事業にあつては、当該市の長。以下この条において「都道府県知事等」という。）の許可を受けなければならない。","- 一　個人施行者が施行する土地区画整理事業にあつては、その施行についての認可の公告又は施行地区の変更を含む事業計画の変更（以下この項において「事業計画の変更」という。）についての認可の公告","- 二　組合が施行する土地区画整理事業にあつては、第二十一条第三項の公告又は事業計画の変更についての認可の公告","- 三　区画整理会社が施行する土地区画整理事業にあつては、その施行についての認可の公告又は事業計画の変更についての認可の公告","- 四　市町村、都道府県又は国土交通大臣が第三条第四項又は第五項の規定により施行する土地区画整理事業にあつては、事業計画の決定の公告又は事業計画の変更の公告","- 五　機構等が第三条の二又は第三条の三の規定により施行する土地区画整理事業にあつては、施行規程及び事業計画の認可の公告又は事業計画の変更の認可の公告"],["２　都道府県知事等は、前項に規定する許可の申請があつた場合において、その許可をしようとするときは、施行者の意見を聴かなければならない。"],["３　国土交通大臣又は都道府県知事等は、第一項に規定する許可をする場合において、土地区画整理事業の施行のため必要があると認めるときは、許可に期限その他必要な条件を付することができる。この場合において、これらの条件は、当該許可を受けた者に不当な義務を課するものであつてはならない。"],["４　国土交通大臣又は都道府県知事等は、第一項の規定に違反し、又は前項の規定により付した条件に違反した者がある場合においては、これらの者又はこれらの者から当該土地、建築物その他の工作物又は物件についての権利を承継した者に対して、相当の期限を定めて、土地区画整理事業の施行に対する障害を排除するため必要な限度において、当該土地の原状回復を命じ、又は当該建築物その他の工作物若しくは物件の移転若しくは除却を命ずることができる。"],["５　前項の規定により土地の原状回復を命じ、又は建築物その他の工作物若しくは物件の移転若しくは除却を命じようとする場合において、過失がなくてその原状回復又は移転若しくは除却を命ずべき者を確知することができないときは、国土交通大臣又は都道府県知事等は、その措置を自ら行い、又はその命じた者若しくは委任した者にこれを行わせることができる。この場合においては、相当の期限を定めて、これを原状回復し、又は移転し、若しくは除却すべき旨及びその期限までに原状回復し、又は移転し、若しくは除却しないときは、国土交通大臣若しくは都道府県知事等又はその命じた者若しくは委任した者が、原状回復し、又は移転し、若しくは除却する旨をあらかじめ公告しなければならない。"]]},"土地区画整理法99条":{"n":"土地区画整理法第九十九条","c":"（仮換地の指定の効果）","p":[["前条第一項の規定により仮換地が指定された場合においては、従前の宅地について権原に基づき使用し、又は収益することができる者は、仮換地の指定の効力発生の日から第百三条第四項の公告がある日まで、仮換地又は仮換地について仮に使用し、若しくは収益することができる権利の目的となるべき宅地若しくはその部分について、従前の宅地について有する権利の内容である使用又は収益と同じ使用又は収益をすることができるものとし、従前の宅地については、使用し、又は収益することができないものとする。"],["２　施行者は、前条第一項の規定により仮換地を指定した場合において、その仮換地に使用又は収益の障害となる物件が存するときその他特別の事情があるときは、その仮換地について使用又は収益を開始することができる日を同条第五項に規定する日と別に定めることができる。この場合においては、同項及び同条第六項の規定による通知に併せてその旨を通知しなければならない。"],["３　前二項の場合においては、仮換地について権原に基づき使用し、又は収益することができる者は、前条第五項に規定する日（前項前段の規定によりその仮換地について使用又は収益を開始することができる日を別に定めた場合においては、その日）から第百三条第四項の公告がある日まで、当該仮換地を使用し、又は収益することができない。"]]},"土地区画整理法103条":{"n":"土地区画整理法第百三条","c":"（換地処分）","p":[["換地処分は、関係権利者に換地計画において定められた関係事項を通知してするものとする。"],["２　換地処分は、換地計画に係る区域の全部について土地区画整理事業の工事が完了した後において、遅滞なく、しなければならない。ただし、規準、規約、定款又は施行規程に別段の定めがある場合においては、換地計画に係る区域の全部について工事が完了する以前においても換地処分をすることができる。"],["３　個人施行者、組合、区画整理会社、市町村又は機構等は、換地処分をした場合においては、遅滞なく、その旨を都道府県知事に届け出なければならない。"],["４　国土交通大臣は、換地処分をした場合においては、その旨を公告しなければならない。都道府県知事は、都道府県が換地処分をした場合又は前項の届出があつた場合においては、換地処分があつた旨を公告しなければならない。"],["５　換地処分の結果、市町村の区域内の町又は字の区域又は名称について変更又は廃止をすることが必要となる場合においては、前項の公告に係る換地処分の効果及びこれらの変更又は廃止の効力が同時に発生するように、その公告をしなければならない。"],["６　換地処分については、行政手続法第三章の規定は、適用しない。"]]},"土地区画整理法104条":{"n":"土地区画整理法第百四条","c":"（換地処分の効果）","p":[["前条第四項の公告があつた場合においては、換地計画において定められた換地は、その公告があつた日の翌日から従前の宅地とみなされるものとし、換地計画において換地を定めなかつた従前の宅地について存する権利は、その公告があつた日が終了した時において消滅するものとする。"],["２　前条第四項の公告があつた場合においては、従前の宅地について存した所有権及び地役権以外の権利又は処分の制限について、換地計画において換地について定められたこれらの権利又は処分の制限の目的となるべき宅地又はその部分は、その公告があつた日の翌日から従前の宅地について存したこれらの権利又は処分の制限の目的である宅地又はその部分とみなされるものとし、換地計画において換地について目的となるべき宅地の部分を定められなかつたこれらの権利は、その公告があつた日が終了した時において消滅するものとする。"],["３　前二項の規定は、行政上又は裁判上の処分で従前の宅地に専属するものに影響を及ぼさない。"],["４　施行地区内の宅地について存する地役権は、第一項の規定にかかわらず、前条第四項の公告があつた日の翌日以後においても、なお従前の宅地の上に存する。"],["５　土地区画整理事業の施行に因り行使する利益がなくなつた地役権は、前条第四項の公告があつた日が終了した時において消滅する。"],["６　第八十九条の四又は第九十一条第三項の規定により換地計画において土地の共有持分を与えられるように定められた宅地を有する者は、前条第四項の公告があつた日の翌日において、換地計画において定められたところにより、その土地の共有持分を取得するものとする。この場合において、従前の宅地について存した先取特権、質権若しくは抵当権又は仮登記、買戻しの特約その他権利の消滅に関する事項の定めの登記若しくは処分の制限の登記に係る権利は、同項の公告があつた日の翌日以後においては、その土地の共有持分の上に存するものとする。"],["７　第九十三条第一項、第二項、第四項又は第五項の規定により換地計画において建築物の一部及びその建築物の存する土地の共有持分を与えられるように定められた宅地又は借地権を有する者は、前条第四項の公告があつた日の翌日において、換地計画において定められたところにより、その建築物の一部及びその建築物の存する土地の共有持分を取得するものとする。前項後段の規定は、この場合について準用する。"],["８　第九十四条の規定により換地計画において定められた清算金は、前条第四項の公告があつた日の翌日において確定する。"],["９　第九十五条第二項又は第三項の規定により換地計画において定められた換地は、前条第四項の公告があつた日の翌日において、当該換地の所有者となるべきものとして換地計画において定められた者が取得する。"],["１０　第九十五条の二の規定により換地計画において参加組合員に対して与えるべきものとして定められた宅地は、前条第四項の公告があつた日の翌日において、当該宅地の所有者となるべきものとして換地計画において定められた参加組合員が取得する。"],["１１　第九十六条第一項又は第二項の規定により換地計画において定められた保留地は、前条第四項の公告があつた日の翌日において、施行者が取得する。"]]},"地方税法343条":{"n":"地方税法第三百四十三条","c":"（固定資産税の納税義務者等）","p":[["固定資産税は、固定資産の所有者（質権又は百年より永い存続期間の定めのある地上権の目的である土地については、その質権者又は地上権者とする。以下固定資産税について同様とする。）に課する。"],["２　前項の所有者とは、土地又は家屋については、登記簿又は土地補充課税台帳若しくは家屋補充課税台帳に所有者（区分所有に係る家屋については、当該家屋に係る建物の区分所有等に関する法律第二条第二項の区分所有者とする。以下固定資産税について同様とする。）として登記又は登録がされている者をいう。この場合において、所有者として登記又は登録がされている個人が賦課期日前に死亡しているとき、若しくは所有者として登記又は登録がされている法人が同日前に消滅しているとき、又は所有者として登記されている第三百四十八条第一項の者が同日前に所有者でなくなつているときは、同日において当該土地又は家屋を現に所有している者をいうものとする。"],["３　第一項の所有者とは、償却資産については、償却資産課税台帳に所有者として登録されている者をいう。"],["４　市町村は、固定資産の所有者の所在が震災、風水害、火災その他の事由により不明である場合には、その使用者を所有者とみなして、固定資産課税台帳に登録し、その者に固定資産税を課することができる。この場合において、当該市町村は、当該登録をしようとするときは、あらかじめ、その旨を当該使用者に通知しなければならない。"],["５　市町村は、相当な努力が払われたと認められるものとして政令で定める方法により探索を行つてもなお固定資産の所有者の存在が不明である場合（前項に規定する場合を除く。）には、その使用者を所有者とみなして、固定資産課税台帳に登録し、その者に固定資産税を課することができる。この場合において、当該市町村は、当該登録をしようとするときは、あらかじめ、その旨を当該使用者に通知しなければならない。"],["６　農地法第四十五条第一項若しくは農地法等の一部を改正する法律（平成二十一年法律第五十七号）附則第八条第一項の規定によりなお従前の例によることとされる同法第一条の規定による改正前の農地法第七十八条第一項の規定により農林水産大臣が管理する土地又は旧相続税法（昭和二十二年法律第八十七号）第五十二条、相続税法第四十一条若しくは第四十八条の二、所得税法の一部を改正する法律（昭和二十六年法律第六十三号）による改正前の所得税法第五十七条の四、戦時補償特別措置法（昭和二十一年法律第三十八号）第二十三条若しくは財産税法（昭和二十一年法律第五十二号）第五十六条の規定により国が収納した農地については、買収し、又は収納した日から国が当該土地又は農地を他人に売り渡し、その所有権が売渡しの相手方に移転する日までの間はその使用者をもつて、その日後当該売渡しの相手方が登記簿に所有者として登記される日までの間はその売渡しの相手方をもつて、それぞれ第一項の所有者とみなす。"],["７　土地区画整理法による土地区画整理事業（農住組合法第八条第一項の規定により土地区画整理法の規定が適用される農住組合法第七条第一項第一号の事業及び密集市街地における防災街区の整備の促進に関する法律第四十六条第一項の規定により土地区画整理法の規定が適用される密集市街地における防災街区の整備の促進に関する法律第四十五条第一項第一号の事業並びに大都市地域における住宅及び住宅地の供給の促進に関する特別措置法による住宅街区整備事業を含む。以下この項において同じ。）又は土地改良法による土地改良事業の施行に係る土地については、法令若しくは規約等の定めるところにより仮換地、一時利用地その他の仮に使用し、若しくは収益することができる土地（以下この項、第三百四十九条の三の三第三項及び第三百八十一条第八項において「仮換地等」と総称する。）の指定があつた場合又は土地区画整理法による土地区画整理事業の施行者が同法第百条の二（農住組合法第八条第一項及び密集市街地における防災街区の整備の促進に関する法律第四十六条第一項において適用する場合並びに大都市地域における住宅及び住宅地の供給の促進に関する特別措置法第八十三条において準用する場合を含む。）の規定により管理する土地で当該施行者以外の者が仮に使用するもの（以下この項及び第三百八十一条第八項において「仮使用地」という。）がある場合には、当該仮換地等又は仮使用地について使用し、又は収益することができることとなつた日から換地処分の公告がある日又は換地計画の認可の公告がある日までの間は、仮換地等にあつては当該仮換地等に対応する従前の土地について登記簿又は土地補充課税台帳に所有者として登記又は登録がされている者をもつて、仮使用地にあつては土地区画整理法による土地区画整理事業の施行者以外の仮使用地の使用者をもつて、それぞれ当該仮換地等又は仮使用地に係る第一項の所有者とみなし、換地処分の公告があつた日又は換地計画の認可の公告があつた日から換地又は保留地を取得した者が登記簿に当該換地又は保留地に係る所有者として登記される日までの間は、当該換地又は保留地を取得した者をもつて当該換地又は保留地に係る同項の所有者とみなすことができる。"],["８　公有水面埋立法（大正十年法律第五十七号）第二十三条第一項の規定により使用する埋立地若しくは干拓地（以下この項において「埋立地等」という。）又は国が埋立て若しくは干拓により造成する埋立地等（同法第四十二条第二項の規定による通知前の埋立地等に限る。以下この項において同じ。）で工作物を設置し、その他土地を使用する場合と同様の状態で使用されているもの（埋立て又は干拓に関する工事に関して使用されているものを除く。）については、これらの埋立地等をもつて土地とみなし、これらの埋立地等のうち、都道府県、市町村、特別区、これらの組合、財産区及び合併特例区（以下この項において「都道府県等」という。）以外の者が同法第二十三条第一項の規定により使用する埋立地等にあつては、当該埋立地等を使用する者をもつて当該埋立地等に係る第一項の所有者とみなし、都道府県等が同条第一項の規定により使用し、又は国が埋立て若しくは干拓により造成する埋立地等にあつては、都道府県等又は国が当該埋立地等を都道府県等又は国以外の者に使用させている場合に限り、当該埋立地等を使用する者（土地改良法第八十七条の二第一項の規定により国又は都道府県が行う同項第一号の事業により造成された埋立地等を使用する者で政令で定めるものを除く。）をもつて当該埋立地等に係る第一項の所有者とみなし、これらの埋立地等が隣接する土地の所在する市町村をもつてこれらの埋立地等が所在する市町村とみなして固定資産税を課することができる。"],["９　信託会社（金融機関の信託業務の兼営等に関する法律（昭和十八年法律第四十三号）により同法第一条第一項に規定する信託業務を営む同項に規定する金融機関を含む。以下この項において同じ。）が信託の引受けをした償却資産で、その信託行為の定めるところにしたがい当該信託会社が他の者にこれを譲渡することを条件として当該他の者に賃貸しているものについては、当該償却資産が当該他の者の事業の用に供するものであるときは、当該他の者をもつて第一項の所有者とみなす。"],["１０　家屋の附帯設備（家屋のうち附帯設備に属する部分その他総務省令で定めるものを含む。）であつて、当該家屋の所有者以外の者がその事業の用に供するため取り付けたものであり、かつ、当該家屋に付合したことにより当該家屋の所有者が所有することとなつたもの（以下この項において「特定附帯設備」という。）については、当該取り付けた者の事業の用に供することができる資産である場合に限り、当該取り付けた者をもつて第一項の所有者とみなし、当該特定附帯設備のうち家屋に属する部分は家屋以外の資産とみなして固定資産税を課することができる。"]]},"地方税法349条の3の2":{"n":"地方税法第三百四十九条の三の二","c":"（住宅用地に対する固定資産税の課税標準の特例）","p":[["専ら人の居住の用に供する家屋又はその一部を人の居住の用に供する家屋で政令で定めるものの敷地の用に供されている土地で政令で定めるもの（前条（第十一項を除く。）の規定の適用を受けるもの並びに空家等対策の推進に関する特別措置法（平成二十六年法律第百二十七号）第十三条第二項の規定により所有者等（同法第五条に規定する所有者等をいう。以下この項において同じ。）に対し勧告がされた同法第十三条第一項に規定する管理不全空家等及び同法第二十二条第二項の規定により所有者等に対し勧告がされた同法第二条第二項に規定する特定空家等の敷地の用に供されている土地を除く。以下この条、次条第一項、第三百五十二条の二第一項及び第三項並びに第三百八十四条において「住宅用地」という。）に対して課する固定資産税の課税標準は、第三百四十九条及び前条第十一項の規定にかかわらず、当該住宅用地に係る固定資産税の課税標準となるべき価格の三分の一の額とする。"],["２　住宅用地のうち、次の各号に掲げる区分に応じ、当該各号に定める住宅用地に該当するもの（以下この項において「小規模住宅用地」という。）に対して課する固定資産税の課税標準は、第三百四十九条、前条第十一項及び前項の規定にかかわらず、当該小規模住宅用地に係る固定資産税の課税標準となるべき価格の六分の一の額とする。","- 一　住宅用地でその面積が二百平方メートル以下であるもの　当該住宅用地","- 二　住宅用地でその面積が二百平方メートルを超えるもの　当該住宅用地の面積を当該住宅用地の上に存する住居で政令で定めるものの数（以下この条及び第三百八十四条第一項において「住居の数」という。）で除して得た面積が二百平方メートル以下であるものにあつては当該住宅用地、当該除して得た面積が二百平方メートルを超えるものにあつては二百平方メートルに当該住居の数を乗じて得た面積に相当する住宅用地"],["３　前項に規定する住居の数の認定その他同項の規定の適用に関し必要な事項は、総務省令で定める。"]]},"地方税法350条":{"n":"地方税法第三百五十条","c":"（固定資産税の税率）","p":[["固定資産税の標準税率は、百分の一・四とする。"],["２　市町村は、当該市町村の固定資産税の一の納税義務者であつてその所有する固定資産に対して課すべき当該市町村の固定資産税の課税標準の総額が当該市町村の区域内に所在する固定資産に対して課すべき当該市町村の固定資産税の課税標準の総額の三分の二を超えるものがある場合において、固定資産税の税率を定め、又はこれを変更して百分の一・七を超える税率で固定資産税を課する旨の条例を制定しようとするときは、当該市町村の議会において、当該納税義務者の意見を聴くものとする。"]]},"地方税法351条":{"n":"地方税法第三百五十一条","c":"（固定資産税の免税点）","p":[["市町村は、同一の者について当該市町村の区域内におけるその者の所有に係る土地、家屋又は償却資産に対して課する固定資産税の課税標準となるべき額が土地にあつては三十万円、家屋にあつては二十万円、償却資産にあつては百五十万円に満たない場合においては、固定資産税を課することができない。ただし、財政上その他特別の必要がある場合においては、当該市町村の条例の定めるところによつて、その額がそれぞれ三十万円、二十万円又は百五十万円に満たないときであつても、固定資産税を課することができる。"]]},"地方税法359条":{"n":"地方税法第三百五十九条","c":"（固定資産税の賦課期日）","p":[["固定資産税の賦課期日は、当該年度の初日の属する年の一月一日とする。"]]},"地方税法73条の2":{"n":"地方税法第七十三条の二","c":"（不動産取得税の納税義務者等）","p":[["不動産取得税は、不動産の取得に対し、当該不動産所在の道府県において、当該不動産の取得者に課する。"],["２　家屋が新築された場合には、当該家屋について最初の使用又は譲渡（独立行政法人都市再生機構、地方住宅供給公社又は家屋を新築して譲渡することを業とする者で政令で定めるものが注文者である家屋の新築に係る請負契約に基づく当該注文者に対する請負人からの譲渡が当該家屋の新築後最初に行われた場合には、当該譲渡の後最初に行われた使用又は譲渡。以下この項において同じ。）が行われた日において家屋の取得があつたものとみなし、当該家屋の所有者又は譲受人を取得者とみなして、これに対して不動産取得税を課する。ただし、家屋が新築された日から六月を経過して、なお、当該家屋について最初の使用又は譲渡が行われない場合には、当該家屋が新築された日から六月を経過した日において家屋の取得があつたものとみなし、当該家屋の所有者を取得者とみなして、これに対して不動産取得税を課する。"],["３　家屋を改築したことにより、当該家屋の価格が増加した場合には、当該改築をもつて家屋の取得とみなして、不動産取得税を課する。"],["４　建物の区分所有等に関する法律（昭和三十七年法律第六十九号）第二条第三項に規定する専有部分（以下この項から第六項までにおいて「専有部分」という。）の取得があつた場合には、当該専有部分の属する家屋（同法第四条第二項の規定により同法第二条第四項に規定する共用部分（次項及び第六項において「共用部分」という。）とされた附属の建物を含む。）の価格を同法第十四条第一項から第三項までの規定の例により算定した専有部分の床面積の割合（専有部分の天井の高さ、附帯設備の程度その他総務省令で定める事項について著しい差違がある場合には、その差違に応じて総務省令で定めるところにより当該割合を補正した割合。第六項において同じ。）により按分して得た額に相当する価格の家屋の取得があつたものとみなして、不動産取得税を課する。"],["５　建築基準法（昭和二十五年法律第二百一号）第二十条第一項第一号に規定する建築物であつて、複数の階に人の居住の用に供する専有部分を有し、かつ、当該専有部分の個数が二個以上のもの（以下この項及び次項において「居住用超高層建築物」という。）において、専有部分の取得があつた場合には、前項の規定にかかわらず、当該専有部分の属する居住用超高層建築物（建物の区分所有等に関する法律第四条第二項の規定により共用部分とされた附属の建物を含む。）の価格を、次の各号に掲げる専有部分の区分に応じ、当該各号に定める専有部分の床面積の当該居住用超高層建築物の全ての専有部分の床面積の合計に対する割合（専有部分の天井の高さ、附帯設備の程度その他総務省令で定める事項について著しい差違がある場合には、その差違に応じて総務省令で定めるところにより当該割合を補正した割合。次項において同じ。）により按分して得た額に相当する価格の家屋の取得があつたものとみなして、不動産取得税を課する。","- 一　人の居住の用に供する専有部分　当該専有部分の床面積（当該専有部分に係る建物の区分所有等に関する法律第二条第二項に規定する区分所有者（次項において「区分所有者」という。）が同法第三条に規定する一部共用部分（附属の建物であるものを除く。）で床面積を有するものを所有する場合には、当該一部共用部分の床面積を同法第十四条第二項及び第三項の規定の例により算入した当該専有部分の床面積。次号において同じ。）を全国における居住用超高層建築物の各階ごとの取引価格の動向を勘案して総務省令で定めるところにより補正した当該専有部分の床面積","- 二　前号に掲げるもの以外の専有部分　当該専有部分の床面積"],["６　共用部分のみの建築があつた場合には、当該建築に係る共用部分に係る区分所有者が、当該建築に係る共用部分の価格を建物の区分所有等に関する法律第十四条第一項から第三項までの規定の例により算定した専有部分の床面積の割合（居住用超高層建築物に係る共用部分のみの建築があつた場合には、前項各号に定める専有部分の床面積の当該居住用超高層建築物の全ての専有部分の床面積の合計に対する割合）により按分して得た額に相当する価格の家屋を取得したものとみなして、不動産取得税を課する。"],["７　家屋が建築された場合において、当該家屋のうち造作その他の附帯設備に属する部分でそれらの部分以外の部分（以下この項及び次項において「主体構造部」という。）と一体となつて家屋として効用を果しているものについては、主体構造部の取得者以外の者がこれを取り付けたものであつても、主体構造部の取得者が附帯設備に属する部分をも併せて当該家屋を取得したものとみなして、これに対して不動産取得税を課することができる。この場合においては、主体構造部の取得者が納税通知書の交付を受けた日から三十日以内に、附帯設備に属する部分の取得者と協議の上、当該不動産取得税の課税標準となるべき価額のうち附帯設備に属する部分の取得者の所有に属する部分の価額を申し出たときは、その部分の価額に基づいて附帯設備に属する部分の取得者に不動産取得税を課するものとし、主体構造部の取得者に課した不動産取得税の税額から附帯設備の取得者に課した不動産取得税の税額に相当する額を減額するものとする。"],["８　道府県は、前項前段の規定により家屋の取得に対して課する不動産取得税に係る地方団体の徴収金を徴収した場合において、同項後段の規定の適用があることとなつたときは、家屋の主体構造部の取得者の申請に基づいて、同項後段の規定により減額すべき額に相当する税額及びこれに係る地方団体の徴収金を還付するものとする。"],["９　道府県は、前項の規定により、不動産取得税額及びこれに係る地方団体の徴収金を還付する場合において、還付を受ける納税義務者の未納に係る地方団体の徴収金があるときは、当該還付すべき額をこれに充当することができる。"],["１０　第八項又は前項の規定により不動産取得税額及びこれに係る地方団体の徴収金を還付し、又は充当する場合には、第八項の規定による還付の申請があつた日から起算して十日を経過した日を第十七条の四第一項各号に掲げる日とみなして、同項の規定を適用する。"],["１１　土地区画整理法（昭和二十九年法律第百十九号）による土地区画整理事業（農住組合法（昭和五十五年法律第八十六号）第八条第一項の規定により土地区画整理法の規定が適用される農住組合法第七条第一項第一号の事業及び密集市街地における防災街区の整備の促進に関する法律（平成九年法律第四十九号）第四十六条第一項の規定により土地区画整理法の規定が適用される密集市街地における防災街区の整備の促進に関する法律第四十五条第一項第一号の事業並びに大都市地域における住宅及び住宅地の供給の促進に関する特別措置法（昭和五十年法律第六十七号）による住宅街区整備事業を含む。次項及び第七十三条の二十九において同じ。）又は土地改良法（昭和二十四年法律第百九十五号）による土地改良事業の施行に係る土地について法令の定めるところにより仮換地又は一時利用地（以下この項及び第七十三条の二十九において「仮換地等」という。）の指定があつた場合において、当該仮換地等である土地について使用し、又は収益することができることとなつた日以後に当該仮換地等である土地に対応する従前の土地（以下この項において「従前の土地」という。）の取得があつたときは、当該従前の土地の取得をもつて当該仮換地等である土地の取得とみなし、当該従前の土地の取得者を取得者とみなして、不動産取得税を課する。"],["１２　土地区画整理法による土地区画整理事業の施行に係る土地について当該土地区画整理事業の施行者が同法第百条の二（農住組合法第八条第一項及び密集市街地における防災街区の整備の促進に関する法律第四十六条第一項において適用する場合並びに大都市地域における住宅及び住宅地の供給の促進に関する特別措置法第八十三条において準用する場合を含む。）の規定により管理する土地（以下この項において「保留地予定地等」という。）がある場合において、当該施行者以外の者が、当該土地区画整理事業に係る換地処分の公告がある日までの間当該保留地予定地等である土地について使用し、若しくは収益することができること及び同日の翌日に当該施行者が取得する当該保留地予定地等である土地を取得することを目的とする契約が締結されたとき、又は同日の翌日に土地区画整理組合の参加組合員が取得する当該保留地予定地等である土地について当該参加組合員が使用し、若しくは収益することができることを目的とする契約が締結されたときは、それらの契約の効力が発生した日として政令で定める日においてそれらの保留地予定地等である土地の取得があつたものとみなし、それらの保留地予定地等である土地を取得することとされている者を取得者とみなして、不動産取得税を課する。"]]},"地方税法73条の7":{"n":"地方税法第七十三条の七","c":"（形式的な所有権の移転等に対する不動産取得税の非課税）","p":[["道府県は、次に掲げる不動産の取得に対しては、不動産取得税を課することができない。","- 一　相続（包括遺贈及び被相続人から相続人に対してなされた遺贈を含む。）による不動産の取得","- 二　法人の合併又は政令で定める分割による不動産の取得","- 二の二　法人が新たに法人を設立するために現物出資（現金出資をする場合における当該出資の額に相当する資産の譲渡を含む。）を行う場合（政令で定める場合に限る。）における不動産の取得","- 二の三　共有物の分割による不動産の取得（当該不動産の取得者の分割前の当該共有物に係る持分の割合を超える部分の取得を除く。）","- 二の四　会社更生法（平成十四年法律第百五十四号）第百八十三条（金融機関等の更生手続の特例等に関する法律（平成八年法律第九十五号。以下この号において「更生特例法」という。）第百四条又は第二百七十三条において準用する場合を含む。）、更生特例法第百三条第一項（更生特例法第三百四十六条において準用する場合を含む。）又は更生特例法第二百七十二条（更生特例法第三百六十三条において準用する場合を含む。）の規定により更生計画において株式会社、協同組織金融機関（更生特例法第二条第二項に規定する協同組織金融機関をいう。以下この号において同じ。）又は相互会社（更生特例法第二条第六項に規定する相互会社をいう。以下この号において同じ。）から新株式会社、新協同組織金融機関又は新相互会社に移転すべき不動産を定めた場合における新株式会社、新協同組織金融機関又は新相互会社の当該不動産の取得","- 三　委託者から受託者に信託財産を移す場合における不動産の取得（当該信託財産の移転が第七十三条の二第二項本文の規定に該当する場合における不動産の取得を除く。）","- 四　信託の効力が生じた時から引き続き委託者のみが信託財産の元本の受益者である信託により受託者から当該受益者（次のいずれかに該当する者に限る。）に信託財産を移す場合における不動産の取得","-- イ　当該信託の効力が生じた時から引き続き委託者である者","-- ロ　当該信託の効力が生じた時における委託者から第一号に規定する相続をした者","-- ハ　当該信託の効力が生じた時における委託者が合併により消滅した場合における当該合併後存続する法人又は当該合併により設立された法人","-- ニ　当該信託の効力が生じた時における委託者が第二号に規定する政令で定める分割をした場合における当該分割により設立された法人又は当該分割により事業を承継した法人","- 四の二　資産の流動化に関する法律第二条第十三項に規定する特定目的信託で次に掲げる要件の全てを満たすものの原委託者（同法第二百二十四条に規定する原委託者をいい、当該特定目的信託の効力が生じた時から引き続き委託者である者に限る。）が、当該特定目的信託の信託財産に属する不動産（同法第二条第十六項に規定する受託信託会社等が、当該特定目的信託の効力が生じた時に当該原委託者から当該特定目的信託の信託財産として取得したものであつて、当該原委託者に賃貸したものに限る。）を当該特定目的信託に係る信託契約の終了の時に買い戻す場合における当該不動産の取得","-- イ　当該特定目的信託に係る信託契約において、資産の流動化に関する法律第二百三十条第一項第二号に規定する社債的受益権（ハにおいて「社債的受益権」という。）の定めがあること及び当該社債的受益権の元本の償還に関する事項として政令で定める事項を定めていること。","-- ロ　当該原委託者の信託した特定資産（資産の流動化に関する法律第二条第一項に規定する特定資産をいう。）が投資者の投資判断に重要な影響を及ぼすものとして政令で定める要件を満たすものであること。","-- ハ　当該特定目的信託の効力が生じた時から引き続き当該原委託者及び当該特定目的信託の社債的受益権を有する者のみが当該特定目的信託の信託財産の元本の受益者であること。","- 五　信託の受託者の変更があつた場合における新たな受託者による不動産の取得","- 五の二　相続税法（昭和二十五年法律第七十三号）第四十六条第一項の規定による承認に基づき物納の許可があつた不動産をその物納の許可を受けた者に移す場合における不動産の取得","- 六　建物の区分所有等に関する法律第二条第三項の専有部分の取得に伴わない同条第四項の共用部分である家屋の取得（当該家屋の建築による取得を除く。）","- 七　保険業法の規定によつて会社がその保険契約の全部の移転契約に基づいて不動産を移転する場合における不動産の取得","- 八　譲渡により担保の目的となつている財産（以下この節において「譲渡担保財産」という。）により担保される債権の消滅により当該譲渡担保財産の設定の日から二年以内に譲渡担保財産の権利者（以下この節において「譲渡担保権者」という。）から譲渡担保財産の設定者（設定者が更迭した場合における新設定者を除く。以下この節において同じ。）に当該譲渡担保財産を移転する場合における不動産の取得","- 九　生産森林組合がその組合員となる資格を有する者から現物出資を受ける場合における土地の取得","- 十　削除","- 十一　沖縄振興開発金融公庫が沖縄振興開発金融公庫法（昭和四十七年法律第三十一号）第十九条第一項第三号に規定する業務で政令で定めるものを行う場合における不動産の取得","- 十二　独立行政法人住宅金融支援機構又は沖縄振興開発金融公庫の貸付金の回収に関連する不動産の取得（独立行政法人住宅金融支援機構又は沖縄振興開発金融公庫が建築中の住宅を取得し、建築工事を完了した住宅の取得を含む。）","- 十三　独立行政法人都市再生機構、独立行政法人中小企業基盤整備機構、地方住宅供給公社又は土地開発公社がその譲渡した不動産を当該不動産に係る譲渡契約の解除又は買戻し特約により取得する場合における当該不動産の取得","- 十四　農業協同組合又は農業協同組合連合会が農業協同組合法第七十条第一項の規定により権利を承継する場合における不動産の取得","- 十五　漁業協同組合、漁業生産組合若しくは漁業協同組合連合会又は水産加工業協同組合若しくは水産加工業協同組合連合会が水産業協同組合法第九十一条の二第一項（同法第百条第五項において準用する場合を含む。）の規定により権利を承継する場合における不動産の取得","- 十六　森林組合又は森林組合連合会が森林組合法（昭和五十三年法律第三十六号）第百八条の三第一項の規定により権利を承継する場合における不動産の取得","- 十七　農業共済組合が農業保険法第七十三条第二項の規定により権利を承継する場合における不動産の取得","- 十八　削除","- 十九　預金保険法第二条第十三項に規定する承継銀行（同法附則第十五条の二第三項の規定により承継銀行とみなされる同項に規定する承継協定銀行を含む。）が同法第九十一条第一項又は第二項の規定による同条第一項第二号に掲げる決定を受けて行う同法第二条第十二項に規定する被管理金融機関からの同条第十三項に規定する事業の譲受け等による不動産（同法第九十三条第二項の規定により当該承継銀行が保有する資産として適当であることの確認がされたものに限る。）の取得","- 二十　預金保険法第百二十六条の三十四第三項第五号に規定する特定承継金融機関等（同法附則第十五条の二第三項の規定により特定承継銀行とみなされる同項に規定する承継協定銀行を含む。）が同法第百二十六条の三十四第一項又は第二項の規定による同条第一項第二号に掲げる決定を受けて行う同法第百二十六条の三第二項に規定する特別監視金融機関等からの同法第百二十六条の三十四第一項に規定する特定事業譲受け等による不動産の取得","- 二十一　保険業法第二百六十条第六項に規定する承継保険会社が、保険契約者保護機構の同法第二百七十条の三の二第六項の規定による同項第二号の決定を受けて行う同法第二百六十条第二項に規定する破綻保険会社からの保険契約の移転による不動産の取得"]]},"地価公示法2条":{"n":"地価公示法第二条","c":"（標準地の価格の判定等）","p":[["土地鑑定委員会は、都市計画法（昭和四十三年法律第百号）第四条第二項に規定する都市計画区域その他の土地取引が相当程度見込まれるものとして国土交通省令で定める区域（国土利用計画法（昭和四十九年法律第九十二号）第十二条第一項の規定により指定された規制区域を除く。以下「公示区域」という。）内の標準地について、毎年一回、国土交通省令で定めるところにより、二人以上の不動産鑑定士の鑑定評価を求め、その結果を審査し、必要な調整を行つて、一定の基準日における当該標準地の単位面積当たりの正常な価格を判定し、これを公示するものとする。"],["２　前項の「正常な価格」とは、土地について、自由な取引が行なわれるとした場合におけるその取引（農地、採草放牧地又は森林の取引（農地、採草放牧地及び森林以外のものとするための取引を除く。）を除く。）において通常成立すると認められる価格（当該土地に建物その他の定着物がある場合又は当該土地に関して地上権その他当該土地の使用若しくは収益を制限する権利が存する場合には、これらの定着物又は権利が存しないものとして通常成立すると認められる価格）をいう。"]]},"地価公示法3条":{"n":"地価公示法第三条","c":"（標準地の選定）","p":[["前条第一項の標準地は、土地鑑定委員会が、国土交通省令で定めるところにより、自然的及び社会的条件からみて類似の利用価値を有すると認められる地域において、土地の利用状況、環境等が通常と認められる一団の土地について選定するものとする。"]]},"宅建業法2条":{"n":"宅地建物取引業法第二条","c":"（用語の定義）","p":[["この法律において次の各号に掲げる用語の意義は、それぞれ当該各号の定めるところによる。","- 一　宅地　建物の敷地に供せられる土地をいい、都市計画法（昭和四十三年法律第百号）第八条第一項第一号の用途地域内のその他の土地で、道路、公園、河川その他政令で定める公共の用に供する施設の用に供せられているもの以外のものを含むものとする。","- 二　宅地建物取引業　宅地若しくは建物（建物の一部を含む。以下同じ。）の売買若しくは交換又は宅地若しくは建物の売買、交換若しくは貸借の代理若しくは媒介をする行為で業として行うものをいう。","- 三　宅地建物取引業者　第三条第一項の免許を受けて宅地建物取引業を営む者をいう。","- 四　宅地建物取引士　第二十二条の二第一項の宅地建物取引士証の交付を受けた者をいう。"]]},"宅建業法3条":{"n":"宅地建物取引業法第三条","c":"（免許）","p":[["宅地建物取引業を営もうとする者は、二以上の都道府県の区域内に事務所（本店、支店その他の政令で定めるものをいう。以下同じ。）を設置してその事業を営もうとする場合にあつては国土交通大臣の、一の都道府県の区域内にのみ事務所を設置してその事業を営もうとする場合にあつては当該事務所の所在地を管轄する都道府県知事の免許を受けなければならない。"],["２　前項の免許の有効期間は、五年とする。"],["３　前項の有効期間の満了後引き続き宅地建物取引業を営もうとする者は、免許の更新を受けなければならない。"],["４　前項の免許の更新の申請があつた場合において、第二項の有効期間の満了の日までにその申請について処分がなされないときは、従前の免許は、同項の有効期間の満了後もその処分がなされるまでの間は、なお効力を有する。"],["５　前項の場合において、免許の更新がなされたときは、その免許の有効期間は、従前の免許の有効期間の満了の日の翌日から起算するものとする。"],["６　第一項の免許のうち国土交通大臣の免許を受けようとする者は、登録免許税法（昭和四十二年法律第三十五号）の定めるところにより登録免許税を、第三項の規定により国土交通大臣の免許の更新を受けようとする者は、政令の定めるところにより手数料を、それぞれ納めなければならない。"]]},"宅建業法77条":{"n":"宅地建物取引業法第七十七条","c":"（信託会社等に関する特例）","p":[["第三条から第七条まで、第十二条、第二十五条第七項、第六十六条及び第六十七条第一項の規定は、信託業法（平成十六年法律第百五十四号）第三条又は第五十三条第一項の免許を受けた信託会社（政令で定めるものを除く。次項及び第三項において同じ。）には、適用しない。"],["２　宅地建物取引業を営む信託会社については、前項に掲げる規定を除き、国土交通大臣の免許を受けた宅地建物取引業者とみなしてこの法律の規定を適用する。"],["３　信託会社は、宅地建物取引業を営もうとするときは、国土交通省令の定めるところにより、その旨を国土交通大臣に届け出なければならない。"],["４　信託業務を兼営する金融機関及び第一項の政令で定める信託会社に対するこの法律の規定の適用に関し必要な事項は、政令で定める。"]]},"宅建業法78条":{"n":"宅地建物取引業法第七十八条","c":"（適用の除外）","p":[["この法律の規定は、国及び地方公共団体には、適用しない。"],["２　第三十三条の二及び第三十七条の二から第四十三条までの規定は、宅地建物取引業者相互間の取引については、適用しない。"]]},"宅建業法5条":{"n":"宅地建物取引業法第五条","c":"（免許の基準）","p":[["国土交通大臣又は都道府県知事は、第三条第一項の免許を受けようとする者が次の各号のいずれかに該当する場合又は免許申請書若しくはその添付書類中に重要な事項について虚偽の記載があり、若しくは重要な事実の記載が欠けている場合においては、免許をしてはならない。","- 一　破産手続開始の決定を受けて復権を得ない者","- 二　第六十六条第一項第八号又は第九号に該当することにより免許を取り消され、その取消しの日から五年を経過しない者（当該免許を取り消された者が法人である場合においては、当該取消しに係る聴聞の期日及び場所の公示の日前六十日以内に当該法人の役員（業務を執行する社員、取締役、執行役又はこれらに準ずる者をいい、相談役、顧問、その他いかなる名称を有する者であるかを問わず、法人に対し業務を執行する社員、取締役、執行役又はこれらに準ずる者と同等以上の支配力を有するものと認められる者を含む。以下この条、第十八条第一項、第六十五条第二項及び第六十六条第一項において同じ。）であつた者で当該取消しの日から五年を経過しないものを含む。）","- 三　第六十六条第一項第八号又は第九号に該当するとして免許の取消処分の聴聞の期日及び場所が公示された日から当該処分をする日又は当該処分をしないことを決定する日までの間に第十一条第一項第四号又は第五号の規定による届出があつた者（解散又は宅地建物取引業の廃止について相当の理由がある者を除く。）で当該届出の日から五年を経過しないもの","- 四　前号に規定する期間内に合併により消滅した法人又は第十一条第一項第四号若しくは第五号の規定による届出があつた法人（合併、解散又は宅地建物取引業の廃止について相当の理由がある法人を除く。）の前号の公示の日前六十日以内に役員であつた者で当該消滅又は届出の日から五年を経過しないもの","- 五　拘禁刑以上の刑に処せられ、その刑の執行を終わり、又は執行を受けることがなくなつた日から五年を経過しない者","- 六　この法律若しくは暴力団員による不当な行為の防止等に関する法律（平成三年法律第七十七号）の規定（同法第三十二条の三第七項及び第三十二条の十一第一項の規定を除く。第十八条第一項第七号及び第五十二条第七号ハにおいて同じ。）に違反したことにより、又は刑法（明治四十年法律第四十五号）第二百四条、第二百六条、第二百八条、第二百八条の二、第二百二十二条若しくは第二百四十七条の罪若しくは暴力行為等処罰に関する法律（大正十五年法律第六十号）の罪を犯したことにより、罰金の刑に処せられ、その刑の執行を終わり、又は執行を受けることがなくなつた日から五年を経過しない者","- 七　暴力団員による不当な行為の防止等に関する法律第二条第六号に規定する暴力団員又は同号に規定する暴力団員でなくなつた日から五年を経過しない者（以下「暴力団員等」という。）","- 八　免許の申請前五年以内に宅地建物取引業に関し不正又は著しく不当な行為をした者","- 九　宅地建物取引業に関し不正又は不誠実な行為をするおそれが明らかな者","- 十　心身の故障により宅地建物取引業を適正に営むことができない者として国土交通省令で定めるもの","- 十一　営業に関し成年者と同一の行為能力を有しない未成年者でその法定代理人（法定代理人が法人である場合においては、その役員を含む。）が前各号のいずれかに該当するもの","- 十二　法人でその役員又は政令で定める使用人のうちに第一号から第十号までのいずれかに該当する者のあるもの","- 十三　個人で政令で定める使用人のうちに第一号から第十号までのいずれかに該当する者のあるもの","- 十四　暴力団員等がその事業活動を支配する者","- 十五　事務所について第三十一条の三に規定する要件を欠く者"],["２　国土交通大臣又は都道府県知事は、免許をしない場合においては、その理由を附した書面をもつて、申請者にその旨を通知しなければならない。"]]},"宅建業法9条":{"n":"宅地建物取引業法第九条","c":"（変更の届出）","p":[["宅地建物取引業者は、第四条第一項第一号から第五号までに掲げる事項について変更があつた場合においては、国土交通省令の定めるところにより、三十日以内に、当該変更に係る事項を記載した届出書をその免許を受けた国土交通大臣又は都道府県知事に提出しなければならない。"],["２　第四条第二項（第一号、第六号及び第七号を除く。以下この項において同じ。）の規定は、前項の届出書について準用する。ただし、既に国土交通大臣又は都道府県知事に提出されている同条第二項の書類の内容に変更がないときは、その添付を省略することができる。"]]},"宅建業法11条":{"n":"宅地建物取引業法第十一条","c":"（廃業等の届出）","p":[["宅地建物取引業者が次の各号のいずれかに該当することとなつた場合においては、当該各号に掲げる者は、その日（第一号の場合にあつては、その事実を知つた日）から三十日以内に、その旨をその免許を受けた国土交通大臣又は都道府県知事に届け出なければならない。","- 一　宅地建物取引業者が死亡した場合　その相続人","- 二　法人が合併により消滅した場合　その法人を代表する役員であつた者","- 三　宅地建物取引業者について破産手続開始の決定があつた場合　その破産管財人","- 四　法人が合併及び破産手続開始の決定以外の理由により解散した場合　その清算人","- 五　宅地建物取引業を廃止した場合　宅地建物取引業者であつた個人又は宅地建物取引業者であつた法人を代表する役員"],["２　前項第三号から第五号までの規定により届出があつたときは、第三条第一項の免許は、その効力を失う。"]]},"宅建業法施行規則3条":{"n":"宅地建物取引業法施行規則第三条","c":"（免許の更新の申請期間）","p":[["法第三条第三項の規定により同項の免許の更新を受けようとする者は、免許の有効期間満了の日の九十日前から三十日前までの間に免許申請書を提出しなければならない。"]]},"宅建業法19条の2":{"n":"宅地建物取引業法第十九条の二","c":"（登録の移転）","p":[["第十八条第一項の登録を受けている者は、当該登録をしている都道府県知事の管轄する都道府県以外の都道府県に所在する宅地建物取引業者の事務所の業務に従事し、又は従事しようとするときは、当該事務所の所在地を管轄する都道府県知事に対し、当該登録をしている都道府県知事を経由して、登録の移転の申請をすることができる。ただし、その者が第六十八条第二項又は第四項の規定による禁止の処分を受け、その禁止の期間が満了していないときは、この限りでない。"]]},"宅建業法22条の2":{"n":"宅地建物取引業法第二十二条の二","c":"（宅地建物取引士証の交付等）","p":[["第十八条第一項の登録を受けている者は、登録をしている都道府県知事に対し、宅地建物取引士証の交付を申請することができる。"],["２　宅地建物取引士証の交付を受けようとする者は、登録をしている都道府県知事が国土交通省令の定めるところにより指定する講習で交付の申請前六月以内に行われるものを受講しなければならない。ただし、試験に合格した日から一年以内に宅地建物取引士証の交付を受けようとする者又は第五項に規定する宅地建物取引士証の交付を受けようとする者については、この限りでない。"],["３　宅地建物取引士証（第五項の規定により交付された宅地建物取引士証を除く。）の有効期間は、五年とする。"],["４　宅地建物取引士証が交付された後第十九条の二の規定により登録の移転があつたときは、当該宅地建物取引士証は、その効力を失う。"],["５　前項に規定する場合において、登録の移転の申請とともに宅地建物取引士証の交付の申請があつたときは、移転後の都道府県知事は、前項の宅地建物取引士証の有効期間が経過するまでの期間を有効期間とする宅地建物取引士証を交付しなければならない。"],["６　宅地建物取引士は、第十八条第一項の登録が消除されたとき又は宅地建物取引士証が効力を失つたときは、速やかに、宅地建物取引士証をその交付を受けた都道府県知事に返納しなければならない。"],["７　宅地建物取引士は、第六十八条第二項又は第四項の規定による禁止の処分を受けたときは、速やかに、宅地建物取引士証をその交付を受けた都道府県知事に提出しなければならない。"],["８　前項の規定により宅地建物取引士証の提出を受けた都道府県知事は、同項の禁止の期間が満了した場合においてその提出者から返還の請求があつたときは、直ちに、当該宅地建物取引士証を返還しなければならない。"]]},"宅建業法35条":{"n":"宅地建物取引業法第三十五条","c":"（重要事項の説明等）","p":[["宅地建物取引業者は、宅地若しくは建物の売買、交換若しくは貸借の相手方若しくは代理を依頼した者又は宅地建物取引業者が行う媒介に係る売買、交換若しくは貸借の各当事者（以下「宅地建物取引業者の相手方等」という。）に対して、その者が取得し、又は借りようとしている宅地又は建物に関し、その売買、交換又は貸借の契約が成立するまでの間に、宅地建物取引士をして、少なくとも次に掲げる事項について、これらの事項を記載した書面（第五号において図面を必要とするときは、図面）を交付して説明をさせなければならない。","- 一　当該宅地又は建物の上に存する登記された権利の種類及び内容並びに登記名義人又は登記簿の表題部に記録された所有者の氏名（法人にあつては、その名称）","- 二　都市計画法、建築基準法その他の法令に基づく制限で契約内容の別（当該契約の目的物が宅地であるか又は建物であるかの別及び当該契約が売買若しくは交換の契約であるか又は貸借の契約であるかの別をいう。以下この条において同じ。）に応じて政令で定めるものに関する事項の概要","- 三　当該契約が建物の貸借の契約以外のものであるときは、私道に関する負担に関する事項","- 四　飲用水、電気及びガスの供給並びに排水のための施設の整備の状況（これらの施設が整備されていない場合においては、その整備の見通し及びその整備についての特別の負担に関する事項）","- 五　当該宅地又は建物が宅地の造成又は建築に関する工事の完了前のものであるときは、その完了時における形状、構造その他国土交通省令・内閣府令で定める事項","- 六　当該建物が建物の区分所有等に関する法律（昭和三十七年法律第六十九号）第二条第一項に規定する区分所有権の目的であるものであるときは、当該建物を所有するための一棟の建物の敷地に関する権利の種類及び内容、同条第四項に規定する共用部分に関する規約の定めその他の一棟の建物又はその敷地（一団地内に数棟の建物があつて、その団地内の土地又はこれに関する権利がそれらの建物の所有者の共有に属する場合には、その土地を含む。）に関する権利及びこれらの管理又は使用に関する事項で契約内容の別に応じて国土交通省令・内閣府令で定めるもの","- 六の二　当該建物が既存の建物であるときは、次に掲げる事項","-- イ　建物状況調査（実施後国土交通省令で定める期間を経過していないものに限る。）を実施しているかどうか、及びこれを実施している場合におけるその結果の概要","-- ロ　設計図書、点検記録その他の建物の建築及び維持保全の状況に関する書類で国土交通省令で定めるものの保存の状況","- 七　代金、交換差金及び借賃以外に授受される金銭の額及び当該金銭の授受の目的","- 八　契約の解除に関する事項","- 九　損害賠償額の予定又は違約金に関する事項","- 十　第四十一条第一項に規定する手付金等を受領しようとする場合における同条又は第四十一条の二の規定による措置の概要","- 十一　支払金又は預り金（宅地建物取引業者の相手方等からその取引の対象となる宅地又は建物に関し受領する代金、交換差金、借賃その他の金銭（第四十一条第一項又は第四十一条の二第一項の規定により保全の措置が講ぜられている手付金等を除く。）であつて国土交通省令・内閣府令で定めるものをいう。第六十四条の三第二項第一号において同じ。）を受領しようとする場合において、同号の規定による保証の措置その他国土交通省令・内閣府令で定める保全措置を講ずるかどうか、及びその措置を講ずる場合におけるその措置の概要","- 十二　代金又は交換差金に関する金銭の貸借のあつせんの内容及び当該あつせんに係る金銭の貸借が成立しないときの措置","- 十三　当該宅地又は建物が種類又は品質に関して契約の内容に適合しない場合におけるその不適合を担保すべき責任の履行に関し保証保険契約の締結その他の措置で国土交通省令・内閣府令で定めるものを講ずるかどうか、及びその措置を講ずる場合におけるその措置の概要","- 十四　その他宅地建物取引業者の相手方等の利益の保護の必要性及び契約内容の別を勘案して、次のイ又はロに掲げる場合の区分に応じ、それぞれ当該イ又はロに定める命令で定める事項","-- イ　事業を営む場合以外の場合において宅地又は建物を買い、又は借りようとする個人である宅地建物取引業者の相手方等の利益の保護に資する事項を定める場合　国土交通省令・内閣府令","-- ロ　イに規定する事項以外の事項を定める場合　国土交通省令"],["２　宅地建物取引業者は、宅地又は建物の割賦販売（代金の全部又は一部について、目的物の引渡し後一年以上の期間にわたり、かつ、二回以上に分割して受領することを条件として販売することをいう。以下同じ。）の相手方に対して、その者が取得しようとする宅地又は建物に関し、その割賦販売の契約が成立するまでの間に、宅地建物取引士をして、前項各号に掲げる事項のほか、次に掲げる事項について、これらの事項を記載した書面を交付して説明をさせなければならない。","- 一　現金販売価格（宅地又は建物の引渡しまでにその代金の全額を受領する場合の価格をいう。）","- 二　割賦販売価格（割賦販売の方法により販売する場合の価格をいう。）","- 三　宅地又は建物の引渡しまでに支払う金銭の額及び賦払金（割賦販売の契約に基づく各回ごとの代金の支払分で目的物の引渡し後のものをいう。第四十二条第一項において同じ。）の額並びにその支払の時期及び方法"],["３　宅地建物取引業者は、宅地又は建物に係る信託（当該宅地建物取引業者を委託者とするものに限る。）の受益権の売主となる場合における売買の相手方に対して、その者が取得しようとしている信託の受益権に係る信託財産である宅地又は建物に関し、その売買の契約が成立するまでの間に、宅地建物取引士をして、少なくとも次に掲げる事項について、これらの事項を記載した書面（第五号において図面を必要とするときは、図面）を交付して説明をさせなければならない。ただし、その売買の相手方の利益の保護のため支障を生ずることがない場合として国土交通省令で定める場合は、この限りでない。","- 一　当該信託財産である宅地又は建物の上に存する登記された権利の種類及び内容並びに登記名義人又は登記簿の表題部に記録された所有者の氏名（法人にあつては、その名称）","- 二　当該信託財産である宅地又は建物に係る都市計画法、建築基準法その他の法令に基づく制限で政令で定めるものに関する事項の概要","- 三　当該信託財産である宅地又は建物に係る私道に関する負担に関する事項","- 四　当該信託財産である宅地又は建物に係る飲用水、電気及びガスの供給並びに排水のための施設の整備の状況（これらの施設が整備されていない場合においては、その整備の見通し及びその整備についての特別の負担に関する事項）","- 五　当該信託財産である宅地又は建物が宅地の造成又は建築に関する工事の完了前のものであるときは、その完了時における形状、構造その他国土交通省令で定める事項","- 六　当該信託財産である建物が建物の区分所有等に関する法律第二条第一項に規定する区分所有権の目的であるものであるときは、当該建物を所有するための一棟の建物の敷地に関する権利の種類及び内容、同条第四項に規定する共用部分に関する規約の定めその他の一棟の建物又はその敷地（一団地内に数棟の建物があつて、その団地内の土地又はこれに関する権利がそれらの建物の所有者の共有に属する場合には、その土地を含む。）に関する権利及びこれらの管理又は使用に関する事項で国土交通省令で定めるもの","- 七　その他当該信託の受益権の売買の相手方の利益の保護の必要性を勘案して国土交通省令で定める事項"],["４　宅地建物取引士は、前三項の説明をするときは、説明の相手方に対し、宅地建物取引士証を提示しなければならない。"],["５　第一項から第三項までの書面の交付に当たつては、宅地建物取引士は、当該書面に記名しなければならない。"],["６　次の表の第一欄に掲げる者が宅地建物取引業者である場合においては、同表の第二欄に掲げる規定の適用については、これらの規定中同表の第三欄に掲げる字句は、それぞれ同表の第四欄に掲げる字句とし、前二項の規定は、適用しない。","| | | | |","| --- | --- | --- | --- |","| 宅地建物取引業者の相手方等 | 第一項 | 宅地建物取引士をして、少なくとも次に掲げる事項について、これらの事項 | 少なくとも次に掲げる事項 |","|   |   | 交付して説明をさせなければ | 交付しなければ |","| 第二項に規定する宅地又は建物の割賦販売の相手方 | 第二項 | 宅地建物取引士をして、前項各号に掲げる事項のほか、次に掲げる事項について、これらの事項 | 前項各号に掲げる事項のほか、次に掲げる事項 |","|   |   | 交付して説明をさせなければ | 交付しなければ |"],["７　宅地建物取引業者は、前項の規定により読み替えて適用する第一項又は第二項の規定により交付すべき書面を作成したときは、宅地建物取引士をして、当該書面に記名させなければならない。"],["８　宅地建物取引業者は、第一項から第三項までの規定による書面の交付に代えて、政令で定めるところにより、第一項に規定する宅地建物取引業者の相手方等、第二項に規定する宅地若しくは建物の割賦販売の相手方又は第三項に規定する売買の相手方の承諾を得て、宅地建物取引士に、当該書面に記載すべき事項を電磁的方法であつて第五項の規定による措置に代わる措置を講ずるものとして国土交通省令で定めるものにより提供させることができる。この場合において、当該宅地建物取引業者は、当該宅地建物取引士に当該書面を交付させたものとみなし、同項の規定は、適用しない。"],["９　宅地建物取引業者は、第六項の規定により読み替えて適用する第一項又は第二項の規定による書面の交付に代えて、政令で定めるところにより、第六項の規定により読み替えて適用する第一項に規定する宅地建物取引業者の相手方等である宅地建物取引業者又は第六項の規定により読み替えて適用する第二項に規定する宅地若しくは建物の割賦販売の相手方である宅地建物取引業者の承諾を得て、当該書面に記載すべき事項を電磁的方法であつて第七項の規定による措置に代わる措置を講ずるものとして国土交通省令で定めるものにより提供することができる。この場合において、当該宅地建物取引業者は、当該書面を交付したものとみなし、同項の規定は、適用しない。"]]},"宅建業法25条":{"n":"宅地建物取引業法第二十五条","c":"（営業保証金の供託等）","p":[["宅地建物取引業者は、営業保証金を主たる事務所のもよりの供託所に供託しなければならない。"],["２　前項の営業保証金の額は、主たる事務所及びその他の事務所ごとに、宅地建物取引業者の取引の実情及びその取引の相手方の利益の保護を考慮して、政令で定める額とする。"],["３　第一項の営業保証金は、国土交通省令の定めるところにより、国債証券、地方債証券その他の国土交通省令で定める有価証券（社債、株式等の振替に関する法律（平成十三年法律第七十五号）第二百七十八条第一項に規定する振替債を含む。）をもつて、これに充てることができる。"],["４　宅地建物取引業者は、営業保証金を供託したときは、その供託物受入れの記載のある供託書の写しを添附して、その旨をその免許を受けた国土交通大臣又は都道府県知事に届け出なければならない。"],["５　宅地建物取引業者は、前項の規定による届出をした後でなければ、その事業を開始してはならない。"],["６　国土交通大臣又は都道府県知事は、第三条第一項の免許をした日から三月以内に宅地建物取引業者が第四項の規定による届出をしないときは、その届出をすべき旨の催告をしなければならない。"],["７　国土交通大臣又は都道府県知事は、前項の催告が到達した日から一月以内に宅地建物取引業者が第四項の規定による届出をしないときは、その免許を取り消すことができる。"],["８　第二項の規定に基づき政令を制定し、又は改廃する場合においては、その政令で、営業保証金の追加の供託又はその取戻しに関して、所要の経過措置（経過措置に関し監督上必要な措置を含む。）を定めることができる。"]]},"宅建業法27条":{"n":"宅地建物取引業法第二十七条","c":"（営業保証金の還付）","p":[["宅地建物取引業者と宅地建物取引業に関し取引をした者（宅地建物取引業者に該当する者を除く。）は、その取引により生じた債権に関し、宅地建物取引業者が供託した営業保証金について、その債権の弁済を受ける権利を有する。"],["２　前項の権利の実行に関し必要な事項は、法務省令・国土交通省令で定める。"]]},"宅建業法施行令2条の4":{"n":"宅地建物取引業法施行令第二条の四","c":"（営業保証金の額）","p":[["法第二十五条第二項に規定する営業保証金の額は、主たる事務所につき千万円、その他の事務所につき事務所ごとに五百万円の割合による金額の合計額とする。"]]},"宅建業法64条の9":{"n":"宅地建物取引業法第六十四条の九","c":"（弁済業務保証金分担金の納付等）","p":[["次の各号に掲げる者は、当該各号に掲げる日までに、弁済業務保証金に充てるため、主たる事務所及びその他の事務所ごとに政令で定める額の弁済業務保証金分担金を当該宅地建物取引業保証協会に納付しなければならない。","- 一　宅地建物取引業者で宅地建物取引業保証協会に加入しようとする者　その加入しようとする日","- 二　第六十四条の二第一項の規定による指定の日にその指定を受けた宅地建物取引業保証協会の社員である者　前条第一項の規定により国土交通大臣の指定する弁済業務開始日の一月前の日"],["２　宅地建物取引業保証協会の社員は、前項の規定による弁済業務保証金分担金を納付した後に、新たに事務所を設置したとき（第七条第一項各号の一に該当する場合において事務所の増設があつたときを含むものとする。）は、その日から二週間以内に、同項の政令で定める額の弁済業務保証金分担金を当該宅地建物取引業保証協会に納付しなければならない。"],["３　宅地建物取引業保証協会の社員は、第一項第二号に規定する期日までに、又は前項に規定する期間内に、これらの規定による弁済業務保証金分担金を納付しないときは、その地位を失う。"],["４　第一項の規定に基づき政令を制定し、又は改廃する場合においては、その政令で、弁済業務保証金の追加の供託及び弁済業務保証金分担金の追加納付又は弁済業務保証金の取戻し及び弁済業務保証金分担金の返還に関して、所要の経過措置（経過措置に関し監督上必要な措置を含む。）を定めることができる。"]]},"宅建業法64条の10":{"n":"宅地建物取引業法第六十四条の十","c":"（還付充当金の納付等）","p":[["宅地建物取引業保証協会は、第六十四条の八第一項の権利の実行により弁済業務保証金の還付があつたときは、当該還付に係る社員又は社員であつた者に対し、当該還付額に相当する額の還付充当金を宅地建物取引業保証協会に納付すべきことを通知しなければならない。"],["２　前項の通知を受けた社員又は社員であつた者は、その通知を受けた日から二週間以内に、その通知された額の還付充当金を当該宅地建物取引業保証協会に納付しなければならない。"],["３　宅地建物取引業保証協会の社員は、前項に規定する期間内に第一項の還付充当金を納付しないときは、その地位を失う。"]]},"宅建業法64条の15":{"n":"宅地建物取引業法第六十四条の十五","c":"（社員の地位を失つた場合の営業保証金の供託）","p":[["宅地建物取引業者は、第六十四条の八第一項の規定により国土交通大臣の指定する弁済業務開始日以後に宅地建物取引業保証協会の社員の地位を失つたときは、当該地位を失つた日から一週間以内に、第二十五条第一項から第三項までの規定により営業保証金を供託しなければならない。この場合においては、同条第四項の規定の適用があるものとする。"]]},"宅建業法施行令7条":{"n":"宅地建物取引業法施行令第七条","c":"（弁済業務保証金分担金の額）","p":[["法第六十四条の九第一項に規定する弁済業務保証金分担金の額は、主たる事務所につき六十万円、その他の事務所につき事務所ごとに三十万円の割合による金額の合計額とする。"]]},"宅建業法31条の3":{"n":"宅地建物取引業法第三十一条の三","c":"（宅地建物取引士の設置）","p":[["宅地建物取引業者は、その事務所その他国土交通省令で定める場所（以下この条及び第五十条第一項において「事務所等」という。）ごとに、事務所等の規模、業務内容等を考慮して国土交通省令で定める数の成年者である専任の宅地建物取引士を置かなければならない。"],["２　前項の場合において、宅地建物取引業者（法人である場合においては、その役員（業務を執行する社員、取締役、執行役又はこれらに準ずる者をいう。））が宅地建物取引士であるときは、その者が自ら主として業務に従事する事務所等については、その者は、その事務所等に置かれる成年者である専任の宅地建物取引士とみなす。"],["３　宅地建物取引業者は、第一項の規定に抵触する事務所等を開設してはならず、既存の事務所等が同項の規定に抵触するに至つたときは、二週間以内に、同項の規定に適合させるため必要な措置を執らなければならない。"]]},"宅建業法48条":{"n":"宅地建物取引業法第四十八条","c":"（証明書の携帯等）","p":[["宅地建物取引業者は、国土交通省令の定めるところにより、従業者に、その従業者であることを証する証明書を携帯させなければ、その者をその業務に従事させてはならない。"],["２　従業者は、取引の関係者の請求があつたときは、前項の証明書を提示しなければならない。"],["３　宅地建物取引業者は、国土交通省令で定めるところにより、その事務所ごとに、従業者名簿を備え、従業者の氏名、第一項の証明書の番号その他国土交通省令で定める事項を記載しなければならない。"],["４　宅地建物取引業者は、取引の関係者から請求があつたときは、前項の従業者名簿をその者の閲覧に供しなければならない。"]]},"宅建業法49条":{"n":"宅地建物取引業法第四十九条","c":"（帳簿の備付け）","p":[["宅地建物取引業者は、国土交通省令の定めるところにより、その事務所ごとに、その業務に関する帳簿を備え、宅地建物取引業に関し取引のあつたつど、その年月日、その取引に係る宅地又は建物の所在及び面積その他国土交通省令で定める事項を記載しなければならない。"]]},"宅建業法施行規則15条の5の3":{"n":"宅地建物取引業法施行規則第十五条の五の三","c":"（法第三十一条の三第一項の国土交通省令で定める数）","p":[["法第三十一条の三第一項の国土交通省令で定める数は、事務所にあつては当該事務所において宅地建物取引業者の業務に従事する者の数に対する同項に規定する宅地建物取引士（同条第二項の規定によりその者とみなされる者を含む。）の数の割合が五分の一以上となる数、前条に規定する場所にあつては一以上とする。"]]},"宅建業法施行規則17条の2":{"n":"宅地建物取引業法施行規則第十七条の二","c":"（従業者名簿の記載事項等）","p":[["法第四十八条第三項の国土交通省令で定める事項は、次に掲げるものとする。","- 一　主たる職務内容","- 二　宅地建物取引士であるか否かの別","- 三　当該事務所の従業者となつた年月日","- 四　当該事務所の従業者でなくなつたときは、その年月日"],["２　法第四十八条第三項に規定する従業者名簿の様式は、別記様式第八号の二によるものとする。"],["３　法第四十八条第三項に規定する従業者の氏名及び同条第一項の証明書の番号並びに第一項各号に掲げる事項が、電子計算機に備えられたファイル又は電磁的記録媒体に記録され、必要に応じ当該事務所において電子計算機その他の機器を用いて明確に紙面に表示されるときは、当該記録をもつて同条第三項に規定する従業者名簿への記載に代えることができる。この場合における同条第四項の規定による閲覧は、当該ファイル又は電磁的記録媒体に記録されている事項を紙面又は入出力装置の映像面に表示する方法で行うものとする。"],["４　宅地建物取引業者は、法第四十八条第三項に規定する従業者名簿（前項の規定による記録が行われた同項のファイル又は電磁的記録媒体を含む。）を最終の記載をした日から十年間保存しなければならない。"]]},"宅建業法施行規則18条":{"n":"宅地建物取引業法施行規則第十八条","c":"（帳簿の記載事項等）","p":[["法第四十九条に規定する国土交通省令で定める事項は、次のとおりとする。","- 一　売買若しくは交換又は売買、交換若しくは貸借の代理若しくは媒介の別（取引一任代理等（法第五十条の二第一項に規定する取引一任代理等をいう。以下同じ。）に係るものである場合は、その旨を含む。）","- 二　売買、交換若しくは貸借の相手方若しくは代理を依頼した者又は媒介に係る売買、交換若しくは貸借の各当事者及びこれらの者の代理人の氏名及び住所","- 三　取引に関与した他の宅地建物取引業者の商号又は名称（当該宅地建物取引業者が個人である場合においては、その者の氏名）","- 四　宅地の場合にあつては、現況地目、位置、形状その他当該宅地の概況","- 五　建物の場合にあつては、構造上の種別、用途その他当該建物の概況","- 六　売買金額、交換物件の品目及び交換差金又は賃料","- 七　報酬の額","- 八　宅地建物取引業者が自ら売主となる新築住宅（住宅の品質確保の促進等に関する法律第二条第二項に規定する新築住宅をいう。以下この条において同じ。）の場合にあつては、次に掲げる事項","-- イ　当該新築住宅を引き渡した年月日","-- ロ　当該新築住宅の床面積","-- ハ　当該新築住宅が特定住宅瑕疵担保責任の履行の確保等に関する法律施行令（平成十九年政令第三百九十五号）第六条第一項の販売新築住宅であるときは、同項の書面に記載された二以上の宅地建物取引業者それぞれの販売瑕疵負担割合（同項に規定する販売瑕疵負担割合をいう。以下この号において同じ。）の合計に対する当該宅地建物取引業者の販売瑕疵負担割合の割合","-- ニ　当該新築住宅について、住宅瑕疵担保責任保険法人（特定住宅瑕疵担保責任の履行の確保等に関する法律第十七条第一項に規定する住宅瑕疵担保責任保険法人をいう。）と住宅販売瑕疵担保責任保険契約（同法第二条第六項に規定する住宅販売瑕疵担保責任保険契約をいう。）を締結し、保険証券又はこれに代わるべき書面を買主に交付しているときは、当該住宅瑕疵担保責任保険法人の名称","- 九　取引に関する特約その他参考となる事項"],["２　法第四十九条に規定する宅地建物取引のあつた年月日、その取引に係る宅地又は建物の所在及び面積並びに第一項各号に掲げる事項が、電子計算機に備えられたファイル又は電磁的記録媒体に記録され、必要に応じ当該事務所において電子計算機その他の機器を用いて明確に紙面に表示されるときは、当該記録をもつて法第四十九条に規定する帳簿への記載に代えることができる。"],["３　宅地建物取引業者は、法第四十九条に規定する帳簿（前項の規定による記録が行われた同項のファイル又は電磁的記録媒体を含む。）を各事業年度の末日をもつて閉鎖するものとし、閉鎖後五年間（当該宅地建物取引業者が自ら売主となる新築住宅に係るものにあつては、十年間）当該帳簿を保存しなければならない。"]]},"宅建業法32条":{"n":"宅地建物取引業法第三十二条","c":"（誇大広告等の禁止）","p":[["宅地建物取引業者は、その業務に関して広告をするときは、当該広告に係る宅地又は建物の所在、規模、形質若しくは現在若しくは将来の利用の制限、環境若しくは交通その他の利便又は代金、借賃等の対価の額若しくはその支払方法若しくは代金若しくは交換差金に関する金銭の貸借のあつせんについて、著しく事実に相違する表示をし、又は実際のものよりも著しく優良であり、若しくは有利であると人を誤認させるような表示をしてはならない。"]]},"宅建業法33条":{"n":"宅地建物取引業法第三十三条","c":"（広告の開始時期の制限）","p":[["宅地建物取引業者は、宅地の造成又は建物の建築に関する工事の完了前においては、当該工事に関し必要とされる都市計画法第二十九条第一項又は第二項の許可、建築基準法（昭和二十五年法律第二百一号）第六条第一項の確認その他法令に基づく許可等の処分で政令で定めるものがあつた後でなければ、当該工事に係る宅地又は建物の売買その他の業務に関する広告をしてはならない。"]]},"宅建業法34条":{"n":"宅地建物取引業法第三十四条","c":"（取引態様の明示）","p":[["宅地建物取引業者は、宅地又は建物の売買、交換又は貸借に関する広告をするときは、自己が契約の当事者となつて当該売買若しくは交換を成立させるか、代理人として当該売買、交換若しくは貸借を成立させるか、又は媒介して当該売買、交換若しくは貸借を成立させるかの別（次項において「取引態様の別」という。）を明示しなければならない。"],["２　宅地建物取引業者は、宅地又は建物の売買、交換又は貸借に関する注文を受けたときは、遅滞なく、その注文をした者に対し、取引態様の別を明らかにしなければならない。"]]},"宅建業法36条":{"n":"宅地建物取引業法第三十六条","c":"（契約締結等の時期の制限）","p":[["宅地建物取引業者は、宅地の造成又は建物の建築に関する工事の完了前においては、当該工事に関し必要とされる都市計画法第二十九条第一項又は第二項の許可、建築基準法第六条第一項の確認その他法令に基づく許可等の処分で政令で定めるものがあつた後でなければ、当該工事に係る宅地又は建物につき、自ら当事者として、若しくは当事者を代理してその売買若しくは交換の契約を締結し、又はその売買若しくは交換の媒介をしてはならない。"]]},"宅建業法34条の2":{"n":"宅地建物取引業法第三十四条の二","c":"（媒介契約）","p":[["宅地建物取引業者は、宅地又は建物の売買又は交換の媒介の契約（以下この条において「媒介契約」という。）を締結したときは、遅滞なく、次に掲げる事項を記載した書面を作成して記名押印し、依頼者にこれを交付しなければならない。","- 一　当該宅地の所在、地番その他当該宅地を特定するために必要な表示又は当該建物の所在、種類、構造その他当該建物を特定するために必要な表示","- 二　当該宅地又は建物を売買すべき価額又はその評価額","- 三　当該宅地又は建物について、依頼者が他の宅地建物取引業者に重ねて売買又は交換の媒介又は代理を依頼することの許否及びこれを許す場合の他の宅地建物取引業者を明示する義務の存否に関する事項","- 四　当該建物が既存の建物であるときは、依頼者に対する建物状況調査（建物の構造耐力上主要な部分又は雨水の浸入を防止する部分として国土交通省令で定めるもの（第三十七条第一項第二号の二において「建物の構造耐力上主要な部分等」という。）の状況の調査であつて、経年変化その他の建物に生じる事象に関する知識及び能力を有する者として国土交通省令で定める者が実施するものをいう。第三十五条第一項第六号の二イにおいて同じ。）を実施する者のあつせんに関する事項","- 五　媒介契約の有効期間及び解除に関する事項","- 六　当該宅地又は建物の第五項に規定する指定流通機構への登録に関する事項","- 七　報酬に関する事項","- 八　その他国土交通省令・内閣府令で定める事項"],["２　宅地建物取引業者は、前項第二号の価額又は評価額について意見を述べるときは、その根拠を明らかにしなければならない。"],["３　依頼者が他の宅地建物取引業者に重ねて売買又は交換の媒介又は代理を依頼することを禁ずる媒介契約（以下「専任媒介契約」という。）の有効期間は、三月を超えることができない。これより長い期間を定めたときは、その期間は、三月とする。"],["４　前項の有効期間は、依頼者の申出により、更新することができる。ただし、更新の時から三月を超えることができない。"],["５　宅地建物取引業者は、専任媒介契約を締結したときは、契約の相手方を探索するため、国土交通省令で定める期間内に、当該専任媒介契約の目的物である宅地又は建物につき、所在、規模、形質、売買すべき価額その他国土交通省令で定める事項を、国土交通省令で定めるところにより、国土交通大臣が指定する者（以下「指定流通機構」という。）に登録しなければならない。"],["６　前項の規定による登録をした宅地建物取引業者は、第五十条の六に規定する登録を証する書面を遅滞なく依頼者に引き渡さなければならない。"],["７　前項の宅地建物取引業者は、第五項の規定による登録に係る宅地又は建物の売買又は交換の契約が成立したときは、国土交通省令で定めるところにより、遅滞なく、その旨を当該登録に係る指定流通機構に通知しなければならない。"],["８　媒介契約を締結した宅地建物取引業者は、当該媒介契約の目的物である宅地又は建物の売買又は交換の申込みがあつたときは、遅滞なく、その旨を依頼者に報告しなければならない。"],["９　専任媒介契約を締結した宅地建物取引業者は、前項に定めるもののほか、依頼者に対し、当該専任媒介契約に係る業務の処理状況を二週間に一回以上（依頼者が当該宅地建物取引業者が探索した相手方以外の者と売買又は交換の契約を締結することができない旨の特約を含む専任媒介契約にあつては、一週間に一回以上）報告しなければならない。"],["１０　第三項から第六項まで及び前二項の規定に反する特約は、無効とする。"],["１１　宅地建物取引業者は、第一項の書面の交付に代えて、政令で定めるところにより、依頼者の承諾を得て、当該書面に記載すべき事項を電磁的方法（電子情報処理組織を使用する方法その他の情報通信の技術を利用する方法をいう。以下同じ。）であつて同項の規定による記名押印に代わる措置を講ずるものとして国土交通省令で定めるものにより提供することができる。この場合において、当該宅地建物取引業者は、当該書面に記名押印し、これを交付したものとみなす。"],["１２　宅地建物取引業者は、第六項の規定による書面の引渡しに代えて、政令で定めるところにより、依頼者の承諾を得て、当該書面において証されるべき事項を電磁的方法であつて国土交通省令で定めるものにより提供することができる。この場合において、当該宅地建物取引業者は、当該書面を引き渡したものとみなす。"]]},"宅建業法施行規則15条の10":{"n":"宅地建物取引業法施行規則第十五条の十","c":"（指定流通機構への登録期間）","p":[["法第三十四条の二第五項の国土交通省令で定める期間は、専任媒介契約の締結の日から七日（専属専任媒介契約にあつては、五日）とする。"],["２　前項の期間の計算については、休業日数は算入しないものとする。"]]},"宅建業法37条":{"n":"宅地建物取引業法第三十七条","c":"（書面の交付）","p":[["宅地建物取引業者は、宅地又は建物の売買又は交換に関し、自ら当事者として契約を締結したときはその相手方に、当事者を代理して契約を締結したときはその相手方及び代理を依頼した者に、その媒介により契約が成立したときは当該契約の各当事者に、遅滞なく、次に掲げる事項を記載した書面を交付しなければならない。","- 一　当事者の氏名（法人にあつては、その名称）及び住所","- 二　当該宅地の所在、地番その他当該宅地を特定するために必要な表示又は当該建物の所在、種類、構造その他当該建物を特定するために必要な表示","- 二の二　当該建物が既存の建物であるときは、建物の構造耐力上主要な部分等の状況について当事者の双方が確認した事項","- 三　代金又は交換差金の額並びにその支払の時期及び方法","- 四　宅地又は建物の引渡しの時期","- 五　移転登記の申請の時期","- 六　代金及び交換差金以外の金銭の授受に関する定めがあるときは、その額並びに当該金銭の授受の時期及び目的","- 七　契約の解除に関する定めがあるときは、その内容","- 八　損害賠償額の予定又は違約金に関する定めがあるときは、その内容","- 九　代金又は交換差金についての金銭の貸借のあつせんに関する定めがある場合においては、当該あつせんに係る金銭の貸借が成立しないときの措置","- 十　天災その他不可抗力による損害の負担に関する定めがあるときは、その内容","- 十一　当該宅地若しくは建物が種類若しくは品質に関して契約の内容に適合しない場合におけるその不適合を担保すべき責任又は当該責任の履行に関して講ずべき保証保険契約の締結その他の措置についての定めがあるときは、その内容","- 十二　当該宅地又は建物に係る租税その他の公課の負担に関する定めがあるときは、その内容"],["２　宅地建物取引業者は、宅地又は建物の貸借に関し、当事者を代理して契約を締結したときはその相手方及び代理を依頼した者に、その媒介により契約が成立したときは当該契約の各当事者に、次に掲げる事項を記載した書面を交付しなければならない。","- 一　前項第一号、第二号、第四号、第七号、第八号及び第十号に掲げる事項","- 二　借賃の額並びにその支払の時期及び方法","- 三　借賃以外の金銭の授受に関する定めがあるときは、その額並びに当該金銭の授受の時期及び目的"],["３　宅地建物取引業者は、前二項の規定により交付すべき書面を作成したときは、宅地建物取引士をして、当該書面に記名させなければならない。"],["４　宅地建物取引業者は、第一項の規定による書面の交付に代えて、政令で定めるところにより、次の各号に掲げる場合の区分に応じ当該各号に定める者の承諾を得て、当該書面に記載すべき事項を電磁的方法であつて前項の規定による措置に代わる措置を講ずるものとして国土交通省令で定めるものにより提供することができる。この場合において、当該宅地建物取引業者は、当該書面を交付したものとみなし、同項の規定は、適用しない。","- 一　自ら当事者として契約を締結した場合　当該契約の相手方","- 二　当事者を代理して契約を締結した場合　当該契約の相手方及び代理を依頼した者","- 三　その媒介により契約が成立した場合　当該契約の各当事者"],["５　宅地建物取引業者は、第二項の規定による書面の交付に代えて、政令で定めるところにより、次の各号に掲げる場合の区分に応じ当該各号に定める者の承諾を得て、当該書面に記載すべき事項を電磁的方法であつて第三項の規定による措置に代わる措置を講ずるものとして国土交通省令で定めるものにより提供することができる。この場合において、当該宅地建物取引業者は、当該書面を交付したものとみなし、同項の規定は、適用しない。","- 一　当事者を代理して契約を締結した場合　当該契約の相手方及び代理を依頼した者","- 二　その媒介により契約が成立した場合　当該契約の各当事者"]]},"宅建業法37条の2":{"n":"宅地建物取引業法第三十七条の二","c":"（事務所等以外の場所においてした買受けの申込みの撤回等）","p":[["宅地建物取引業者が自ら売主となる宅地又は建物の売買契約について、当該宅地建物取引業者の事務所その他国土交通省令・内閣府令で定める場所（以下この条において「事務所等」という。）以外の場所において、当該宅地又は建物の買受けの申込みをした者又は売買契約を締結した買主（事務所等において買受けの申込みをし、事務所等以外の場所において売買契約を締結した買主を除く。）は、次に掲げる場合を除き、書面により、当該買受けの申込みの撤回又は当該売買契約の解除（以下この条において「申込みの撤回等」という。）を行うことができる。この場合において、宅地建物取引業者は、申込みの撤回等に伴う損害賠償又は違約金の支払を請求することができない。","- 一　買受けの申込みをした者又は買主（以下この条において「申込者等」という。）が、国土交通省令・内閣府令の定めるところにより、申込みの撤回等を行うことができる旨及びその申込みの撤回等を行う場合の方法について告げられた場合において、その告げられた日から起算して八日を経過したとき。","- 二　申込者等が、当該宅地又は建物の引渡しを受け、かつ、その代金の全部を支払つたとき。"],["２　申込みの撤回等は、申込者等が前項前段の書面を発した時に、その効力を生ずる。"],["３　申込みの撤回等が行われた場合においては、宅地建物取引業者は、申込者等に対し、速やかに、買受けの申込み又は売買契約の締結に際し受領した手付金その他の金銭を返還しなければならない。"],["４　前三項の規定に反する特約で申込者等に不利なものは、無効とする。"]]},"宅建業法施行規則16条の5":{"n":"宅地建物取引業法施行規則第十六条の五","c":"（法第三十七条の二第一項の国土交通省令・内閣府令で定める場所）","p":[["法第三十七条の二第一項の国土交通省令・内閣府令で定める場所は、次に掲げるものとする。","- 一　次に掲げる場所のうち、法第三十一条の三第一項の規定により同項に規定する宅地建物取引士を置くべきもの","-- イ　当該宅地建物取引業者の事務所以外の場所で継続的に業務を行うことができる施設を有するもの","-- ロ　当該宅地建物取引業者が一団の宅地建物の分譲を案内所（土地に定着する建物内に設けられるものに限る。ニにおいて同じ。）を設置して行う場合にあつては、その案内所","-- ハ　当該宅地建物取引業者が他の宅地建物取引業者に対し、宅地又は建物の売却について代理又は媒介の依頼をした場合にあつては、代理又は媒介の依頼を受けた他の宅地建物取引業者の事務所又は事務所以外の場所で継続的に業務を行うことができる施設を有するもの","-- ニ　当該宅地建物取引業者が一団の宅地建物の分譲の代理又は媒介の依頼をし、かつ、依頼を受けた宅地建物取引業者がその代理又は媒介を案内所を設置して行う場合にあつては、その案内所","-- ホ　当該宅地建物取引業者（当該宅地建物取引業者が他の宅地建物取引業者に対し、宅地又は建物の売却について代理又は媒介の依頼をした場合にあつては、代理又は媒介の依頼を受けた他の宅地建物取引業者を含む。）が法第三十一条の三第一項の規定により同項に規定する宅地建物取引士を置くべき場所（土地に定着する建物内のものに限る。）で宅地又は建物の売買契約に関する説明をした後、当該宅地又は建物に関し展示会その他これに類する催しを土地に定着する建物内において実施する場合にあつては、これらの催しを実施する場所","- 二　当該宅地建物取引業者の相手方がその自宅又は勤務する場所において宅地又は建物の売買契約に関する説明を受ける旨を申し出た場合にあつては、その相手方の自宅又は勤務する場所"]]},"宅建業法38条":{"n":"宅地建物取引業法第三十八条","c":"（損害賠償額の予定等の制限）","p":[["宅地建物取引業者がみずから売主となる宅地又は建物の売買契約において、当事者の債務の不履行を理由とする契約の解除に伴う損害賠償の額を予定し、又は違約金を定めるときは、これらを合算した額が代金の額の十分の二をこえることとなる定めをしてはならない。"],["２　前項の規定に反する特約は、代金の額の十分の二をこえる部分について、無効とする。"]]},"宅建業法39条":{"n":"宅地建物取引業法第三十九条","c":"（手付の額の制限等）","p":[["宅地建物取引業者は、自ら売主となる宅地又は建物の売買契約の締結に際して、代金の額の十分の二を超える額の手付を受領することができない。"],["２　宅地建物取引業者が、自ら売主となる宅地又は建物の売買契約の締結に際して手付を受領したときは、その手付がいかなる性質のものであつても、買主はその手付を放棄して、当該宅地建物取引業者はその倍額を現実に提供して、契約の解除をすることができる。ただし、その相手方が契約の履行に着手した後は、この限りでない。"],["３　前項の規定に反する特約で、買主に不利なものは、無効とする。"]]},"宅建業法41条":{"n":"宅地建物取引業法第四十一条","c":"（手付金等の保全）","p":[["宅地建物取引業者は、宅地の造成又は建築に関する工事の完了前において行う当該工事に係る宅地又は建物の売買で自ら売主となるものに関しては、次の各号のいずれかに掲げる措置を講じた後でなければ、買主から手付金等（代金の全部又は一部として授受される金銭及び手付金その他の名義をもつて授受される金銭で代金に充当されるものであつて、契約の締結の日以後当該宅地又は建物の引渡し前に支払われるものをいう。以下同じ。）を受領してはならない。ただし、当該宅地若しくは建物について買主への所有権移転の登記がされたとき、買主が所有権の登記をしたとき、又は当該宅地建物取引業者が受領しようとする手付金等の額（既に受領した手付金等があるときは、その額を加えた額）が代金の額の百分の五以下であり、かつ、宅地建物取引業者の取引の実情及びその取引の相手方の利益の保護を考慮して政令で定める額以下であるときは、この限りでない。","- 一　銀行その他政令で定める金融機関又は国土交通大臣が指定する者（以下この条において「銀行等」という。）との間において、宅地建物取引業者が受領した手付金等の返還債務を負うこととなつた場合において当該銀行等がその債務を連帯して保証することを委託する契約（以下「保証委託契約」という。）を締結し、かつ、当該保証委託契約に基づいて当該銀行等が手付金等の返還債務を連帯して保証することを約する書面を買主に交付すること。","- 二　保険事業者（保険業法（平成七年法律第百五号）第三条第一項又は第百八十五条第一項の免許を受けて保険業を行う者をいう。以下この号において同じ。）との間において、宅地建物取引業者が受領した手付金等の返還債務の不履行により買主に生じた損害のうち少なくとも当該返還債務の不履行に係る手付金等の額に相当する部分を当該保険事業者がうめることを約する保証保険契約を締結し、かつ、保険証券又はこれに代わるべき書面を買主に交付すること。"],["２　前項第一号の規定による保証委託契約は、銀行等が次の各号に掲げる要件に適合する保証契約を買主との間において成立させることを内容とするものでなければならない。","- 一　保証債務が、少なくとも宅地建物取引業者が受領した手付金等の返還債務の全部を保証するものであること。","- 二　保証すべき手付金等の返還債務が、少なくとも宅地建物取引業者が受領した手付金等に係る宅地又は建物の引渡しまでに生じたものであること。"],["３　第一項第二号の規定による保証保険契約は、次の各号に掲げる要件に適合するものでなければならない。","- 一　保険金額が、宅地建物取引業者が受領しようとする手付金等の額（既に受領した手付金等があるときは、その額を加えた額）に相当する金額であること。","- 二　保険期間が、少なくとも保証保険契約が成立した時から宅地建物取引業者が受領した手付金等に係る宅地又は建物の引渡しまでの期間であること。"],["４　宅地建物取引業者が、第一項に規定する宅地又は建物の売買を行う場合（同項ただし書に該当する場合を除く。）において、同項第一号又は第二号に掲げる措置を講じないときは、買主は、手付金等を支払わないことができる。"],["５　宅地建物取引業者は、次の各号に掲げる措置に代えて、政令で定めるところにより、第一項に規定する買主の承諾を得て、電磁的方法であつて当該各号に掲げる措置に準ずるものとして国土交通省令・内閣府令で定めるものを講じることができる。この場合において、当該国土交通省令・内閣府令で定める措置を講じた者は、当該各号に掲げる措置を講じたものとみなす。","- 一　第一項第一号に掲げる措置のうち、当該保証委託契約に基づいて当該銀行等が手付金等の返還債務を連帯して保証することを約する書面を買主に交付する措置","- 二　第一項第二号に掲げる措置のうち、保険証券に代わるべき書面を買主に交付する措置"]]},"宅建業法41条の2":{"n":"宅地建物取引業法第四十一条の二","c":"","p":[["宅地建物取引業者は、自ら売主となる宅地又は建物の売買（前条第一項に規定する売買を除く。）に関しては、同項第一号若しくは第二号に掲げる措置を講じた後又は次の各号に掲げる措置をいずれも講じた後でなければ、買主から手付金等を受領してはならない。ただし、当該宅地若しくは建物について買主への所有権移転の登記がされたとき、買主が所有権の登記をしたとき、又は当該宅地建物取引業者が受領しようとする手付金等の額（既に受領した手付金等があるときは、その額を加えた額）が代金の額の十分の一以下であり、かつ、宅地建物取引業者の取引の実情及びその取引の相手方の利益の保護を考慮して政令で定める額以下であるときは、この限りでない。","- 一　国土交通大臣が指定する者（以下「指定保管機関」という。）との間において、宅地建物取引業者が自己に代理して当該指定保管機関に当該手付金等を受領させることとするとともに、当該指定保管機関が、当該宅地建物取引業者が受領した手付金等の額に相当する額の金銭を保管することを約する契約（以下「手付金等寄託契約」という。）を締結し、かつ、当該手付金等寄託契約を証する書面を買主に交付すること。","- 二　買主との間において、買主が宅地建物取引業者に対して有することとなる手付金等の返還を目的とする債権の担保として、手付金等寄託契約に基づく寄託金の返還を目的とする債権について質権を設定する契約（以下「質権設定契約」という。）を締結し、かつ、当該質権設定契約を証する書面を買主に交付し、及び当該質権設定契約による質権の設定を民法第四百六十七条の規定による確定日付のある証書をもつて指定保管機関に通知すること。"],["２　前項第一号の規定による手付金等寄託契約は、次の各号に掲げる要件に適合するものでなければならない。","- 一　保管される金額が、宅地建物取引業者が受領しようとする手付金等の額（既に受領した手付金等で指定保管機関に保管されていないものがあるときは、その保管されていないものの額を加えた額）に相当する金額であること。","- 二　保管期間が、少なくとも指定保管機関が宅地建物取引業者に代理して手付金等を受領した時から当該手付金等に係る宅地又は建物の引渡しまでの期間であること。"],["３　第一項第二号の規定による質権設定契約は、設定される質権の存続期間が、少なくとも当該質権が設定された時から宅地建物取引業者が受領した手付金等に係る宅地又は建物の引渡しまでの期間であるものでなければならない。"],["４　宅地建物取引業者は、第一項各号に掲げる措置を講ずる場合において、既に自ら手付金等を受領しているときは、自ら受領した手付金等の額に相当する額（既に指定保管機関が保管する金銭があるときは、その額を除いた額）の金銭を、買主が手付金等の支払をする前に、指定保管機関に交付しなければならない。"],["５　宅地建物取引業者が、第一項に規定する宅地又は建物の売買を行う場合（同項ただし書に該当する場合を除く。）において、前条第一項第一号若しくは第二号に掲げる措置を講じないとき、第一項各号の一に掲げる措置を講じないとき、又は前項の規定による金銭の交付をしないときは、買主は、手付金等を支払わないことができる。"],["６　宅地建物取引業者は、次の各号に掲げる措置に代えて、政令で定めるところにより、第一項に規定する買主の承諾を得て、電磁的方法であつて当該各号に掲げる措置に準ずるものとして国土交通省令・内閣府令で定めるものを講じることができる。この場合において、当該国土交通省令・内閣府令で定める措置を講じた者は、当該各号に掲げる措置を講じたものとみなす。","- 一　第一項第一号に掲げる措置のうち、当該手付金等寄託契約を証する書面を買主に交付する措置","- 二　第一項第二号に掲げる措置のうち、当該質権設定契約を証する書面を買主に交付する措置"]]},"宅建業法施行令3条の5":{"n":"宅地建物取引業法施行令第三条の五","c":"（法第四十一条第一項ただし書及び第四十一条の二第一項ただし書の政令で定める額）","p":[["法第四十一条第一項ただし書及び第四十一条の二第一項ただし書の政令で定める額は、千万円とする。"]]},"宅建業法33条の2":{"n":"宅地建物取引業法第三十三条の二","c":"（自己の所有に属しない宅地又は建物の売買契約締結の制限）","p":[["宅地建物取引業者は、自己の所有に属しない宅地又は建物について、自ら売主となる売買契約（予約を含む。）を締結してはならない。ただし、次の各号のいずれかに該当する場合は、この限りでない。","- 一　宅地建物取引業者が当該宅地又は建物を取得する契約（予約を含み、その効力の発生が条件に係るものを除く。）を締結しているときその他宅地建物取引業者が当該宅地又は建物を取得できることが明らかな場合で国土交通省令・内閣府令で定めるとき。","- 二　当該宅地又は建物の売買が第四十一条第一項に規定する売買に該当する場合で当該売買に関して同項第一号又は第二号に掲げる措置が講じられているとき。"]]},"宅建業法40条":{"n":"宅地建物取引業法第四十条","c":"（担保責任についての特約の制限）","p":[["宅地建物取引業者は、自ら売主となる宅地又は建物の売買契約において、その目的物が種類又は品質に関して契約の内容に適合しない場合におけるその不適合を担保すべき責任に関し、民法（明治二十九年法律第八十九号）第五百六十六条に規定する期間についてその目的物の引渡しの日から二年以上となる特約をする場合を除き、同条に規定するものより買主に不利となる特約をしてはならない。"],["２　前項の規定に反する特約は、無効とする。"]]},"宅建業法46条":{"n":"宅地建物取引業法第四十六条","c":"（報酬）","p":[["宅地建物取引業者が宅地又は建物の売買、交換又は貸借の代理又は媒介に関して受けることのできる報酬の額は、国土交通大臣の定めるところによる。"],["２　宅地建物取引業者は、前項の額をこえて報酬を受けてはならない。"],["３　国土交通大臣は、第一項の報酬の額を定めたときは、これを告示しなければならない。"],["４　宅地建物取引業者は、その事務所ごとに、公衆の見やすい場所に、第一項の規定により国土交通大臣が定めた報酬の額を掲示しなければならない。"]]},"宅建業法45条":{"n":"宅地建物取引業法第四十五条","c":"（秘密を守る義務）","p":[["宅地建物取引業者は、正当な理由がある場合でなければ、その業務上取り扱つたことについて知り得た秘密を他に漏らしてはならない。宅地建物取引業を営まなくなつた後であつても、また同様とする。"]]},"宅建業法47条":{"n":"宅地建物取引業法第四十七条","c":"（業務に関する禁止事項）","p":[["宅地建物取引業者は、その業務に関して、宅地建物取引業者の相手方等に対し、次に掲げる行為をしてはならない。","- 一　宅地若しくは建物の売買、交換若しくは貸借の契約の締結について勧誘をするに際し、又はその契約の申込みの撤回若しくは解除若しくは宅地建物取引業に関する取引により生じた債権の行使を妨げるため、次のいずれかに該当する事項について、故意に事実を告げず、又は不実のことを告げる行為","-- イ　第三十五条第一項各号又は第二項各号に掲げる事項","-- ロ　第三十五条の二各号に掲げる事項","-- ハ　第三十七条第一項各号又は第二項各号（第一号を除く。）に掲げる事項","-- ニ　イからハまでに掲げるもののほか、宅地若しくは建物の所在、規模、形質、現在若しくは将来の利用の制限、環境、交通等の利便、代金、借賃等の対価の額若しくは支払方法その他の取引条件又は当該宅地建物取引業者若しくは取引の関係者の資力若しくは信用に関する事項であつて、宅地建物取引業者の相手方等の判断に重要な影響を及ぼすこととなるもの","- 二　不当に高額の報酬を要求する行為","- 三　手付について貸付けその他信用の供与をすることにより契約の締結を誘引する行為"]]},"宅建業法65条":{"n":"宅地建物取引業法第六十五条","c":"（指示及び業務の停止）","p":[["国土交通大臣又は都道府県知事は、その免許（第五十条の二第一項の認可を含む。次項において同じ。）を受けた宅地建物取引業者が次の各号のいずれかに該当する場合又はこの法律の規定若しくは特定住宅瑕疵担保責任の履行の確保等に関する法律（平成十九年法律第六十六号。以下この条において「履行確保法」という。）第十一条第一項若しくは第六項、第十二条第一項、第十三条、第十五条第一項若しくは履行確保法第十六条において読み替えて準用する履行確保法第七条第一項若しくは第二項若しくは第八条第一項若しくは第二項の規定に違反した場合においては、当該宅地建物取引業者に対して、必要な指示をすることができる。","- 一　業務に関し取引の関係者に損害を与えたとき又は損害を与えるおそれが大であるとき。","- 二　業務に関し取引の公正を害する行為をしたとき又は取引の公正を害するおそれが大であるとき。","- 三　業務に関し他の法令（履行確保法及びこれに基づく命令を除く。）に違反し、宅地建物取引業者として不適当であると認められるとき。","- 四　宅地建物取引士が、第六十八条又は第六十八条の二第一項の規定による処分を受けた場合において、宅地建物取引業者の責めに帰すべき理由があるとき。"],["２　国土交通大臣又は都道府県知事は、その免許を受けた宅地建物取引業者が次の各号のいずれかに該当する場合においては、当該宅地建物取引業者に対し、一年以内の期間を定めて、その業務の全部又は一部の停止を命ずることができる。","- 一　前項第一号又は第二号に該当するとき（認可宅地建物取引業者の行う取引一任代理等に係るものに限る。）。","- 一の二　前項第三号又は第四号に該当するとき。","- 二　第十三条、第二十五条第五項（第二十六条第二項において準用する場合を含む。）、第二十八条第一項、第三十一条の三第三項、第三十二条、第三十三条の二、第三十四条、第三十四条の二第一項若しくは第二項（第三十四条の三において準用する場合を含む。）、第三十五条第一項から第三項まで、第三十六条、第三十七条第一項若しくは第二項、第四十一条第一項、第四十一条の二第一項、第四十三条から第四十五条まで、第四十六条第二項、第四十七条、第四十七条の二、第四十八条第一項若しくは第三項、第六十四条の九第二項、第六十四条の十第二項、第六十四条の十二第四項、第六十四条の十五前段若しくは第六十四条の二十三前段の規定又は履行確保法第十一条第一項、第十三条若しくは履行確保法第十六条において読み替えて準用する履行確保法第七条第一項の規定に違反したとき。","- 三　前項又は次項の規定による指示に従わないとき。","- 四　この法律の規定に基づく国土交通大臣又は都道府県知事の処分に違反したとき。","- 五　前三号に規定する場合のほか、宅地建物取引業に関し不正又は著しく不当な行為をしたとき。","- 六　営業に関し成年者と同一の行為能力を有しない未成年者である場合において、その法定代理人（法定代理人が法人である場合においては、その役員を含む。）が業務の停止をしようとするとき以前五年以内に宅地建物取引業に関し不正又は著しく不当な行為をしたとき。","- 七　法人である場合において、その役員又は政令で定める使用人のうちに業務の停止をしようとするとき以前五年以内に宅地建物取引業に関し不正又は著しく不当な行為をした者があるに至つたとき。","- 八　個人である場合において、政令で定める使用人のうちに業務の停止をしようとするとき以前五年以内に宅地建物取引業に関し不正又は著しく不当な行為をした者があるに至つたとき。"],["３　都道府県知事は、国土交通大臣又は他の都道府県知事の免許を受けた宅地建物取引業者で当該都道府県の区域内において業務を行うものが、当該都道府県の区域内における業務に関し、第一項各号のいずれかに該当する場合又はこの法律の規定若しくは履行確保法第十一条第一項若しくは第六項、第十二条第一項、第十三条、第十五条第一項若しくは履行確保法第十六条において読み替えて準用する履行確保法第七条第一項若しくは第二項若しくは第八条第一項若しくは第二項の規定に違反した場合においては、当該宅地建物取引業者に対して、必要な指示をすることができる。"],["４　都道府県知事は、国土交通大臣又は他の都道府県知事の免許を受けた宅地建物取引業者で当該都道府県の区域内において業務を行うものが、当該都道府県の区域内における業務に関し、次の各号のいずれかに該当する場合においては、当該宅地建物取引業者に対し、一年以内の期間を定めて、その業務の全部又は一部の停止を命ずることができる。","- 一　第一項第三号又は第四号に該当するとき。","- 二　第十三条、第三十一条の三第三項（事務所に係る部分を除く。）、第三十二条、第三十三条の二、第三十四条、第三十四条の二第一項若しくは第二項（第三十四条の三において準用する場合を含む。）、第三十五条第一項から第三項まで、第三十六条、第三十七条第一項若しくは第二項、第四十一条第一項、第四十一条の二第一項、第四十三条から第四十五条まで、第四十六条第二項、第四十七条、第四十七条の二又は第四十八条第一項若しくは第三項の規定に違反したとき。","- 三　第一項又は前項の規定による指示に従わないとき。","- 四　この法律の規定に基づく国土交通大臣又は都道府県知事の処分に違反したとき。","- 五　前三号に規定する場合のほか、不正又は著しく不当な行為をしたとき。"]]},"宅建業法66条":{"n":"宅地建物取引業法第六十六条","c":"（免許の取消し）","p":[["国土交通大臣又は都道府県知事は、その免許を受けた宅地建物取引業者が次の各号のいずれかに該当する場合においては、当該免許を取り消さなければならない。","- 一　第五条第一項第一号、第五号から第七号まで、第十号又は第十四号のいずれかに該当するに至つたとき。","- 二　営業に関し成年者と同一の行為能力を有しない未成年者である場合において、その法定代理人（法定代理人が法人である場合においては、その役員を含む。）が第五条第一項第一号から第七号まで又は第十号のいずれかに該当するに至つたとき。","- 三　法人である場合において、その役員又は政令で定める使用人のうちに第五条第一項第一号から第七号まで又は第十号のいずれかに該当する者があるに至つたとき。","- 四　個人である場合において、政令で定める使用人のうちに第五条第一項第一号から第七号まで又は第十号のいずれかに該当する者があるに至つたとき。","- 五　第七条第一項各号のいずれかに該当する場合において第三条第一項の免許を受けていないことが判明したとき。","- 六　免許を受けてから一年以内に事業を開始せず、又は引き続いて一年以上事業を休止したとき。","- 七　第十一条第一項の規定による届出がなくて同項第三号から第五号までのいずれかに該当する事実が判明したとき。","- 八　不正の手段により第三条第一項の免許を受けたとき。","- 九　前条第二項各号のいずれかに該当し情状が特に重いとき又は同条第二項若しくは第四項の規定による業務の停止の処分に違反したとき。"],["２　国土交通大臣又は都道府県知事は、その免許を受けた宅地建物取引業者が第三条の二第一項の規定により付された条件に違反したときは、当該宅地建物取引業者の免許を取り消すことができる。"]]},"宅建業法70条":{"n":"宅地建物取引業法第七十条","c":"（監督処分の公告等）","p":[["国土交通大臣又は都道府県知事は、第六十五条第二項若しくは第四項、第六十六条又は第六十七条の二第一項若しくは第二項の規定による処分をしたときは、国土交通省令の定めるところにより、その旨を公告しなければならない。"],["２　国土交通大臣は、第六十五条第一項若しくは第二項又は第六十七条の二第一項若しくは第二項の規定による処分をした場合には、遅滞なく、当該処分の年月日及び内容（同条第一項又は第二項の規定による処分をした場合にあつては、その旨）を、当該宅地建物取引業者が国土交通大臣の免許を受けたものであるときはその主たる事務所の所在地を管轄する都道府県知事に、当該宅地建物取引業者が都道府県知事の免許を受けたものであるときは当該都道府県知事に、それぞれ通知しなければならない。"],["３　都道府県知事は、第六十五条第三項又は第四項の規定による処分をしたときは、遅滞なく、当該処分の年月日及び内容を、当該宅地建物取引業者が国土交通大臣の免許を受けたものであるときは国土交通大臣に報告し、当該宅地建物取引業者が他の都道府県知事の免許を受けたものであるときは当該他の都道府県知事に通知しなければならない。"],["４　国土交通大臣は、前項の規定による報告を受けたときは、遅滞なく、当該処分の年月日及び内容を当該宅地建物取引業者の主たる事務所の所在地を管轄する都道府県知事（当該報告をした都道府県知事を除く。）に通知しなければならない。"],["５　都道府県知事は、第六十八条第三項又は第四項の規定による処分をしたときは、遅滞なく、その旨を当該宅地建物取引士の登録をしている都道府県知事に通知しなければならない。"]]},"住宅瑕疵担保履行法3条":{"n":"特定住宅瑕疵担保責任の履行の確保等に関する法律第三条","c":"（住宅建設瑕疵担保保証金の供託等）","p":[["建設業者は、毎年、基準日（三月三十一日をいう。以下同じ。）から三週間を経過する日までの間において、当該基準日前十年間に住宅を新築する建設工事の請負契約に基づき発注者に引き渡した新築住宅について、当該発注者に対する特定住宅建設瑕疵担保責任の履行を確保するため、住宅建設瑕疵担保保証金の供託をしていなければならない。"],["２　前項の住宅建設瑕疵担保保証金の額は、当該基準日における同項の新築住宅（当該建設業者が第十七条第一項に規定する住宅瑕疵担保責任保険法人（以下この章及び次章において単に「住宅瑕疵担保責任保険法人」という。）と住宅建設瑕疵担保責任保険契約を締結し、当該発注者に、保険証券又はこれに代わるべき書面を交付し、又はこれらに記載すべき事項を記録した電磁的記録（電磁的方式（電子的方式、磁気的方式その他人の知覚によっては認識することができない方式をいう。）で作られる記録をいう。第十一条第二項において同じ。）を提供した場合における当該住宅建設瑕疵担保責任保険契約に係る新築住宅を除く。以下この条において「建設新築住宅」という。）の合計戸数の別表の上欄に掲げる区分に応じ、それぞれ同表の下欄に掲げる金額の範囲内で、建設新築住宅の合計戸数を基礎として、新築住宅に住宅品質確保法第九十四条第一項に規定する瑕疵があった場合に生ずる損害の状況を勘案して政令で定めるところにより算定する額（以下この章において「基準額」という。）以上の額とする。"],["３　前項の建設新築住宅の合計戸数の算定に当たっては、建設新築住宅のうち、その床面積の合計が政令で定める面積以下のものは、その二戸をもって一戸とする。"],["４　前項に定めるもののほか、住宅を新築する建設工事の発注者と二以上の建設業者との間で締結された請負契約であって、建設業法第十九条第一項の規定により特定住宅建設瑕疵担保責任の履行に係る当該建設業者それぞれの負担の割合が記載された書面が相互に交付されたものに係る建設新築住宅その他の政令で定める建設新築住宅については、政令で、第二項の建設新築住宅の合計戸数の算定の特例を定めることができる。"],["５　第一項の住宅建設瑕疵担保保証金は、国土交通省令で定めるところにより、国債証券、地方債証券その他の国土交通省令で定める有価証券（社債、株式等の振替に関する法律（平成十三年法律第七十五号）第二百七十八条第一項に規定する振替債を含む。第八条第二項及び第十一条第五項において同じ。）をもって、これに充てることができる。"],["６　第一項の規定による住宅建設瑕疵担保保証金の供託は、当該建設業者の主たる事務所の最寄りの供託所にするものとする。"]]},"住宅瑕疵担保履行法11条":{"n":"特定住宅瑕疵担保責任の履行の確保等に関する法律第十一条","c":"（住宅販売瑕疵担保保証金の供託等）","p":[["宅地建物取引業者は、毎年、基準日から三週間を経過する日までの間において、当該基準日前十年間に自ら売主となる売買契約に基づき買主に引き渡した新築住宅について、当該買主に対する特定住宅販売瑕疵担保責任の履行を確保するため、住宅販売瑕疵担保保証金の供託をしていなければならない。"],["２　前項の住宅販売瑕疵担保保証金の額は、当該基準日における同項の新築住宅（当該宅地建物取引業者が住宅瑕疵担保責任保険法人と住宅販売瑕疵担保責任保険契約を締結し、当該買主に、保険証券又はこれに代わるべき書面を交付し、又はこれらに記載すべき事項を記録した電磁的記録を提供した場合における当該住宅販売瑕疵担保責任保険契約に係る新築住宅を除く。以下この条において「販売新築住宅」という。）の合計戸数の別表の上欄に掲げる区分に応じ、それぞれ同表の下欄に掲げる金額の範囲内で、販売新築住宅の合計戸数を基礎として、新築住宅に住宅品質確保法第九十五条第一項に規定する瑕疵があった場合に生ずる損害の状況を勘案して政令で定めるところにより算定する額（第十三条において「基準額」という。）以上の額とする。"],["３　前項の販売新築住宅の合計戸数の算定に当たっては、販売新築住宅のうち、その床面積の合計が政令で定める面積以下のものは、その二戸をもって一戸とする。"],["４　前項に定めるもののほか、新築住宅の買主と二以上の自ら売主となる宅地建物取引業者との間で締結された売買契約であって、宅地建物取引業法第三十七条第一項の規定により当該宅地建物取引業者が特定住宅販売瑕疵担保責任の履行に係る当該宅地建物取引業者それぞれの負担の割合が記載された書面を当該新築住宅の買主に交付したものに係る販売新築住宅その他の政令で定める販売新築住宅については、政令で、第二項の販売新築住宅の合計戸数の算定の特例を定めることができる。"],["５　第一項の住宅販売瑕疵担保保証金は、国土交通省令で定めるところにより、国債証券、地方債証券その他の国土交通省令で定める有価証券をもって、これに充てることができる。"],["６　第一項の規定による住宅販売瑕疵担保保証金の供託は、当該宅地建物取引業者の主たる事務所の最寄りの供託所にするものとする。"]]},"住宅瑕疵担保履行法13条":{"n":"特定住宅瑕疵担保責任の履行の確保等に関する法律第十三条","c":"（自ら売主となる新築住宅の売買契約の新たな締結の制限）","p":[["第十一条第一項の新築住宅を引き渡した宅地建物取引業者は、同項の規定による供託をし、かつ、前条第一項の規定による届出をしなければ、当該基準日の翌日から起算して五十日を経過した日以後においては、新たに自ら売主となる新築住宅の売買契約を締結してはならない。ただし、当該基準日後に当該基準日に係る住宅販売瑕疵担保保証金の基準額に不足する額の供託をし、かつ、その供託について、国土交通省令で定めるところにより、その宅地建物取引業法第三条第一項の免許を受けた国土交通大臣又は都道府県知事の確認を受けたときは、その確認を受けた日以後においては、この限りでない。"]]},"住宅瑕疵担保履行法15条":{"n":"特定住宅瑕疵担保責任の履行の確保等に関する法律第十五条","c":"（宅地建物取引業者による供託所の所在地等に関する説明）","p":[["供託宅地建物取引業者は、自ら売主となる新築住宅の買主に対し、当該新築住宅の売買契約を締結するまでに、その住宅販売瑕疵担保保証金の供託をしている供託所の所在地その他住宅販売瑕疵担保保証金に関し国土交通省令で定める事項について、これらの事項を記載した書面を交付して説明しなければならない。"],["２　第十条第二項の規定は、前項の規定による書面の交付について準用する。"]]},"宅建業法施行令1条":{"n":"宅地建物取引業法施行令第一条","c":"（公共施設）","p":[["宅地建物取引業法（以下「法」という。）第二条第一号の政令で定める公共の用に供する施設は、広場及び水路とする。"]]},"住宅金融支援機構法13条":{"n":"独立行政法人住宅金融支援機構法第十三条","c":"（業務の範囲）","p":[["機構は、第四条の目的を達成するため、次の業務を行う。","- 一　住宅の建設若しくは購入又は改良（高齢者その他の居住の安定の確保を図ることが特に必要と認められる者として主務省令で定める者が居住性能又は居住環境の確保又は向上を主たる目的として行うものに限る。以下この号において同じ。）に必要な資金（当該住宅の建設若しくは購入又は改良に付随する行為で政令で定めるものに必要な資金を含む。）の貸付けに係る主務省令で定める金融機関の貸付債権の譲受けを行うこと。","- 二　前号に規定する貸付債権で、その貸付債権について次に掲げる行為を予定した貸付けに係るもの（以下「特定貸付債権」という。）のうち、住宅融資保険法（昭和三十年法律第六十三号）第三条に規定する保険関係が成立した貸付けに係るもの（その信託の受益権を含む。）を担保とする債券その他これに準ずるものとして主務省令で定める有価証券に係る債務の保証（以下「特定債務保証」という。）を行うこと。","-- イ　信託法（平成十八年法律第百八号）第三条第一号に掲げる方法（信託会社又は金融機関の信託業務の兼営等に関する法律（昭和十八年法律第四十三号）第一条第一項の認可を受けた金融機関との間で同号に規定する信託契約を締結するものに限る。第二十三条第一項において同じ。）又は信託法第三条第三号に掲げる方法による信託（以下「特定信託」と総称する。）をし、当該信託の受益権を譲渡すること。","-- ロ　資産の流動化に関する法律（平成十年法律第百五号）第二条第三項に規定する特定目的会社（以下「特定目的会社」という。）に譲渡すること。","-- ハ　その他イ又はロに類するものとして主務省令で定める行為","- 三　住宅融資保険法による保険を行うこと。","- 四　住宅の建設、購入、改良若しくは移転（以下この号において「建設等」という。）をしようとする者又は住宅の建設等に関する事業を行う者に対し、必要な資金の調達又は良質な住宅の設計若しくは建設等に関する情報の提供、相談その他の援助を行うこと。","- 五　災害復興建築物の建設若しくは購入又は被災建築物の補修に必要な資金（当該災害復興建築物の建設若しくは購入又は当該被災建築物の補修に付随する行為で政令で定めるものに必要な資金を含む。）の貸付けを行うこと。","- 六　災害予防代替建築物の建設若しくは購入若しくは災害予防移転建築物の移転に必要な資金（当該災害予防代替建築物の建設若しくは購入又は当該災害予防移転建築物の移転に付随する行為で政令で定めるものに必要な資金を含む。）、災害予防関連工事に必要な資金又は地震に対する安全性の向上を主たる目的とする住宅の改良に必要な資金の貸付けを行うこと。","- 七　合理的土地利用建築物の建設若しくは合理的土地利用建築物で人の居住の用その他その本来の用途に供したことのないものの購入に必要な資金（当該合理的土地利用建築物の建設又は購入に付随する行為で政令で定めるものに必要な資金を含む。）又はマンションの共用部分の改良に必要な資金の貸付けを行うこと。","- 八　マンションの更新（マンションの再生等の円滑化に関する法律（平成十四年法律第七十八号）第二条第一項第三号に規定するマンションの更新をいう。以下この号において同じ。）又はマンションの更新がされた後のマンションで当該マンションの更新がされた後に人の居住の用その他その本来の用途に供したことのないものの購入に必要な資金（当該マンションの更新又はマンションの更新がされた後のマンションの購入に付随する行為で政令で定めるものに必要な資金を含む。）の貸付けを行うこと。","- 九　子どもを育成する家庭若しくは高齢者の家庭（単身の世帯を含む。次号において同じ。）に適した良好な居住性能及び居住環境を有する賃貸住宅若しくは賃貸の用に供する住宅部分が大部分を占める建築物の建設に必要な資金（当該賃貸住宅又は当該建築物の建設に付随する行為で政令で定めるものに必要な資金を含む。）又は当該賃貸住宅の改良（当該賃貸住宅とすることを主たる目的とする人の居住の用その他その本来の用途に供したことのある建築物の改良を含む。）に必要な資金の貸付けを行うこと。","- 十　高齢者の家庭に適した良好な居住性能及び居住環境を有する住宅とすることを主たる目的とする住宅の改良（高齢者が自ら居住する住宅について行うものに限る。）に必要な資金又は高齢者の居住の安定確保に関する法律（平成十三年法律第二十六号）第七条第五項に規定する登録住宅（賃貸住宅であるものに限る。）とすることを主たる目的とする人の居住の用に供したことのある住宅の購入に必要な資金（当該住宅の購入に付随する行為で政令で定めるものに必要な資金を含む。）の貸付けを行うこと。","- 十一　住宅のエネルギー消費性能（建築物のエネルギー消費性能の向上等に関する法律（平成二十七年法律第五十三号）第二条第一項第二号に規定するエネルギー消費性能をいう。）の向上を主たる目的とする住宅の改良に必要な資金の貸付けを行うこと。","- 十二　機構が第一号の業務により譲り受ける貸付債権に係る貸付けを受けた者若しくは第五号から第七号まで若しくは前号若しくは次項第五号若しくは第九号の規定による貸付けを受けた者とあらかじめ契約を締結して、その者が死亡した場合（重度障害の状態となった場合を含む。以下同じ。）に支払われる生命保険の保険金若しくは生命共済の共済金（以下「保険金等」という。）を当該貸付けに係る債務の弁済に充当し、又は沖縄振興開発金融公庫法（昭和四十七年法律第三十一号）第十九条第一項第三号の規定による貸付けを受けた者とあらかじめ契約を締結して、その者が死亡した場合に支払われる保険金等により当該貸付けに係る債務を弁済すること。","- 十三　前各号の業務に附帯する業務を行うこと。"],["２　機構は、前項に規定する業務のほか、次の業務を行う。","- 一　高齢者の居住の安定確保に関する法律第二十二条第一項の規定により住宅融資保険法第四条の保険関係が成立するとみなされる貸付けについて同法の規定による保険を行うこと。","- 二　高齢者の居住の安定確保に関する法律第二十二条第二項の規定による貸付債権の譲受け及び債務の保証を行うこと。","- 三　海外社会資本事業への我が国事業者の参入の促進に関する法律（平成三十年法律第四十号）第七条の規定による調査、研究及び情報の提供を行うこと。","- 四　空家等対策の推進に関する特別措置法（平成二十六年法律第百二十七号）第二十一条の規定による情報の提供その他の援助を行うこと。","- 五　阪神・淡路大震災に対処するための特別の財政援助及び助成に関する法律（平成七年法律第十六号）第七十七条、東日本大震災に対処するための特別の財政援助及び助成に関する法律（平成二十三年法律第四十号）第百三十八条又は福島復興再生特別措置法（平成二十四年法律第二十五号）第三十一条若しくは第四十三条の規定による貸付けを行うこと。","- 六　マンションの再生等の円滑化に関する法律第百六十三条の六十一の規定による貸付けを行うこと。","- 七　住宅確保要配慮者に対する賃貸住宅の供給の促進に関する法律（平成十九年法律第百十二号）第十九条（同法第五十二条において準用する場合を含む。）の規定による貸付けを行うこと。","- 八　住宅確保要配慮者に対する賃貸住宅の供給の促進に関する法律第二十条第一項又は第八十条第一項の規定による保険を行うこと。","- 九　勤労者財産形成促進法（昭和四十六年法律第九十二号）第十条第一項の規定による貸付けを行うこと。","- 十　中小企業退職金共済法（昭和三十四年法律第百六十号）第七十二条第二項の規定による委託に基づき、勤労者財産形成促進法第九条第一項に規定する業務の一部を行うこと。","- 十一　前各号の業務に附帯する業務を行うこと。"]]},"景品表示法2条":{"n":"不当景品類及び不当表示防止法第二条","c":"（定義）","p":[["この法律で「事業者」とは、商業、工業、金融業その他の事業を行う者をいい、当該事業を行う者の利益のためにする行為を行う役員、従業員、代理人その他の者は、次項及び第三十六条の規定の適用については、これを当該事業者とみなす。"],["２　この法律で「事業者団体」とは、事業者としての共通の利益を増進することを主たる目的とする二以上の事業者の結合体又はその連合体をいい、次に掲げる形態のものを含む。ただし、二以上の事業者の結合体又はその連合体であつて、資本又は構成事業者（事業者団体の構成員である事業者をいう。第五十一条において同じ。）の出資を有し、営利を目的として商業、工業、金融業その他の事業を営むことを主たる目的とし、かつ、現にその事業を営んでいるものを含まないものとする。","- 一　二以上の事業者が社員（社員に準ずるものを含む。）である一般社団法人その他の社団","- 二　二以上の事業者が理事又は管理人の任免、業務の執行又はその存立を支配している一般財団法人その他の財団","- 三　二以上の事業者を組合員とする組合又は契約による二以上の事業者の結合体"],["３　この法律で「景品類」とは、顧客を誘引するための手段として、その方法が直接的であるか間接的であるかを問わず、くじの方法によるかどうかを問わず、事業者が自己の供給する商品又は役務の取引（不動産に関する取引を含む。以下同じ。）に付随して相手方に提供する物品、金銭その他の経済上の利益であつて、内閣総理大臣が指定するものをいう。"],["４　この法律で「表示」とは、顧客を誘引するための手段として、事業者が自己の供給する商品又は役務の内容又は取引条件その他これらの取引に関する事項について行う広告その他の表示であつて、内閣総理大臣が指定するものをいう。"]]},"景品表示法5条":{"n":"不当景品類及び不当表示防止法第五条","c":"（不当な表示の禁止）","p":[["事業者は、自己の供給する商品又は役務の取引について、次の各号のいずれかに該当する表示をしてはならない。","- 一　商品又は役務の品質、規格その他の内容について、一般消費者に対し、実際のものよりも著しく優良であると示し、又は事実に相違して当該事業者と同種若しくは類似の商品若しくは役務を供給している他の事業者に係るものよりも著しく優良であると示す表示であつて、不当に顧客を誘引し、一般消費者による自主的かつ合理的な選択を阻害するおそれがあると認められるもの","- 二　商品又は役務の価格その他の取引条件について、実際のもの又は当該事業者と同種若しくは類似の商品若しくは役務を供給している他の事業者に係るものよりも取引の相手方に著しく有利であると一般消費者に誤認される表示であつて、不当に顧客を誘引し、一般消費者による自主的かつ合理的な選択を阻害するおそれがあると認められるもの","- 三　前二号に掲げるもののほか、商品又は役務の取引に関する事項について一般消費者に誤認されるおそれがある表示であつて、不当に顧客を誘引し、一般消費者による自主的かつ合理的な選択を阻害するおそれがあると認めて内閣総理大臣が指定するもの"]]},"景品表示法7条":{"n":"不当景品類及び不当表示防止法第七条","c":"","p":[["内閣総理大臣は、第四条の規定による制限若しくは禁止又は第五条の規定に違反する行為があるときは、当該事業者に対し、その行為の差止め若しくはその行為が再び行われることを防止するために必要な事項又はこれらの実施に関連する公示その他必要な事項を命ずることができる。その命令は、当該違反行為が既になくなつている場合においても、次に掲げる者に対し、することができる。","- 一　当該違反行為をした事業者","- 二　当該違反行為をした事業者が法人である場合において、当該法人が合併により消滅したときにおける合併後存続し、又は合併により設立された法人","- 三　当該違反行為をした事業者が法人である場合において、当該法人から分割により当該違反行為に係る事業の全部又は一部を承継した法人","- 四　当該違反行為をした事業者から当該違反行為に係る事業の全部又は一部を譲り受けた事業者"],["２　内閣総理大臣は、前項の規定による命令（以下「措置命令」という。）に関し、事業者がした表示が第五条第一号に該当するか否かを判断するため必要があると認めるときは、当該表示をした事業者に対し、期間を定めて、当該表示の裏付けとなる合理的な根拠を示す資料の提出を求めることができる。この場合において、当該事業者が当該資料を提出しないときは、同項の規定の適用については、当該表示は同号に該当する表示とみなす。"],["３　措置命令は、措置命令書の謄本を送達して行う。"]]}});
+Object.assign(GY_JB, {"tk-1":[["民法95条",[[3,[]]]],["民法96条",[[2,[]],[3,[]]]]],"tk-2":[["民法114条",[]],["民法115条",[]],["民法116条",[]],["民法117条",[[2,[2]]]]],"tk-3":[["民法147条",[[1,[]],[2,[]]]],["民法152条",[[1,[]]]],["民法162条",[]],["民法166条",[[1,[]]]]],"tk-4":[["民法177条",[]],["民法896条",[]],["民法899条の2",[[1,[]]]]],"tk-5":[["民法304条",[[1,[]]]],["民法370条",[]],["民法372条",[]],["民法388条",[]],["民法389条",[[1,[]]]]],"tk-6":[["民法446条",[[2,[]],[3,[]]]],["民法452条",[]],["民法454条",[]],["民法465条の2",[[2,[]]]]],"tk-7":[["民法562条",[[1,[]]]],["民法563条",[[1,[]],[2,[]],[3,[]]]],["民法566条",[]]],"tk-8":[["民法607条の2",[]],["民法613条",[[3,[]]]],["民法622条の2",[]]],"tk-9":[["借地借家法3条",[]],["借地借家法4条",[]],["借地借家法10条",[[1,[]]]],["借地借家法22条",[[1,[]]]]],"tk-10":[["借地借家法26条",[[1,[]]]],["借地借家法28条",[]],["借地借家法29条",[[1,[]]]],["借地借家法31条",[]]],"tk-11":[["区分所有法31条",[[1,[]]]],["区分所有法34条",[[2,[]]]],["区分所有法35条",[[1,[]]]],["区分所有法62条",[[1,[]],[2,[]]]]],"tk-12":[["不動産登記法47条",[[1,[]]]],["不動産登記法60条",[]],["不動産登記法76条の2",[[1,[]]]],["不動産登記法106条",[]]],"tk-13":[["民法887条",[[2,[]]]],["民法900条",[[1,[1,4]]]],["民法915条",[[1,[]]]],["民法939条",[]],["民法1042条",[]]],"tk-14":[["民法251条",[[1,[]]]],["民法252条",[[1,[]],[4,[3]],[5,[]]]]],"tk-15":[["都市計画法29条",[[1,[1,2,3]],[2,[]]]]],"tk-16":[["都市計画法7条",[[1,[]],[2,[]],[3,[]]]],["都市計画法13条",[[1,[7]]]]],"tk-17":[["建築基準法41条の2",[]],["建築基準法43条",[[1,[]],[3,[]]]]],"tk-18":[["建築基準法53条",[[1,[4]],[3,[]],[6,[]]]]],"tk-19":[["国土利用計画法23条",[[1,[]],[2,[1,3]]]],["国土利用計画法24条",[[1,[]]]]],"tk-20":[["農地法3条",[[6,[]]]],["農地法3条の3",[]],["農地法4条",[[1,[7]]]]],"tk-21":[["盛土規制法10条",[[1,[]]]],["盛土規制法12条",[[1,[]]]],["盛土規制法17条",[[1,[]]]],["盛土規制法21条",[[1,[]]]]],"tk-22":[["土地区画整理法76条",[[1,[]]]],["土地区画整理法99条",[[1,[]]]],["土地区画整理法103条",[[2,[]]]],["土地区画整理法104条",[[1,[]]]]],"tk-23":[["地方税法343条",[[1,[]]]],["地方税法349条の3の2",[[2,[]]]],["地方税法350条",[[1,[]]]],["地方税法351条",[]],["地方税法359条",[]]],"tk-24":[["地方税法73条の2",[[1,[]],[3,[]]]],["地方税法73条の7",[]]],"tk-25":[["地価公示法2条",[[1,[]],[2,[]]]],["地価公示法3条",[]]],"tk-26":[["宅建業法2条",[[1,[2]]]],["宅建業法3条",[[1,[]]]],["宅建業法77条",[]],["宅建業法78条",[[1,[]]]]],"tk-27":[["宅建業法5条",[[1,[1,5,6,12]]]]],"tk-28":[["宅建業法3条",[[2,[]]]],["宅建業法9条",[]],["宅建業法11条",[[1,[1]]]],["宅建業法施行規則3条",[]]],"tk-29":[["宅建業法19条の2",[]],["宅建業法22条の2",[[3,[]],[7,[]]]],["宅建業法35条",[[4,[]]]]],"tk-30":[["宅建業法25条",[[1,[]],[2,[]],[5,[]]]],["宅建業法27条",[[1,[]]]],["宅建業法施行令2条の4",[]]],"tk-31":[["宅建業法64条の9",[[1,[1]]]],["宅建業法64条の10",[[2,[]]]],["宅建業法64条の15",[]],["宅建業法施行令7条",[]]],"tk-32":[["宅建業法31条の3",[[1,[]]]],["宅建業法48条",[[2,[]]]],["宅建業法49条",[]],["宅建業法施行規則15条の5の3",[]],["宅建業法施行規則17条の2",[[4,[]]]],["宅建業法施行規則18条",[[3,[]]]]],"tk-33":[["宅建業法32条",[]],["宅建業法33条",[]],["宅建業法34条",[]],["宅建業法36条",[]]],"tk-34":[["宅建業法34条の2",[[3,[]],[4,[]],[5,[]],[9,[]],[10,[]]]],["宅建業法施行規則15条の10",[]]],"tk-35":[["宅建業法35条",[[1,[3]],[4,[]],[5,[]],[6,[]]]]],"tk-36":[["宅建業法37条",[[1,[5]],[2,[1]],[3,[]]]],["宅建業法78条",[[2,[]]]]],"tk-37":[["宅建業法37条の2",[[1,[1,2]],[2,[]]]],["宅建業法施行規則16条の5",[[1,[2]]]]],"tk-38":[["宅建業法38条",[]],["宅建業法39条",[]]],"tk-39":[["宅建業法41条",[[1,[]]]],["宅建業法41条の2",[[1,[]]]],["宅建業法施行令3条の5",[]]],"tk-40":[["宅建業法33条の2",[]],["宅建業法40条",[]]],"tk-41":[["宅建業法46条",[]]],"tk-42":[["宅建業法45条",[]],["宅建業法47条",[[1,[3]]]]],"tk-43":[["宅建業法65条",[[2,[]],[3,[]],[4,[]]]],["宅建業法66条",[[1,[]]]],["宅建業法70条",[[1,[]]]]],"tk-44":[["住宅瑕疵担保履行法3条",[[1,[]]]],["住宅瑕疵担保履行法11条",[[6,[]]]],["住宅瑕疵担保履行法13条",[]],["住宅瑕疵担保履行法15条",[[1,[]]]]],"tk-45":[["宅建業法2条",[[1,[1]]]],["宅建業法施行令1条",[]]],"tk-46":[["住宅金融支援機構法13条",[[1,[1,5,7]]]]],"tk-47":[["景品表示法2条",[[3,[]]]],["景品表示法5条",[[1,[1,2]]]],["景品表示法7条",[[1,[]]]]],"tk-48":[],"tk-49":[],"tk-50":[]});
 
 // keyboard: 1-5 / o x to answer, Enter for next
 document.addEventListener("keydown", e => {
