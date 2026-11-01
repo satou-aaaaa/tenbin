@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611010118";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611010119";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -6141,7 +6141,7 @@ async function keySample(prompt, { signal, onText } = {}) {
   let res;
   try {
     res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST", signal,
+      method: "POST", signal, redirect: "error", // キーをほかの場所へ転送させない
       headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
       body: JSON.stringify({ model: aiModel(), max_tokens: 4000, stream: true, system: AI_SYSTEM, messages: [{ role: "user", content: prompt }] }),
     });
@@ -6156,7 +6156,7 @@ async function keySample(prompt, { signal, onText } = {}) {
   }
   // ストリーミング（SSE）: content_block_delta の text_delta をつなぎ、message_delta の stop_reason を見る
   const rd = res.body.getReader(), dec = new TextDecoder();
-  let buf = "", text = "", stop = "";
+  let buf = "", text = "", stop = "", ended = false;
   try {
     for (;;) {
       const { done, value } = await rd.read();
@@ -6170,10 +6170,12 @@ async function keySample(prompt, { signal, onText } = {}) {
         let ev; try { ev = JSON.parse(data); } catch { continue; }
         if (ev.type === "content_block_delta" && ev.delta && ev.delta.type === "text_delta") { text += ev.delta.text; onText && onText({ text }); }
         else if (ev.type === "message_delta" && ev.delta) stop = ev.delta.stop_reason || stop;
+        else if (ev.type === "message_stop") ended = true;
         else if (ev.type === "error") throw aiErr(ev.error && ev.error.type === "overloaded_error" ? "overloaded" : "api_error");
       }
     }
   } catch (e) { if (e && e.code) throw e; throw aiErr(signal && signal.aborted ? "cancelled" : "network", text); }
+  if (!ended) throw aiErr(signal && signal.aborted ? "cancelled" : "network", text); // 最後まで届かなかった応答は使わない
   if (stop === "refusal") throw aiErr("refused");
   if (!text) throw aiErr("empty_completion");
   return { text, truncated: stop === "max_tokens" };
@@ -6198,7 +6200,7 @@ function keyPanel(el, onChange) {
   const caution = `<details><summary>注意すること（かならず読んでください）</summary><ul class="menu">
         <li><b>APIキーはお金を使える「合いことば」です。</b>パスワードと同じように、友だちに教えたり、SNSにのせたり、画面の写真にうつしたりしないでください。</li>
         <li><b>添削するたびにお金がかかります</b>（1回あたり数円ほど）。お金はキーを作った人のAnthropicのアカウントからはらわれます。このアプリの作者にははらわれません。</li>
-        <li>みんなで使う端末（学校・図書館など）では「この端末に覚えておく」のチェックを外し、使い終わったら「キーを消す」をおしてください。</li>
+        <li>みんなで使う端末（学校・図書館など）では「この端末に覚えておく」にチェックを入れず、使い終わったら「キーを消す」をおしてください。</li>
         <li>キーを人に知られたかもしれないときは、すぐに Claude Console の API Keys で、そのキーを消して（Delete）ください。</li>
         <li>書いた答案は、添削のために Anthropic（AIの会社）へ送られます。答案には、自分や友だちの名前・住所・学校名などを書かないでください（<a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noopener noreferrer">プライバシーポリシー</a>）。</li>
         <li>添削をしているのは人ではなくAIです。まちがえることもあるので、模範答案と採点の観点でも確かめてください。</li>
@@ -6220,7 +6222,7 @@ function keyPanel(el, onChange) {
       </ol><p class="note">出典：Anthropic「<a href="https://platform.claude.com/docs/en/get-api-key" target="_blank" rel="noopener noreferrer">Get an API key</a>」「<a href="https://support.claude.com/en/articles/9767949-api-key-best-practices-keeping-your-keys-safe-and-secure" target="_blank" rel="noopener noreferrer">API key best practices</a>」</p></details>
       ${caution}
       <label>APIキー<input type="password" id="aiKeyIn" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…"></label>
-      <label class="chk"><input type="checkbox" id="aiKeyKeep" checked> この端末に覚えておく（みんなで使う端末では外す）</label>
+      <label class="chk"><input type="checkbox" id="aiKeyKeep"> この端末に覚えておく（自分だけが使う端末のときだけ）</label>
       <label class="chk"><input type="checkbox" id="aiKeyOk"> 18さい以上のキーの持ち主（または保護者）が、上の「注意すること」を読んで入れています</label>
       <label>使うモデル<select id="aiModel">${opts}</select></label>
       <div class="row" style="justify-content:flex-start;margin:0"><button class="btn-gold" id="aiKeySave">キーを使う</button></div>
