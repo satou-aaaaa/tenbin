@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611011001";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611011042";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -7010,12 +7010,13 @@ function gyExamBind() {
   showGyosei = before(showGyosei, () => touch("gyosei"));
   showXm = before(showXm, k => touch("xm:" + k));
   let ronbunBack = false;  // 論文の画面から答案を開いたら、もどる先を論文の画面にする
+  window.__tenbinClearBack = () => { ronbunBack = false; };  // スマホの「戻る」で戻ったら、この「もどる先」は使い終わり（7）
   const daysTxt = d => d == null || d < 0 ? "" : d ? `<span class="nw">・本試験まで<b class="tnum">${d}</b>日</span>` : `<span class="nw">・今日が本試験</span>`;
   const examRows = () => {
     const live = x => x && x.step !== "done";
     const rows = [];
     const dueR = probs().filter(c => isDue("e:" + c.id)).length + dueNorms().length;
-    rows.push({ key: "ronbun", html: `<button class="chapter gyentry exrow" id="goRonbun"><b class="pixel" aria-hidden="true">論</b><span><span class="ch-title">司法試験・論文式</span><span class="ch-sub tnum">論文演習${probs().length}問・規範カード・知識ドリル</span></span><span class="ch-state">${dueR ? `<b class="due">復習${dueR}</b>` : "▶"}</span></button>`, go: () => showRonbun() });
+    rows.push({ key: "ronbun", html: `<button class="chapter gyentry exrow" id="goRonbun"><b class="pixel" aria-hidden="true">論</b><span><span class="ch-title">司法試験・論文式</span><span class="ch-sub tnum">論文演習${probs().length}問・規範カード・知識ドリル</span></span><span class="ch-state">${dueR ? `<b class="due">復習${dueR}</b>` : "▶"}</span></button>`, go: () => window.showRonbun() });
     const gd = gyDue().length, gx = S.gyExam;
     rows.push({ key: "gyosei", html: `<button class="chapter gyentry exrow" id="goGyosei"><b class="pixel" aria-hidden="true">行</b><span><span class="ch-title">行政書士試験</span><span class="ch-sub tnum">5肢択一・多肢・記述${GY_ALL.length}問${daysTxt(gyDaysLeft())}</span>${live(gx) ? `<span class="ch-sub gyon tnum">本番形式模試の途中（解答 ${gx.ids.filter(d => gyDone(gx, d)).length}/${gx.ids.length}）</span>` : ""}</span><span class="ch-state">${gd ? `<b class="due">復習${gd}</b>` : "▶"}</span></button>`, go: () => showGyosei() });
     XM_LIST.forEach(c => { const due = xmDue(c).length, x = xmSt(c.key).cur;
@@ -7029,7 +7030,7 @@ function gyExamBind() {
     const out = [h]; for (let n = h.nextElementSibling; n && !n.matches("details.others, .row"); n = n.nextElementSibling) out.push(n); return out; };
   const showHome = showOffice;
   showOffice = function (...a) {
-    if (ronbunBack) { ronbunBack = false; return showRonbun(); }
+    if (ronbunBack) { ronbunBack = false; return window.showRonbun(); }
     const r = showHome.apply(this, a);
     try {
       const tiles = $app.querySelector("nav.tiles"), today = $app.querySelector("section.today");
@@ -7041,7 +7042,8 @@ function gyExamBind() {
     } catch (e) { console.warn("gyosei_ux home", e); }
     return r;
   };
-  // 司法試験・論文式の画面：論文演習・規範カード・知識ドリルの入口と、科目ごとの問題
+  // 司法試験・論文式の画面：論文演習・規範カード・知識ドリルの入口と、科目ごとの問題（「戻る」の記録のため window から呼ぶ）
+  window.showRonbun = showRonbun;
   function showRonbun() {
     showHome();
     const keep = [$app.querySelector("nav.tiles"), ...ronbunNodes()];
@@ -7054,7 +7056,7 @@ function gyExamBind() {
     document.getElementById("home").onclick = () => { ronbunBack = false; showOffice(); };
     toTop();
   }
-  window.tbShowRonbun = showRonbun;  // 予備試験の画面から「司法試験・論文式」の画面を開く（yobi_ronbun.js）
+  window.tbShowRonbun = (...a) => window.showRonbun(...a);  // 予備試験の画面から「司法試験・論文式」の画面を開く（yobi_ronbun.js）。「戻る」の記録に残すため window から
 
   // 4. 模試と見直しのキー操作：1〜5で肢を選ぶ、← → で前後の問題へ
   document.addEventListener("keydown", e => {
@@ -7066,29 +7068,63 @@ function gyExamBind() {
   });
 })();
 
-// ===== 7. スマホの「戻る」（端からの左右スワイプ・戻るボタン）をアプリ内の「もどる」にする（2026-11-01 satou「左にスワイプするとアプリが閉じてしまう」） =====
-// このアプリは画面を書きかえるだけで、ブラウザの履歴に何も積んでいなかった。そのため「戻る」で履歴が尽きてアプリが閉じた。
-// 目次（ホーム）以外の画面では履歴に1つ「しるし」を積み、「戻る」が来たら画面の「もどる」ボタンを押す。目次で「戻る」をするとふつうに閉じる。
+// ===== 7. スマホの「戻る」（端からの左右スワイプ・戻るボタン）を、アプリの中で「ひとつ前の画面」に戻す =====
+// 2026-11-01 satou「左にスワイプするとアプリが閉じてしまう」→ 履歴に「しるし」を積むようにした。
+// 同日 satou「戻ると別の画面に移ることがある」→ 原因は、画面の「もどる」ボタンを押していたこと（ボタンの行き先は通ってきた順と違うことがある。
+//   例：教科書から解いた問題で「やめる」は行政書士の画面へ行く）。今は、通ってきた画面（SCREENS の関数の呼び出し）を順に記録して、そこへ戻す。
+// 問題を解いている途中・模試などの記録しない画面では、後片付けのボタン（中断・やめる）を押してから、問題を始めた画面に戻す。
 (() => {
-  // 押す候補（上から順に、その画面でいちばん近い「ひとつ前」）
-  const BACK = ["#dlgClose", "#tbPrev", "#tbList", "#tbList2", "#gxNo", "#gxBack", "#gxRes", "#gxList", "#tbBack", "#gyBack", "#gxBackG", "#xmAgain", "#xmBackL", "#quit", "#home"];
-  const findBack = () => { for (const sel of BACK) { const b = document.querySelector(sel); if (b && !b.disabled && b.getClientRects().length) return b; } return null; };
+  const SCREENS = ["showOffice", "showRonbun", "showGyosei", "showTb", "showTbUnit", "showXm", "showXmList"];  // 記録する画面（新しい画面の関数を作ったらここに足す）
+  // 記録しない画面（問題を解いている途中・模試など）から出るときに押す「後片付け」のボタン（タイマーを止める・途中を保存する）
+  const EXIT = ["#gxPause", "#quit", "#gxBackG", "#xmAgain", "#gyBack"];
+  const vis = sel => { const b = document.querySelector(sel); return b && !b.disabled && b.getClientRects().length ? b : null; };
+  let stack = [], depth = 0, quiet = false, inner = null;  // stack: 通ってきた画面／quiet: 戻す途中は記録しない
+  const top = () => stack[stack.length - 1];
+  const onTop = () => !!top() && $app.firstElementChild === top().node;  // いま見えているのが記録の最後の画面か
+  const atRoot = () => stack.length === 1 && stack[0].name === "showOffice" && onTop();
+  SCREENS.forEach(name => {
+    const fn = window[name]; if (typeof fn !== "function") return;
+    window[name] = function (...a) {
+      const args = a.filter(x => !(x instanceof Event));
+      if (name === "showTbUnit" && args.length === 2) args.push(0);  // ページを省いたときは1ページ目（同じ画面かを比べるため、そろえる）
+      if (depth || quiet) { if (depth === 1 && !quiet && !inner) inner = { name, args }; depth++; try { return fn.apply(this, a); } finally { depth--; } }
+      inner = null; depth++; let r; try { r = fn.apply(this, a); } finally { depth--; }
+      // showOffice が別の画面を出したとき（答案から「目次にもどる」→ 論文の画面）は、出た画面として記録する
+      const e = name === "showOffice" && inner ? inner : { name, args }; inner = null;
+      if (e.name === "showOffice") stack = [];
+      // すでに通ってきた画面をもう一度出したときは、その画面まで戻ったことにする（同じ画面が二重に積まれないように）
+      else { const k = JSON.stringify(e.args), i = stack.findIndex(x => x.name === e.name && JSON.stringify(x.args) === k); if (i >= 0) stack.length = i; }
+      stack.push({ ...e, node: $app.firstElementChild });
+      if (stack.length > 60) stack.splice(1, stack.length - 60);
+      return r;
+    };
+  });
+  const show = e => { quiet = true; try { window[e.name](...e.args); } finally { quiet = false; } e.node = $app.firstElementChild; };
   // 再読み込みしたときは、前に積んだ「しるし」が履歴に残っていることがあるので引き継ぐ
   let armed = !!(history.state && history.state.tenbinBack), skip = false;  // armed: 履歴に「しるし」を積んであるか／skip: 自分で消した「しるし」の popstate
-  const arm = () => { if (!armed && findBack()) { try { history.pushState({ tenbinBack: 1 }, ""); armed = true; } catch {} } };
-  // 画面のボタンで目次に戻ったら、残った「しるし」を消す（目次での「戻る」1回でちゃんと閉じるように）
-  const disarm = () => { if (armed && !findBack()) { armed = false; skip = true; history.back(); } };
+  const arm = () => { if (!armed && !atRoot()) { try { history.pushState({ tenbinBack: 1 }, ""); armed = true; } catch {} } };
+  // 目次（ホーム）に戻ったら、残った「しるし」を消す（目次での「戻る」1回でちゃんと閉じるように）
+  const disarm = () => { if (armed && atRoot()) { armed = false; skip = true; history.back(); } };
+  // 答案を開いた画面へもどすための目印（論文の ronbunBack・予備試験の ybBack）。戻るで戻ったら消す。残ると次の「戻る」でも同じ画面が出る
+  const clearBack = () => { try { window.__tenbinClearBack && window.__tenbinClearBack(); } catch {} try { if (typeof ybBack !== "undefined") ybBack = false; } catch {} };
+  const goBack = () => {
+    const dlg = document.querySelector("dialog[open]");
+    if (dlg) { dlg.close(); return; }
+    clearBack();
+    if (onTop()) { if (stack.length > 1) { stack.pop(); show(top()); } return; }
+    const no = vis("#gxNo"); if (no) { no.click(); return; }  // 「やめますか？」などの確認が出ていたら閉じるだけ
+    // 記録しない画面：後片付けのボタンを押してから、問題を始めた画面（記録の最後）に戻す
+    const ex = EXIT.map(vis).find(Boolean);
+    if (ex) { quiet = true; try { ex.click(); } finally { quiet = false; } }
+    if (top()) show(top());
+  };
   window.addEventListener("popstate", () => {
     if (skip) { skip = false; return; }
-    armed = false;
-    const dlg = document.querySelector("dialog[open]");
-    if (dlg) { dlg.close(); arm(); return; }
-    const b = findBack();
-    if (b) b.click();  // 画面が変わると下の見張りが、まだ目次でなければ「しるし」を積み直す
-    arm();
+    armed = false; goBack(); arm(); disarm();
   });
   new MutationObserver(() => { arm(); disarm(); }).observe($app, { childList: true });
-  arm(); disarm();
+  window.__tenbinNav = { stack: () => stack.map(e => e.name + JSON.stringify(e.args)), onTop, atRoot };  // 検査用
+  queueMicrotask(() => { arm(); disarm(); });
 })();
 
 // ===== ほかの資格試験の対策（宅建士・司法試験の短答式・司法書士・社労士など。共通の仕組み） =====
