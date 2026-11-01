@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611011008";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611011023";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -7077,17 +7077,21 @@ function gyExamBind() {
   // 記録しない画面（問題を解いている途中・模試など）から出るときに押す「後片付け」のボタン（タイマーを止める・途中を保存する）
   const EXIT = ["#gxPause", "#quit", "#gxBackG", "#xmAgain", "#gyBack"];
   const vis = sel => { const b = document.querySelector(sel); return b && !b.disabled && b.getClientRects().length ? b : null; };
-  let stack = [], depth = 0, quiet = false;  // stack: 通ってきた画面／quiet: 戻す途中は記録しない
+  let stack = [], depth = 0, quiet = false, inner = null;  // stack: 通ってきた画面／quiet: 戻す途中は記録しない
   const top = () => stack[stack.length - 1];
   const onTop = () => !!top() && $app.firstElementChild === top().node;  // いま見えているのが記録の最後の画面か
   const atRoot = () => stack.length === 1 && stack[0].name === "showOffice" && onTop();
   SCREENS.forEach(name => {
     const fn = window[name]; if (typeof fn !== "function") return;
     window[name] = function (...a) {
-      if (depth || quiet) { depth++; try { return fn.apply(this, a); } finally { depth--; } }
-      depth++; let r; try { r = fn.apply(this, a); } finally { depth--; }
-      if (name === "showOffice") stack = [];
-      stack.push({ name, args: a.filter(x => !(x instanceof Event)), node: $app.firstElementChild });
+      const args = a.filter(x => !(x instanceof Event));
+      if (depth || quiet) { if (depth === 1 && !quiet && !inner) inner = { name, args }; depth++; try { return fn.apply(this, a); } finally { depth--; } }
+      inner = null; depth++; let r; try { r = fn.apply(this, a); } finally { depth--; }
+      // showOffice が別の画面を出したとき（答案から「目次にもどる」→ 論文の画面）は、出た画面として記録する
+      const e = name === "showOffice" && inner ? inner : { name, args }; inner = null;
+      if (e.name === "showOffice") stack = [];
+      else if (name === "showOffice") { const i = stack.map(x => x.name).lastIndexOf(e.name); if (i >= 0) stack.length = i; }
+      stack.push({ ...e, node: $app.firstElementChild });
       if (stack.length > 60) stack.splice(1, stack.length - 60);
       return r;
     };
