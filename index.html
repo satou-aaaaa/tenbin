@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611010851";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611010901";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -7069,7 +7069,8 @@ function gyExamBind() {
   // 押す候補（上から順に、その画面でいちばん近い「ひとつ前」）
   const BACK = ["#dlgClose", "#tbPrev", "#tbList", "#tbList2", "#gxNo", "#gxBack", "#gxRes", "#gxList", "#tbBack", "#gyBack", "#gxBackG", "#xmAgain", "#xmBackL", "#quit", "#home"];
   const findBack = () => { for (const sel of BACK) { const b = document.querySelector(sel); if (b && !b.disabled && b.getClientRects().length) return b; } return null; };
-  let armed = false, skip = false;  // armed: 履歴に「しるし」を積んであるか／skip: 自分で消した「しるし」の popstate
+  // 再読み込みしたときは、前に積んだ「しるし」が履歴に残っていることがあるので引き継ぐ
+  let armed = !!(history.state && history.state.tenbinBack), skip = false;  // armed: 履歴に「しるし」を積んであるか／skip: 自分で消した「しるし」の popstate
   const arm = () => { if (!armed && findBack()) { try { history.pushState({ tenbinBack: 1 }, ""); armed = true; } catch {} } };
   // 画面のボタンで目次に戻ったら、残った「しるし」を消す（目次での「戻る」1回でちゃんと閉じるように）
   const disarm = () => { if (armed && !findBack()) { armed = false; skip = true; history.back(); } };
@@ -7083,7 +7084,7 @@ function gyExamBind() {
     arm();
   });
   new MutationObserver(() => { arm(); disarm(); }).observe($app, { childList: true });
-  arm();
+  arm(); disarm();
 })();
 
 // ===== ほかの資格試験の対策（宅建士・司法試験の短答式・司法書士・社労士など。共通の仕組み） =====
