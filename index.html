@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611010139";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611010156";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -83,6 +83,26 @@ body {
 .tbbody .jobun { margin-top: 16px; }
 .tbgo .btn-gold { margin-top: 10px; }
 .tbnav button { flex: 1 1 0; min-height: 44px; }
+/* 目次：やり方3つ・科目の開け閉め（2026-11-01 見やすく） */
+.tbhow { list-style: none; margin: 0 0 8px; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; counter-reset: tbs; }
+.tbhow li { counter-increment: tbs; border: 1px solid var(--line); border-radius: 4px; padding: 6px 4px; text-align: center; font-size: 12px; color: var(--muted); line-height: 1.4; }
+.tbhow li b { display: block; color: var(--gold); font-size: 15px; }
+.tbhow li b::before { content: counter(tbs) ". "; }
+.tbprog { display: flex; align-items: center; gap: 8px; } .tbprog .mbar { flex: 1; }
+#tbNext .tbnt { display: block; font-size: 13px; font-weight: 400; margin-top: 2px; }
+.tbsubs details.tbsub > summary { min-height: 48px; }
+.tbsubs details.tbsub > summary .kcount { width: auto; }
+/* 単元：ページの印・ページ番号 */
+.tbsteps { display: flex; gap: 4px; margin: 0 0 6px; }
+.tbstep { flex: 1; min-height: 0; height: 22px; padding: 0; border: 0; background: transparent; position: relative; cursor: pointer; }
+.tbstep::after { content: ""; position: absolute; left: 0; right: 0; top: 8px; height: 6px; border-radius: 3px; background: var(--line); }
+.tbstep.done::after { background: var(--hit); } .tbstep.on::after { background: var(--gold); }
+.tbpgno { margin: 0 0 8px; font-size: 13px; color: var(--muted); } .tbpgno span { margin-left: 8px; color: var(--chalk); }
+.tbbody .tbh:first-child { margin-top: 0; font-size: 17px; }
+.tbsum { margin: 4px 0 12px; padding-left: 1.4em; display: grid; gap: 2px; }
+.tblink { background: none; border: 0; padding: 4px 0; min-height: 36px; color: var(--chalk); text-decoration: underline; text-underline-offset: 3px; text-align: left; font: inherit; cursor: pointer; }
+.tbfin .btn-gold { margin-top: 14px; width: 100%; }
+.tbnav .btn-gold { flex: 2 1 0; }
 /* ほかの資格試験の対策（行政書士の見た目 .gy* / .gx* をそのまま使い、足りない所だけ足す） */
 .xmlist { display: grid; gap: 10px; margin: 12px 0; }
 .xmentry .ch-sub { display: block; }
@@ -11090,8 +11110,10 @@ function tbHtml(src) {
 }
 // 単元の問題の正答状況
 const tbQStat = u => { let done = 0, ok = 0; u.qs.forEach(id => { const s = S.stats[id]; if (s) { done++; if (s[0] >= s[1] && s[1]) ok++; } }); return { done, ok }; };
-// 教科書の目次（科目 → 章 → 単元）
-function showTb(book) {
+// 単元の本文を「## 見出し」ごとのページに分ける（1ページ＝1画面ほど。2026-11-01 satou「縦長になると読みづらい」）
+const tbPages = body => body.trim().split(/\n(?=\s*## )/).map(p => p.trim()).filter(Boolean);
+// 教科書の目次（科目ごとに開け閉めする。最初は閉じて、科目と進み具合だけを見せる）
+function showTb(book, openSub) {
   quiz = null;
   const B = TB_BOOKS[book], units = TB_UNITS[book] || [];
   const read = units.filter(u => tbRead(u.id)).length;
@@ -11100,41 +11122,65 @@ function showTb(book) {
   $app.innerHTML = `
     <div class="chapter-head">教科書（${esc(B.name)}）</div>
     <section class="win today">
-      <p class="note" style="margin:0">単元ごとに要点を読み、条文を確かめてから、その単元の問題を解きます。1単元は5分ほどです。</p>
-      <p class="tbprog tnum">読んだ単元 <b>${read}</b>/${units.length}</p>
-      ${next ? `<button class="btn-gold big" id="tbNext">${read ? "続きから読む" : "最初の単元から読む"}：${esc(next.title)} ▶</button>` : `<p class="note">全部の単元を読みました。気になる単元を読み直しましょう。</p>`}
+      <ol class="tbhow"><li><b>読む</b>要点</li><li><b>確かめる</b>条文</li><li><b>解く</b>問題</li></ol>
+      <p class="tbprog tnum">読んだ単元 <b>${read}</b>/${units.length}<span class="mbar" aria-hidden="true"><i style="width:${Math.round(read / Math.max(units.length, 1) * 100)}%"></i></span></p>
+      ${next ? `<button class="btn-gold big" id="tbNext">${read ? "続きから読む" : "最初の単元から読む"}<span class="tbnt">${esc(next.sub)}：${esc(next.title)}</span></button>` : `<p class="note">全部の単元を読みました。気になる単元を読み直しましょう。</p>`}
     </section>
-    ${subs.map(s => `<h2 class="section-label">${esc(s)}</h2>${[...new Set(units.filter(u => u.sub === s).map(u => u.ch))].map(ch => `
-      <section class="wlist tbch"><h3 class="tbchh">${esc(ch)}</h3>${units.filter(u => u.sub === s && u.ch === ch).map(u => { const st = tbQStat(u);
-        return `<button class="gyb tbu" data-u="${esc(u.id)}"><span class="ch-title">${tbRead(u.id) ? `<span class="tbdone" aria-label="読んだ">✓</span>` : ""}${esc(u.title)}</span><span class="ch-sub tnum">約${u.min}分・問題${u.qs.length}問${st.done ? `（解いた${st.done}）` : ""}</span></button>`; }).join("")}</section>`).join("")}`).join("")}
-    <p class="note">本文はこのアプリのために書いたもので、e-Gov 法令検索の条文（2026年10月時点）で確かめています。本試験は令和8年4月1日現在の法令で出題されます。くわしくは各単元の「条文を読む」で本文を確かめてください。</p>
+    <h2 class="section-label">科目を選ぶ</h2>
+    <section class="tbsubs">${subs.map(s => { const us = units.filter(u => u.sub === s), r = us.filter(u => tbRead(u.id)).length, min = us.reduce((a, u) => a + u.min, 0);
+      return `<details class="kgroup tbsub" data-s="${esc(s)}"${s === openSub ? " open" : ""}><summary><span class="kname">${esc(s)}</span><span class="mbar" aria-hidden="true"><i style="width:${Math.round(r / us.length * 100)}%"></i></span><span class="kcount tnum">${r}/${us.length}単元・約${min}分</span></summary>
+      ${[...new Set(us.map(u => u.ch))].map(ch => `<h4 class="bunya-label">${esc(ch)}</h4><section class="wlist">${us.filter(u => u.ch === ch).map(u => { const st = tbQStat(u);
+        return `<button class="gyb tbu" data-u="${esc(u.id)}"><span class="ch-title">${tbRead(u.id) ? `<span class="tbdone" aria-label="読んだ">✓</span>` : ""}${esc(u.title)}</span><span class="ch-sub tnum">約${u.min}分・${u.qs.length}問${st.done ? `（解いた${st.done}）` : ""}</span></button>`; }).join("")}</section>`).join("")}</details>`; }).join("")}</section>
+    <p class="note">本文はこのアプリのために書いたもので、e-Gov 法令検索の条文（2026年10月時点）で確かめています。本試験は令和8年4月1日現在の法令で出題されます。</p>
     <div class="row"><button class="btn-gold" id="tbBack">${esc(B.backLabel)}</button><button id="home">目次にもどる</button></div>`;
   $app.querySelectorAll(".tbu").forEach(b => b.onclick = () => showTbUnit(book, b.dataset.u));
+  // 開くのは一度に1科目だけ（縦に長くしない）
+  $app.querySelectorAll("details.tbsub").forEach(d => d.ontoggle = () => { if (d.open) $app.querySelectorAll("details.tbsub[open]").forEach(o => { if (o !== d) o.open = false; }); });
   const n = document.getElementById("tbNext"); if (n) n.onclick = () => showTbUnit(book, next.id);
   document.getElementById("tbBack").onclick = B.back;
   document.getElementById("home").onclick = showOffice;
   toTop();
 }
-// 単元を読む
-function showTbUnit(book, id) {
+// 単元を読む：本文を見出しごとのページでめくり、最後のページで条文と問題へ
+function showTbUnit(book, id, pg = 0) {
   quiz = null;
   const B = TB_BOOKS[book], units = TB_UNITS[book], i = units.findIndex(u => u.id === id), u = units[i];
-  const prev = units[i - 1], next = units[i + 1];
+  const next = units[i + 1];
   const qs = u.qs.map(B.q).filter(Boolean);
+  const pages = tbPages(u.body), N = pages.length + 1;  // 最後は「確かめて解く」ページ
+  pg = Math.max(0, Math.min(pg, N - 1));
+  const last = pg === N - 1;
   const mark = () => { S.tb = S.tb || {}; if (!S.tb[u.id]) { S.tb[u.id] = today(); save(); } };
+  if (last) mark();
+  const titles = pages.map(p => p.split("\n")[0].replace(/^\s*## /, "")).concat("確かめて解く");
   $app.innerHTML = `
     <div class="chapter-head">${esc(u.title)}</div>
-    <p class="tbcrumb">${esc(u.sub)} ＞ ${esc(u.ch)}<span class="tnum">（${i + 1}/${units.length}）</span></p>
-    <article class="win tbbody">${tbHtml(u.body)}${u.arts.length ? B.jobun(u.arts) : ""}</article>
-    <section class="win tbgo">
-      <p class="note" style="margin:0">読んだら、この単元の問題で確かめましょう。まちがえた問題は復習に出ます。</p>
-      ${qs.length ? `<button class="btn-gold big" id="tbSolve">この単元の問題を解く（${qs.length}問）▶</button>` : ""}
-    </section>
-    <div class="row tbnav">${prev ? `<button id="tbPrev">‹ 前の単元</button>` : ""}<button id="tbList">教科書の目次</button>${next ? `<button id="tbNextU">次の単元 ›</button>` : ""}</div>`;
-  const s = document.getElementById("tbSolve"); if (s) s.onclick = () => { mark(); B.run(shuffle(qs), `${u.title}（教科書の問題）`, { book, id: u.id }); };
-  if (prev) document.getElementById("tbPrev").onclick = () => showTbUnit(book, prev.id);
-  if (next) document.getElementById("tbNextU").onclick = () => { mark(); showTbUnit(book, next.id); };
-  document.getElementById("tbList").onclick = () => showTb(book);
+    <p class="tbcrumb">${esc(u.sub)} ＞ ${esc(u.ch)}・約${u.min}分</p>
+    <nav class="tbsteps" aria-label="この単元のページ">${titles.map((t, k) => `<button class="tbstep${k === pg ? " on" : ""}${k < pg ? " done" : ""}" data-p="${k}" aria-label="${k + 1}ページ目：${esc(t)}"${k === pg ? ` aria-current="step"` : ""}></button>`).join("")}</nav>
+    <p class="tbpgno tnum">${pg + 1}/${N}${last ? `<span>${esc(titles[pg])}</span>` : ""}</p>
+    ${last ? `
+    <section class="win tbbody tbfin">
+      <p style="margin-top:0">この単元で読んだこと</p>
+      <ol class="tbsum">${titles.slice(0, -1).map((t, k) => `<li><button class="tblink" data-p="${k}">${esc(t)}</button></li>`).join("")}</ol>
+      ${u.arts.length ? B.jobun(u.arts) : ""}
+      ${qs.length ? `<button class="btn-gold big" id="tbSolve">この単元の問題を解く（${qs.length}問）▶</button><p class="note">まちがえた問題は復習に出ます。</p>` : ""}
+    </section>` : `<article class="win tbbody">${tbHtml(pages[pg])}</article>`}
+    <div class="row tbnav">${pg ? `<button id="tbPrev">‹ 前へ</button>` : `<button id="tbList">目次</button>`}${last
+      ? (next ? `<button id="tbNextU">次の単元 ›</button>` : `<button id="tbList2">教科書の目次</button>`)
+      : `<button class="btn-gold" id="tbPgNext">${pg === N - 2 ? "確かめて解く ›" : "次へ ›"}</button>`}</div>`;
+  const go = k => showTbUnit(book, id, k);
+  $app.querySelectorAll("[data-p]").forEach(b => b.onclick = () => go(+b.dataset.p));
+  const on = (sel, f) => { const e = document.getElementById(sel); if (e) e.onclick = f; };
+  on("tbSolve", () => B.run(shuffle(qs), `${u.title}（教科書の問題）`, { book, id: u.id }));
+  on("tbPrev", () => go(pg - 1));
+  on("tbPgNext", () => go(pg + 1));
+  on("tbNextU", () => showTbUnit(book, next.id));
+  on("tbList", () => showTb(book, u.sub)); on("tbList2", () => showTb(book, u.sub));
+  // スマホは左右のスワイプでもめくれる
+  const art = $app.querySelector(".tbbody"); let x0 = null, y0 = null;
+  art.addEventListener("touchstart", e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  art.addEventListener("touchend", e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy) && !e.target.closest(".tbtw")) { if (dx < 0 && pg < N - 1) go(pg + 1); else if (dx > 0 && pg) go(pg - 1); } }, { passive: true });
   toTop();
 }
 // 行政書士の画面に入口を出す・教科書から解いた問題の終わりに「教科書にもどる」
@@ -11145,7 +11191,7 @@ showGyosei = (fn => function (...a) { const r = fn.apply(this, a);
     document.getElementById("gyTb").onclick = () => showTb("gyosei"); } } catch (e) { console.warn("tb", e); }
   return r; })(showGyosei);
 gyEnd = (fn => function (d, ...a) { const r = fn.call(this, d, ...a);
-  try { if (d && d.tb) { const b = document.getElementById("gyBack"); b.textContent = "教科書にもどる"; b.onclick = () => showTbUnit(d.tb.book, d.tb.id); } } catch (e) { console.warn("tb", e); }
+  try { if (d && d.tb) { const b = document.getElementById("gyBack"); b.textContent = "教科書にもどる"; b.onclick = () => showTbUnit(d.tb.book, d.tb.id, 99); } } catch (e) { console.warn("tb", e); }
   return r; })(gyEnd);
 
 // 教科書：行政書士試験。本文は e-Gov 法令検索の条文（LawCodex/jp の写し・2026年10月時点）を確かめて書く。arts は GY_JOBUN にある条のキー。
