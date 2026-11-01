@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611010120";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611010121";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -5715,6 +5715,19 @@ function showOffice() {
         <li>学習用に簡略化した説明です。実際の法律問題は専門家に相談してください</li>
       </ul>
     </details>
+    <details class="win" id="privacy">
+      <summary>個人情報について（プライバシー）</summary>
+      <p><b>このアプリは、あなたの個人情報を集めません。</b>名前やメールアドレスを登録する場所はなく、作者に記録が送られることもありません。</p>
+      <ul>
+        <li>進み具合・書いた答案・設定は、<b>この端末のブラウザの中だけ</b>に保存されます。作者を含め、ほかの人は見られません。消したいときは、ブラウザの「サイトのデータを消す」で消せます。</li>
+        <li>アクセス数を数える道具（アクセス解析）や広告は使っていません。</li>
+        <li>AIの添削を使ったときだけ、答案と問題の文が${IS_PWA ? "AIの会社 Anthropic（api.anthropic.com）へ送られます。APIキーも、この端末の中だけにしまい、Anthropic にだけ送ります" : "claude.ai をとおして Anthropic へ送られます"}。答案には、自分や友だちの名前・住所・学校名などを書かないでください。</li>
+        ${IS_PWA ? "<li>このページは GitHub Pages で公開しています。ページを開くと、ふつうのウェブサイトと同じように、GitHub と文字の形（フォント）を配る Google にも、通信の記録（IPアドレスなど）が届きます。作者はその記録を見ません。</li>" : ""}
+        <li>判例のリンクや「Ko-fi で応援」は、おしたときだけ、そのサイトを開きます。</li>
+        <li>記録の書き出しで作るコードには、あなたの記録が入っています。人に渡すときは気をつけてください（APIキーは入りません）。</li>
+      </ul>
+      <p class="note">関係する会社の説明：<a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noopener noreferrer">Anthropic</a>${IS_PWA ? "・<a href=\"https://docs.github.com/ja/pages/getting-started-with-github-pages/what-is-github-pages#data-collection\" target=\"_blank\" rel=\"noopener noreferrer\">GitHub Pages</a>・<a href=\"https://fonts.google.com/faq\" target=\"_blank\" rel=\"noopener noreferrer\">Google Fonts</a>" : ""}</p>
+    </details>
     </details>`;
   $app.querySelectorAll("canvas[data-char]").forEach(c => drawChar(c, c.dataset.char, 4));
   $app.querySelectorAll("[data-case]").forEach(b => b.onclick = () => startCase(b.dataset.case));
@@ -6202,7 +6215,7 @@ function keyPanel(el, onChange) {
         <li><b>添削するたびにお金がかかります</b>（1回あたり数円ほど）。お金はキーを作った人のAnthropicのアカウントからはらわれます。このアプリの作者にははらわれません。</li>
         <li>みんなで使う端末（学校・図書館など）では「この端末に覚えておく」にチェックを入れず、使い終わったら「キーを消す」をおしてください。</li>
         <li>キーを人に知られたかもしれないときは、すぐに Claude Console の API Keys で、そのキーを消して（Delete）ください。</li>
-        <li>書いた答案は、添削のために Anthropic（AIの会社）へ送られます。答案には、自分や友だちの名前・住所・学校名などを書かないでください（<a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noopener noreferrer">プライバシーポリシー</a>）。</li>
+        <li>書いた答案は、添削のために Anthropic（AIの会社）へ送られます。答案には、自分や友だちの名前・住所・学校名などを書かないでください（くわしくは目次の「個人情報について」）。</li>
         <li>添削をしているのは人ではなくAIです。まちがえることもあるので、模範答案と採点の観点でも確かめてください。</li>
         <li>キーはこの端末の中だけにしまい、Anthropic（api.anthropic.com）にだけ送ります。作者やほかの人には届きません。記録の書き出しにも入りません。</li>
       </ul></details>`;
