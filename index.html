@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611011033";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611011042";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -7086,6 +7086,7 @@ function gyExamBind() {
     const fn = window[name]; if (typeof fn !== "function") return;
     window[name] = function (...a) {
       const args = a.filter(x => !(x instanceof Event));
+      if (name === "showTbUnit" && args.length === 2) args.push(0);  // ページを省いたときは1ページ目（同じ画面かを比べるため、そろえる）
       if (depth || quiet) { if (depth === 1 && !quiet && !inner) inner = { name, args }; depth++; try { return fn.apply(this, a); } finally { depth--; } }
       inner = null; depth++; let r; try { r = fn.apply(this, a); } finally { depth--; }
       // showOffice が別の画面を出したとき（答案から「目次にもどる」→ 論文の画面）は、出た画面として記録する
