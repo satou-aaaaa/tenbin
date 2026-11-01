@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611011023";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611011033";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -7010,6 +7010,7 @@ function gyExamBind() {
   showGyosei = before(showGyosei, () => touch("gyosei"));
   showXm = before(showXm, k => touch("xm:" + k));
   let ronbunBack = false;  // 論文の画面から答案を開いたら、もどる先を論文の画面にする
+  window.__tenbinClearBack = () => { ronbunBack = false; };  // スマホの「戻る」で戻ったら、この「もどる先」は使い終わり（7）
   const daysTxt = d => d == null || d < 0 ? "" : d ? `<span class="nw">・本試験まで<b class="tnum">${d}</b>日</span>` : `<span class="nw">・今日が本試験</span>`;
   const examRows = () => {
     const live = x => x && x.step !== "done";
@@ -7090,7 +7091,8 @@ function gyExamBind() {
       // showOffice が別の画面を出したとき（答案から「目次にもどる」→ 論文の画面）は、出た画面として記録する
       const e = name === "showOffice" && inner ? inner : { name, args }; inner = null;
       if (e.name === "showOffice") stack = [];
-      else if (name === "showOffice") { const i = stack.map(x => x.name).lastIndexOf(e.name); if (i >= 0) stack.length = i; }
+      // すでに通ってきた画面をもう一度出したときは、その画面まで戻ったことにする（同じ画面が二重に積まれないように）
+      else { const k = JSON.stringify(e.args), i = stack.findIndex(x => x.name === e.name && JSON.stringify(x.args) === k); if (i >= 0) stack.length = i; }
       stack.push({ ...e, node: $app.firstElementChild });
       if (stack.length > 60) stack.splice(1, stack.length - 60);
       return r;
@@ -7102,9 +7104,12 @@ function gyExamBind() {
   const arm = () => { if (!armed && !atRoot()) { try { history.pushState({ tenbinBack: 1 }, ""); armed = true; } catch {} } };
   // 目次（ホーム）に戻ったら、残った「しるし」を消す（目次での「戻る」1回でちゃんと閉じるように）
   const disarm = () => { if (armed && atRoot()) { armed = false; skip = true; history.back(); } };
+  // 答案を開いた画面へもどすための目印（論文の ronbunBack・予備試験の ybBack）。戻るで戻ったら消す。残ると次の「戻る」でも同じ画面が出る
+  const clearBack = () => { try { window.__tenbinClearBack && window.__tenbinClearBack(); } catch {} try { if (typeof ybBack !== "undefined") ybBack = false; } catch {} };
   const goBack = () => {
     const dlg = document.querySelector("dialog[open]");
     if (dlg) { dlg.close(); return; }
+    clearBack();
     if (onTop()) { if (stack.length > 1) { stack.pop(); show(top()); } return; }
     const no = vis("#gxNo"); if (no) { no.click(); return; }  // 「やめますか？」などの確認が出ていたら閉じるだけ
     // 記録しない画面：後片付けのボタンを押してから、問題を始めた画面（記録の最後）に戻す
