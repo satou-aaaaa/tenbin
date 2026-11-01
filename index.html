@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611010214";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611010901";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -7062,6 +7062,31 @@ function gyExamBind() {
   });
 })();
 
+// ===== 7. スマホの「戻る」（端からの左右スワイプ・戻るボタン）をアプリ内の「もどる」にする（2026-11-01 satou「左にスワイプするとアプリが閉じてしまう」） =====
+// このアプリは画面を書きかえるだけで、ブラウザの履歴に何も積んでいなかった。そのため「戻る」で履歴が尽きてアプリが閉じた。
+// 目次（ホーム）以外の画面では履歴に1つ「しるし」を積み、「戻る」が来たら画面の「もどる」ボタンを押す。目次で「戻る」をするとふつうに閉じる。
+(() => {
+  // 押す候補（上から順に、その画面でいちばん近い「ひとつ前」）
+  const BACK = ["#dlgClose", "#tbPrev", "#tbList", "#tbList2", "#gxNo", "#gxBack", "#gxRes", "#gxList", "#tbBack", "#gyBack", "#gxBackG", "#xmAgain", "#xmBackL", "#quit", "#home"];
+  const findBack = () => { for (const sel of BACK) { const b = document.querySelector(sel); if (b && !b.disabled && b.getClientRects().length) return b; } return null; };
+  // 再読み込みしたときは、前に積んだ「しるし」が履歴に残っていることがあるので引き継ぐ
+  let armed = !!(history.state && history.state.tenbinBack), skip = false;  // armed: 履歴に「しるし」を積んであるか／skip: 自分で消した「しるし」の popstate
+  const arm = () => { if (!armed && findBack()) { try { history.pushState({ tenbinBack: 1 }, ""); armed = true; } catch {} } };
+  // 画面のボタンで目次に戻ったら、残った「しるし」を消す（目次での「戻る」1回でちゃんと閉じるように）
+  const disarm = () => { if (armed && !findBack()) { armed = false; skip = true; history.back(); } };
+  window.addEventListener("popstate", () => {
+    if (skip) { skip = false; return; }
+    armed = false;
+    const dlg = document.querySelector("dialog[open]");
+    if (dlg) { dlg.close(); arm(); return; }
+    const b = findBack();
+    if (b) b.click();  // 画面が変わると下の見張りが、まだ目次でなければ「しるし」を積み直す
+    arm();
+  });
+  new MutationObserver(() => { arm(); disarm(); }).observe($app, { childList: true });
+  arm(); disarm();
+})();
+
 // ===== ほかの資格試験の対策（宅建士・司法試験の短答式・司法書士・社労士など。共通の仕組み） =====
 // 試験ごとに xmAdd(設定) で登録する。問題は { id, sub, topic, q, c:[肢…], a:正解の番号(0から), ex:[肢ごとの説明], e:ポイント, art:根拠, trap?, d:[[見出し, 本文]×3] }。
 // 練習（すぐ答え合わせ）・本番形式模試（時間つき・最後にまとめて採点）・見直し・模試に出た回数の少ない問題から出す仕組みを、どの試験でも同じ作りで使う。
@@ -11189,7 +11214,8 @@ function showTbUnit(book, id, pg = 0) {
   on("tbList", () => showTb(book, u.sub)); on("tbList2", () => showTb(book, u.sub));
   // スマホは左右のスワイプでもめくれる
   const art = $app.querySelector(".tbbody"); let x0 = null, y0 = null;
-  art.addEventListener("touchstart", e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  // 画面の端（左右24px）から始まるスワイプはスマホの「戻る」に任せる
+  art.addEventListener("touchstart", e => { const x = e.touches[0].clientX; if (x < 24 || x > innerWidth - 24) { x0 = null; return; } x0 = x; y0 = e.touches[0].clientY; }, { passive: true });
   art.addEventListener("touchend", e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
     if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy) && !e.target.closest(".tbtw")) { if (dx < 0 && pg < N - 1) go(pg + 1); else if (dx > 0 && pg) go(pg - 1); } }, { passive: true });
   toTop();
