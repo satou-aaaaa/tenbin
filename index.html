@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611011001";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611011008";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -7055,7 +7055,7 @@ function gyExamBind() {
     document.getElementById("home").onclick = () => { ronbunBack = false; showOffice(); };
     toTop();
   }
-  window.tbShowRonbun = showRonbun;  // 予備試験の画面から「司法試験・論文式」の画面を開く（yobi_ronbun.js）
+  window.tbShowRonbun = (...a) => window.showRonbun(...a);  // 予備試験の画面から「司法試験・論文式」の画面を開く（yobi_ronbun.js）。「戻る」の記録に残すため window から
 
   // 4. 模試と見直しのキー操作：1〜5で肢を選ぶ、← → で前後の問題へ
   document.addEventListener("keydown", e => {
