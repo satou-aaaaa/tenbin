@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611030121";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611031621";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -7750,7 +7750,7 @@ function gyExamBind() {
 //   例：教科書から解いた問題で「やめる」は行政書士の画面へ行く）。今は、通ってきた画面（SCREENS の関数の呼び出し）を順に記録して、そこへ戻す。
 // 問題を解いている途中・模試などの記録しない画面では、後片付けのボタン（中断・やめる）を押してから、問題を始めた画面に戻す。
 (() => {
-  const SCREENS = ["showOffice", "showRonbun", "showGyosei", "showTb", "showTbUnit", "showXm", "showXmList"];  // 記録する画面（新しい画面の関数を作ったらここに足す）
+  const SCREENS = ["showOffice", "showRonbun", "showGyosei", "showTb", "showTbUnit", "showXm", "showXmList", "showKm", "showKmSub"];  // 記録する画面（新しい画面の関数を作ったらここに足す）
   // 記録しない画面（問題を解いている途中・模試など）から出るときに押す「後片付け」のボタン（タイマーを止める・途中を保存する）
   const EXIT = ["#gxPause", "#quit", "#gxBackG", "#xmAgain", "#gyBack"];
   const vis = sel => { const b = document.querySelector(sel); return b && !b.disabled && b.getClientRects().length ? b : null; };
@@ -13717,6 +13717,151 @@ tbAdd("gyosei", [
 ! 利用目的の変更の範囲は、事業者が「関連性」、行政機関等が「相当の関連性」。
 ` },
 ]);
+
+// ===== 科目別に解く（試験をまたいで、同じ科目の問題をまとめて解く） =====
+// 2026-11-03 satou「特定の領域を勉強できるようにしても良いかもしれません。たとえば、憲法・民法、など」。
+// 問題は増やさない。各試験の問題（XM_LIST の qs・行政書士の GY_GO・論文の probs()）を、下の KM_MAP で科目に振り分けて出すだけ。
+// 新しい試験・分野を足したときは KM_MAP に「試験のkey: { 分野(sub): 科目 }」を足す（足さない分野は科目別には出ない）。
+// 同じ問題を複数の試験で使っているもの（{ id, from }）は、もとの問題1問にまとめ、「どの試験の問題か」に全部の試験名を出す。
+const KM_SUBJ = [  // 並び順・名前・画面の説明
+  ["憲法", "憲"], ["行政法", "行"], ["民法", "民"], ["商法・会社法", "商"], ["民事訴訟法", "訴"],
+  ["刑法", "刑"], ["刑事訴訟法", "捜"], ["労働法・社会保険", "労"], ["不動産登記法", "登"],
+];
+const KM_MAP = {
+  tanto: { 憲法: "憲法", 民法: "民法", 刑法: "刑法" },
+  yobi: { 憲法: "憲法", 民法: "民法", 刑法: "刑法", 行政法: "行政法", 商法: "商法・会社法", 民事訴訟法: "民事訴訟法", 刑事訴訟法: "刑事訴訟法" },
+  shoshi: { 憲法: "憲法", 民法: "民法", 刑法: "刑法", "会社法・商法": "商法・会社法", 民事訴訟法: "民事訴訟法", "民事執行法・民事保全法": "民事訴訟法", 不動産登記法: "不動産登記法" },
+  sharoshi: q => "労働法・社会保険",
+  takken: q => q.sub !== "権利関係" ? null : /不動産登記法/.test(q.topic) ? "不動産登記法" : "民法",  // 借地借家法・区分所有法は民法（民事の特別法）に入れる
+  gyosei: q => ({ 憲法: "憲法", 行政法: "行政法", 民法: "民法", 商法: "商法・会社法" })[q.sub]
+    || (q.sub === "基礎知識" && /労働|雇用|育児|年金|介護保険/.test(q.topic) ? "労働法・社会保険" : null),
+  ronbun: p => ({ 憲法: "憲法", 行政法: "行政法", 民法: "民法", 商法: "商法・会社法", 民事訴訟法: "民事訴訟法", 刑法: "刑法", 刑事訴訟法: "刑事訴訟法", 労働法: "労働法・社会保険", "法律実務基礎（民事）": "民事訴訟法", "法律実務基礎（刑事）": "刑事訴訟法" })[p.kamoku],
+};
+const KM_EXAM = { tanto: "司法試験（短答）", yobi: "予備試験", shoshi: "司法書士", sharoshi: "社労士", takken: "宅建", gyosei: "行政書士" };
+const kmOf = (key, q) => { const m = KM_MAP[key]; return !m ? null : typeof m === "function" ? m(q) : m[q.sub] || null; };
+let _km = null;
+// 科目 -> { qs: [{ q: もとの問題, ex: [試験のkey…] }], essays: [論文] }
+function kmData() {
+  if (_km) return _km;
+  const out = {}; KM_SUBJ.forEach(([s]) => out[s] = { qs: [], essays: [] });
+  const byId = {}, root = q => { let r = q; while (r.from && XM_BY[r.from]) r = XM_BY[r.from]; return r; };
+  const add = (key, q) => { const s = kmOf(key, q); if (!s || !out[s]) return; const r = root(q);
+    let e = byId[r.id]; if (!e) { e = byId[r.id] = { q: r, ex: [], s }; out[s].qs.push(e); }
+    if (!e.ex.includes(key)) e.ex.push(key); };
+  // もとの問題（from のないもの）を先に入れ、共有の問題はあとで試験名だけ足す
+  XM_LIST.forEach(c => c.qs.filter(q => !q.from).forEach(q => add(c.key, q)));
+  XM_LIST.forEach(c => c.qs.filter(q => q.from).forEach(q => add(c.key, q)));
+  if (typeof GY_GO !== "undefined") GY_GO.forEach(q => add("gyosei", q));
+  try { probs().forEach(p => { const s = kmOf("ronbun", p); if (s && out[s]) out[s].essays.push(p); }); } catch (e) { console.warn("kamoku", e); }
+  return _km = out;
+}
+const kmExNames = e => e.ex.map(k => KM_EXAM[k] || k);
+const kmExams = s => { const n = {}; kmData()[s].qs.forEach(e => e.ex.forEach(k => n[k] = (n[k] || 0) + 1)); return Object.keys(KM_EXAM).filter(k => n[k]).map(k => [k, n[k]]); };
+const kmDue = l => { const t = today(); return l.filter(e => S.srs[e.q.id] && S.srs[e.q.id].due <= t); };
+// 出す順：まだ解いていない問題（試験が偏らないようシャッフル）→ 復習日の近い問題
+const kmPick = (l, n = 10) => { const un = shuffle(l.filter(e => !S.srs[e.q.id])), seen = l.filter(e => S.srs[e.q.id]).sort((a, b) => S.srs[a.q.id].due - S.srs[b.q.id].due); return [...un, ...seen].slice(0, n); };
+// 肢の並べ替え：組合せ・個数問題は本試験と同じ順（xm_engine の xmPerm があればそれを使う）
+const kmPerm = q => typeof xmPerm === "function" ? xmPerm(q) : q.fix || /組合せ|いくつあるか|全てを掲げたもの/.test(q.q) ? [...q.c.keys()] : shuffle([...q.c.keys()]);
+let kmBack = null;  // 科目の画面から答案を開いたら、「目次にもどる」でその科目の画面にもどす
+
+// ---- 科目の一覧 ----
+function showKm() {
+  quiz = null; kmBack = null;
+  const D = kmData();
+  const row = ([s, icon]) => { const d = D[s], st = gyStat(d.qs.map(e => e.q)), due = kmDue(d.qs).length;
+    return `<button class="chapter gyentry kmrow" data-s="${esc(s)}"><b class="pixel" aria-hidden="true">${esc(icon)}</b><span><span class="ch-title">${esc(s)}</span>
+      <span class="ch-sub tnum">択一${d.qs.length}問${d.essays.length ? `・論文${d.essays.length}問` : ""}${st.n ? `・正答${Math.round(st.r / st.n * 100)}%` : ""}</span>
+      <span class="ch-sub kmex">${kmExams(s).map(([k]) => esc(KM_EXAM[k])).join("・")}</span></span>
+      <span class="ch-state">${due ? `<b class="due">復習${due}</b>` : "▶"}</span></button>`; };
+  $app.innerHTML = `<div class="chapter-head">科目別に解く</div>
+    <section class="win"><p class="note" style="margin:0">司法試験・予備試験・司法書士・行政書士・宅建・社労士の問題を、科目ごとにまとめて解きます。問題ごとに、どの試験の問題かを表示します。いろいろな試験の問題がまざって出るので、同じ条文・判例を別の角度から確かめられます。</p></section>
+    <nav class="exlist kmlist" aria-label="科目を選ぶ">${KM_SUBJ.filter(([s]) => D[s].qs.length || D[s].essays.length).map(row).join("")}</nav>
+    <div class="row"><button class="btn-gold" id="home">目次にもどる</button></div>`;
+  document.getElementById("home").onclick = showOffice;
+  $app.querySelectorAll(".kmrow").forEach(b => b.onclick = () => showKmSub(b.dataset.s));
+  toTop();
+}
+
+// ---- 科目ごとの画面 ----
+function showKmSub(s) {
+  quiz = null; kmBack = null;
+  const d = kmData()[s]; if (!d) return showKm();
+  const due = kmDue(d.qs), traps = d.qs.filter(e => e.q.trap);
+  const rowOf = (key, title, l) => { const st = gyStat(l.map(e => e.q));
+    return `<button class="gyb" data-r="${esc(key)}"><span class="ch-title">${esc(title)}</span><span class="ch-sub tnum">${st.done}/${l.length}問${st.n ? `・正答${Math.round(st.r / st.n * 100)}%` : ""}</span></button>`; };
+  const decks = {}, rows = [];
+  if (traps.length > 2) { decks.trap = ["ひっかけ・間違えやすい問題", traps]; rows.push(rowOf("trap", "ひっかけ・間違えやすい問題", traps)); }
+  const exRows = kmExams(s).map(([k]) => { const l = d.qs.filter(e => e.ex.includes(k)); decks["x:" + k] = [`${KM_EXAM[k]}の問題`, l]; return rowOf("x:" + k, `${KM_EXAM[k]}の問題だけ`, l); });
+  const btn = p => `<button data-write="${esc(p.id)}" aria-label="${esc(p.title)}（${esc(p.kamoku)}）"><span class="ch-title">${p.big ? `<b class="star" aria-hidden="true">★</b>` : ""}${esc(p.title)}</span><span class="ch-sub">${isDue("e:" + p.id) ? `<b class="due">↻ 復習</b>` : S.essays[p.id] != null ? `自己採点 ${rating(S.essays[p.id])}` : S.drafts[p.id] ? "書きかけ" : `<span class="new">未着手</span> ▶`}</span></button>`;
+  $app.innerHTML = `<div class="chapter-head">${xmPh("科目別：", s)}</div>
+    <section class="win today">
+      <p class="note" style="margin:0">択一 ${d.qs.length}問（${kmExams(s).map(([k, n]) => `${esc(KM_EXAM[k])} ${n}`).join("・")}）${d.essays.length ? `、論文 ${d.essays.length}問` : ""}。試験をまたいで、まだ解いていない問題から出します。</p>
+      ${due.length ? `<button class="btn-gold big" id="kmDue">復習 ${Math.min(due.length, 10)}問を解く ▶</button>` : ""}
+      ${d.qs.length ? `<button class="${due.length ? "" : "btn-gold big"}" id="kmMix">${esc(s)}を10問解く（試験をまぜて）▶</button>` : ""}
+    </section>
+    ${d.qs.length ? `<h2 class="section-label">択一：試験・問題の種類で選ぶ</h2><section class="wlist">${[...rows, ...exRows].join("")}</section>` : ""}
+    ${d.essays.length ? `<h2 class="section-label">論文：答案を書く</h2><section class="wlist">${d.essays.map(btn).join("")}</section>` : ""}
+    <div class="row"><button class="btn-gold" id="kmBackL">科目の一覧にもどる</button><button id="home">目次にもどる</button></div>`;
+  document.getElementById("home").onclick = showOffice;
+  document.getElementById("kmBackL").onclick = showKm;
+  const run = (deck, title) => kmRun({ s, deck, i: 0, right: 0, title });
+  const dd = document.getElementById("kmDue"); if (dd) dd.onclick = () => run(due.slice(0, 10), `${s}の復習`);
+  const mx = document.getElementById("kmMix"); if (mx) mx.onclick = () => run(kmPick(d.qs), s);
+  $app.querySelectorAll(".gyb[data-r]").forEach(b => b.onclick = () => { const [t, l] = decks[b.dataset.r]; run(kmPick(l), `${s}：${t}`); });
+  $app.querySelectorAll("[data-write]").forEach(b => b.onclick = () => { kmBack = s; startWrite(b.dataset.write); });
+  toTop();
+}
+
+// ---- 練習（1問ずつすぐ答え合わせ。答え方は各試験の練習と同じ） ----
+function kmRun(d) {
+  if (d.i >= d.deck.length) return kmEnd(d);
+  const e = d.deck[d.i], q = e.q, c = XM_CONF[q.xm], perm = kmPerm(q), v = { ...q, t: "choice", c: perm.map(i => q.c[i]), a: perm.indexOf(q.a) };
+  const form = c ? c.form : "5肢択一", last = d.i + 1 >= d.deck.length ? "結果を見る" : "つぎへ ▶";
+  $app.innerHTML = `<div class="chapter-head">${esc(d.title)}</div>
+    <div class="dprog" aria-hidden="true"><i style="width:${d.i / d.deck.length * 100}%"></i></div>
+    <div class="qhead"><span class="tag kmexam">${esc(kmExNames(e).join("・"))}</span><span class="tag">${esc(form)}</span>${q.trap ? `<span class="tag">間違えやすい</span>` : ""}<span class="tag" style="border-color:var(--muted);color:var(--muted)">${esc(q.sub)}・${esc(q.topic)}</span><span class="qcount tnum">${d.i + 1}/${d.deck.length}</span></div>
+    <section class="win gyq">${questionHTML(v, [], "").replace(/<div class="qhead">[\s\S]*?<\/div>/, "")}</section>
+    <section class="win msg" id="msg" hidden></section><div class="row"><button id="quit">やめる</button></div>`;
+  document.getElementById("quit").onclick = () => showKmSub(d.s); toTop();
+  bindQuiz(v, (ok, p) => { record(q, ok); if (ok) d.right++;
+    const msg = document.getElementById("msg"); msg.hidden = false;
+    msg.innerHTML = `${gyRes(ok, ok ? "せいかい！" : "ざんねん…", `正解は <b class="tnum">${v.a + 1}</b>${ok ? "" : `　あなたの解答は <span class="tnum">${p + 1}</span>`}`)}
+      <p class="note kmfrom">出題：${esc(kmExNames(e).join("・"))}の問題</p>
+      ${gyPoint(q)}${xmChoices(q, perm, p)}${c ? xmAfter(c, q, perm) : `${gyArt(q)}${gyDetail(q, perm)}${gyJobun(q)}${citeList(q.art)}`}`;
+    showNext(msg, last, () => { d.i++; kmRun(d); }); gyShowRes(msg); });
+}
+function kmEnd(d) {
+  quiz = null;
+  const note = completeDay();
+  $app.innerHTML = `<div class="chapter-head">${esc(d.title)}</div>
+    <section class="win msg"><p class="line good" style="font-size:20px">おつかれさま！</p>
+      <p class="tnum">${d.deck.length}問中 <b>${d.right}</b>問 せいかい</p>
+      <p class="note">まちがえた問題は、あしたの「復習」に出ます（科目別の画面と、もとの試験の画面の両方）。${esc(note)}</p></section>
+    <div class="row"><button class="btn-gold" id="xmAgain">${esc(d.s)}の画面にもどる</button><button id="home">目次にもどる</button></div>`;
+  document.getElementById("xmAgain").onclick = () => showKmSub(d.s);
+  document.getElementById("home").onclick = showOffice;
+  document.getElementById("xmAgain").focus({ preventScroll: true });
+  toTop();
+}
+
+// ---- 目次に入口を置く・答案からもどる先 ----
+(() => {
+  const home = showOffice;
+  showOffice = function (...a) {
+    if (kmBack) { const s = kmBack; kmBack = null; return showKmSub(s); }
+    const r = home.apply(this, a);
+    try {
+      const list = $app.querySelector("nav.exlist"); if (!list || document.getElementById("goKm")) return r;
+      const D = kmData(), n = KM_SUBJ.reduce((t, [s]) => t + D[s].qs.length, 0), due = KM_SUBJ.reduce((t, [s]) => t + kmDue(D[s].qs).length, 0);
+      list.insertAdjacentHTML("afterend", `<h2 class="section-label exhead">科目から選ぶ</h2><nav class="exlist" aria-label="科目から選ぶ"><button class="chapter gyentry exrow" id="goKm"><b class="pixel" aria-hidden="true">科</b><span><span class="ch-title">科目別に解く（試験をまたいで）</span><span class="ch-sub">${KM_SUBJ.slice(0, 4).map(([s]) => esc(s)).join("・")}など${KM_SUBJ.length}科目・択一${n}問</span></span><span class="ch-state">${due ? `<b class="due">復習${due}</b>` : "▶"}</span></button></nav>`);
+      document.getElementById("goKm").onclick = () => showKm();
+    } catch (e) { console.warn("kamoku home", e); }
+    return r;
+  };
+  // スマホの「戻る」で戻ったら、答案のもどる先は使い終わり（gyosei_ux.js の 7）
+  const clr = window.__tenbinClearBack;
+  window.__tenbinClearBack = () => { try { clr && clr(); } finally { kmBack = null; } };
+})();
 
 // keyboard: 1-5 / o x to answer, Enter for next
 document.addEventListener("keydown", e => {
