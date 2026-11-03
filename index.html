@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611031621";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611031632";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -13851,9 +13851,12 @@ function kmEnd(d) {
     if (kmBack) { const s = kmBack; kmBack = null; return showKmSub(s); }
     const r = home.apply(this, a);
     try {
-      const list = $app.querySelector("nav.exlist"); if (!list || document.getElementById("goKm")) return r;
-      const D = kmData(), n = KM_SUBJ.reduce((t, [s]) => t + D[s].qs.length, 0), due = KM_SUBJ.reduce((t, [s]) => t + kmDue(D[s].qs).length, 0);
-      list.insertAdjacentHTML("afterend", `<h2 class="section-label exhead">科目から選ぶ</h2><nav class="exlist" aria-label="科目から選ぶ"><button class="chapter gyentry exrow" id="goKm"><b class="pixel" aria-hidden="true">科</b><span><span class="ch-title">科目別に解く（試験をまたいで）</span><span class="ch-sub">${KM_SUBJ.slice(0, 4).map(([s]) => esc(s)).join("・")}など${KM_SUBJ.length}科目・択一${n}問</span></span><span class="ch-state">${due ? `<b class="due">復習${due}</b>` : "▶"}</span></button></nav>`);
+      // 目次を短く保つ（スマホで1.5画面以内。gyosei/ux.cjs）ため、「試験を選ぶ」の見出しの右に小さなボタンで置く
+      const head = $app.querySelector("h2.exhead"); if (!head || document.getElementById("goKm")) return r;
+      const D = kmData(), due = KM_SUBJ.reduce((t, [s]) => t + kmDue(D[s].qs).length, 0);
+      const row = document.createElement("div"); row.className = "kmhead"; row.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:4px 0 -6px";
+      head.replaceWith(row); head.style.margin = "0"; row.appendChild(head);
+      row.insertAdjacentHTML("beforeend", `<button id="goKm" style="min-height:44px;padding:4px 12px;font-size:13px;border-color:var(--gold);color:var(--gold)">科目別に解く${due ? `（復習${due}）` : ""} ▶</button>`);
       document.getElementById("goKm").onclick = () => showKm();
     } catch (e) { console.warn("kamoku home", e); }
     return r;
