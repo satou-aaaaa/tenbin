@@ -1,7 +1,13 @@
-# ワークフローの Actions を月1回まとめて新しくする PR を出す（共通部品 shared-workflows の呼び出しは @main なので対象外）。
-# .github/ を変える PR なので、Check が ✅ になったら手でマージする。
+# 月1回、依存を新しくする PR を出す（共通部品 shared-workflows の呼び出しは @main なので対象外）。
 version: 2
 updates:
+  # 作り直しと検査の道具（package.json の Playwright）。2026-11-04 まで見ていなかった
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 2
+  # ワークフローの Actions。.github/ を変える PR なので、Check が ✅ になったら手でマージする
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
