@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611031640";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611031645";</script>
 </head><body>
 
 <title>天秤の書</title>
@@ -12511,8 +12511,7 @@ function stK(o) {
   return { id: o.id, sub: o.sub, topic: o.topic, q: `${o.q}\n\n${body}`, c, a, ex, tf: false, pts: o.pts || 3, e: o.e, art: o.art,
     d: [...o.it.map((t, i) => [`${ks[i]}（${t[1] ? "正しい" : "誤り"}）`, t[2]]), ...(o.d || [])] };
 }
-const ST_OX = "次のアからウまでの各記述について、%正しいものに○、誤っているものに×を付した場合の組合せを、後記1から8までの中から選びなさい。";
-const stOX = (lead, basis) => lead + ST_OX.replace("%", basis || "判例の立場に従って検討し、");
+const stOX = (lead, basis) => `${lead}次のアからウまでの各記述について、${basis || "判例の立場に従って検討し、"}正しいものに○、誤っているものに×を付した場合の組合せを、後記1から8までの中から選びなさい。`;
 ST_Q.push(...[
   // ---- 憲法（本試験の形：判例・条文の正誤の組合せ。3点） ----
   { id:"st-k26", sub:"憲法", topic:"表現の自由と事前抑制（判例）", ox:true,
