@@ -59,6 +59,10 @@ const kofi = (html.match(/<a id="kofi" href="https:\/\/ko-fi\.com\/satouaaaaa"[^
 if (!((kofi.match(/\brel="([^"]*)"/) || [])[1] || "").split(/\s+/).includes("noopener")) ng("下に Ko-fi の応援リンク（noopener つき）が無い");
 else if (/<script\b[^>]*\bsrc\s*=/i.test(html) || /createElement\(\s*["'`]script/i.test(html) || /\bimport\(\s*["'`](https?:)?\/\//i.test(html)) ng("index.html が外のスクリプトを読んでいる（script src・createElement(\"script\")・外への import()）");
 else ok("下に Ko-fi の応援リンクがある（ただのリンク）");
+// 3c. 節目のお願い（#tenbin-kofi）も、ただのリンク（noopener つき）で、「もう出さない」があること
+const kofiGo = (html.match(/<a id="tenbin-kofi-go" href="https:\/\/ko-fi\.com\/satouaaaaa"[^>]*>/) || [""])[0];
+if (!/\brel="[^"]*\bnoopener\b/.test(kofiGo) || !html.includes('id="tenbin-kofi-never"')) ng("節目の応援のお願いに、noopener つきのリンクか「もう出さない」が無い");
+else ok("節目の応援のお願いは、ただのリンクで「もう出さない」がある");
 
 // 4. アイコンの大きさ（PNG の先頭 IHDR から幅と高さを読む）
 const pngSize = (f) => {
@@ -114,6 +118,28 @@ if (process.argv.includes("--browser")) {
     if (jit === null) ok(`${vp.name}: 模試の画面がないので残り時間の幅は確かめない`);
     else if (jit.length === 1) ok(`${vp.name}: 模試の残り時間の幅と位置が変わらない`);
     else ng(`${vp.name}: 模試の残り時間が変わるたびに幅か位置が動く（${jit.join(" , ")}）。.gytimer の幅を固定する`);
+    await page.close();
+  }
+  // 応援のお願い: 何も解いていないうちは出ない。10問を越えて目次を開くと1回だけ出る。「もう出さない」のあとは出ない
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`応援: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    const vis = () => page.evaluate(() => { const b = document.getElementById("tenbin-kofi"); return !!b && b.style.display !== "none"; });
+    await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
+    const v0 = await vis();
+    // 控えの案内は「あとで」にしておく（両方が同時に出ないことは別に確かめる）
+    await page.evaluate(() => { const st = { cases: {}, essays: {}, stats: {} }; for (let i = 0; i < 12; i++) st.stats["q" + i] = [1, 1];
+      localStorage.setItem("roppo-quest-v2", JSON.stringify(st)); localStorage.setItem("tenbin-lastexp", String(Date.now())); });
+    await page.reload({ waitUntil: "load" }); await page.waitForTimeout(1500);
+    const v1 = await vis();
+    await page.reload({ waitUntil: "load" }); await page.waitForTimeout(1500);
+    const v2 = await vis(); // 同じ節目では二度出ない
+    await page.evaluate(() => { localStorage.removeItem("tenbin-kofi-step"); localStorage.removeItem("tenbin-kofi-last"); localStorage.setItem("tenbin-kofi-never", "1"); });
+    await page.reload({ waitUntil: "load" }); await page.waitForTimeout(1500);
+    const v3 = await vis();
+    if (!v0 && v1 && !v2 && !v3) ok("応援のお願いは節目に1回だけ出て、「もう出さない」で止まる");
+    else ng(`応援のお願いの出かたがおかしい（記録なし:${v0}・10問越え:${v1}・2回目:${v2}・もう出さない:${v3}）`);
     await page.close();
   }
   await browser.close(); server.close();
