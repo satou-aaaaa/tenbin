@@ -69,6 +69,10 @@ const need = ["法律相談ではありません", "非公式", "正確さは保
 const miss = need.filter((w) => !about.includes(w));
 if (miss.length) ng("「このアプリについて」が無いか、次の言葉が抜けている: " + miss.join("・"));
 else ok("「このアプリについて」（免責・非公式・データの扱い）がある");
+// 3e. 外枠は一つだけ。Artifact の写しの外枠ごと入れると、二つ目の <!doctype> や </body></html> が中に入る
+const docs = (html.match(/<!doctype/gi) || []).length, ends = (html.match(/<\/body>/gi) || []).length;
+if (docs !== 1 || ends > 1) ng(`index.html に <!doctype> が ${docs} 個、</body> が ${ends} 個ある（Artifact の写しの外枠が中に入っている）`);
+else ok("index.html の外枠は一つだけ");
 
 // 4. アイコンの大きさ（PNG の先頭 IHDR から幅と高さを読む）
 const pngSize = (f) => {
