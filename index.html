@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611041055";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611041136";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -7436,13 +7436,13 @@ function showOffice() {
         <li>問題・模範答案・解説は、作者がAI（Claude）を使って作り、条文と判例を確かめています。それでも誤りや、法改正で古くなった内容がありえます。内容の正確さは保証できないので、大事なところは条文・判決文や教科書で確かめてください</li>
         <li>条文は e-Gov 法令検索（デジタル庁）のデータをもとに作者が加工しています。判決文は裁判所ウェブサイトなどによります</li>
         <li>問題と解説の文章の著作権は作者にあります</li>
-        <li>依頼（論文演習）：設問に対して、問題提起・規範・あてはめ・結論の型で答案を書き、模範答案と採点の観点で自己採点します。時間を計り、必要ならヒントを見られます。全7科目に基本問題と、論点が2つある本番形式の大問があります</li>
-        <li>Claudeの添削：書いた答案をClaudeが読み、良い点と直すとよい点をコメントします（AIによる参考意見です）。claude.ai の外（ホーム画面に置いた版など）では、自分のAnthropic APIキーを入れると使えます</li>
+        <li>依頼（論文演習）：設問に対して、問題提起・規範・あてはめ・結論の型で答案を書き、AIが添削して観点ごとに採点します（AIを使えないときは、模範答案と採点の観点で自己採点します）。時間を計り、必要ならヒントを見られます。全7科目に基本問題と、論点が2つある本番形式の大問があります</li>
+        <li>AIの添削・採点：論文や記述式で書いた答案をAIが読み、良い点と直すとよい点をコメントして、採点の観点ごとに採点します（AIによる参考意見です）。claude.ai の外（ホーム画面に置いた版など）では、自分のAnthropic APIキーを入れると使えます</li>
         <li>新人研修：本編4話、実際の判例がモデルの判例ファイル7話、令和7年司法試験の論点による司法試験編4話。人名・社名は架空です。聞き取りで集めた事実を使い、三段論法を選びながら組み立てます</li>
         <li>今日のメニュー：自己採点がA以上の依頼と「覚えていた」カードは、1日後・3日後・1週間後…と間隔をのばして復習に出します。A未満や「まだ」のものは翌日にもう一度出ます</li>
         <li>規範カード：各依頼の論点と規範（大問は論点ごとに答案に書くこと）をカードにしています。「まだ」としたカードから先に出ます</li>
         <li>知識の確認ドリル：まちがえた問題は翌日以降に、正解した問題は1日後・3日後・1週間後…と間隔をあけて再出題します</li>
-        <li>行政書士試験の対策：本試験と同じ5肢択一・多肢選択・40字記述の形式で解きます。記述は観点ごとの点数で自己採点します。問題はすべて新しく作ったもので、過去問の文章は使っていません</li>
+        <li>行政書士試験の対策：本試験と同じ5肢択一・多肢選択・40字記述の形式で解きます。記述はAIが観点ごとに採点します（AIを使えないときは自己採点）。問題はすべて新しく作ったもので、過去問の文章は使っていません</li>
         <li>ほかの資格試験の対策：宅建士・司法試験の短答式・予備試験などの択一式を、分野ごとの練習と本番に合わせた問題数・制限時間の模試で解きます。模試は、まだ出ていない問題から先に出します。問題はすべて新しく作ったもので、過去問の文章は使っていません</li>
         <li>司法試験予備試験：予備試験だけの論文科目「法律実務基礎科目（民事・刑事）」の大問と、短答式の法律基本科目7科目を練習します。法律基本科目と選択科目（労働法）の論文は、司法試験・論文式の問題を使います</li>
         <li>連続記録は、論文演習かドリルのどちらかをすると1日分になります。1日休んでも、おやすみ券（週1枚）で続きます</li>
@@ -7766,7 +7766,7 @@ function writeCompare(id, meta = { time: null, hints: 0 }) {
   const mineHTML = t => t.trim() ? esc(t) : `<span class="note">（未記入）</span>`;
   const modelText = big ? p.secs.map(s => s.text).join("\n") : p.m.join("");
   $app.innerHTML = `<div class="chapter-head">${big ? "★ 大問" : "依頼"}「${esc(p.title)}」</div>
-    <p class="note cmpwide">あなたの答案と模範答案を見比べて、できている観点にチェックを入れましょう。模範答案は一例です。言い回しがちがっても、観点がそろっていればチェックして構いません。</p>
+    <p class="note cmpwide">「AIに添削・採点してもらう」をおすと、AIが添削して観点ごとにチェックを入れます。自分で採点するときは、あなたの答案と模範答案を見比べて、できている観点にチェックを入れましょう。模範答案は一例です。言い回しがちがっても、観点がそろっていればチェックして構いません。</p>
     ${big
       ? `<section class="win cmp"><div class="qhead"><span class="tag">あなたの答案</span><span class="qcount tnum">${mine[0].length}字</span></div><div class="mine">${mineHTML(mine[0])}</div></section>
     ${p.secs.map((s, i) => `<section class="win cmp">
@@ -7942,8 +7942,8 @@ function keyPanel(el, onChange) {
   const opts = AI_MODELS.map(([id, t]) => `<option value="${id}"${id === aiModel() ? " selected" : ""}>${t}</option>`).join("");
   const howto = `<details><summary>使い方</summary><ol class="menu">
         <li>答案を書いて「答え合わせ」まで進みます。</li>
-        <li>「Claudeに添削してもらう」をおします。AIが答案を読み、よいところと直すとよいところを書きます（少し時間がかかります）。</li>
-        <li>読み終わったら、「Claudeの判定をチェックに反映」をおすと、チェックの欄にAIの判定が入ります。自分でも見直してから「自己採点を確定」をおします。</li>
+        <li>「AIに添削・採点してもらう」をおします。AIが答案を読み、よいところと直すとよいところを書いて、採点します（少し時間がかかります）。</li>
+        <li>AIの判定は、採点の観点のチェックに自動で入ります。ちがうと思うところは自分で直してから、採点を確定します。</li>
       </ol></details>`;
   const caution = `<details><summary>注意すること（かならず読んでください）</summary><ul class="menu">
         <li><b>APIキーはお金を使える「合いことば」です。</b>パスワードと同じように、友だちに教えたり、SNSにのせたり、画面の写真にうつしたりしないでください。</li>
@@ -24012,6 +24012,205 @@ details.serow[open] .sesnip { display: none; }
   window.__tenbinClearBack = () => { try { clr && clr(); } finally { seBack = false; } };
 })();
 // ===== さがす ここまで =====
+
+// ===== AIの添削・採点：文章で答える問題すべてを、AIが添削して観点ごとに採点する（2026-11-04） =====
+// 対象：論文演習（司法試験・予備の実務基礎・労働法。writeCompare → bindAI）、行政書士の記述式（練習・ミニ模試・本番形式の模試）、司法書士の記述式（登記の申請）。
+// AIは観点ごとに ○/× を返し、点数はその観点の配点を足して出す（どの観点で点が入ったかが見えるように）。判定はチェックの欄に自動で入り、遊ぶ人が直せる。
+// claude.ai の中は Claude の利用枠（sample）、外（PWA版）は遊ぶ人自身のAPIキー（keySample・keyPanel）。どちらも使えないときは、これまでどおり自己採点。
+// 画面の作りには手を入れず、採点画面が出たら（$app の変化を見て）パネルを足す。論文演習だけは bindAI を置き換える。
+const AG_CACHE = new Map();   // 同じ答案をもう一度採点させない（画面を行き来しても結果を残す。お金がかかるので）
+let _agSample = null;
+const agSample = () => _agSample || (_agSample = useSample());
+const agStrip = t => t.replace(/\n?観点判定[:：].*$/s, "").trim();
+const agMarks = (text, n) => {
+  const m = text.match(/観点判定[:：]\s*([○◯×xX✕ 　]+)/);
+  if (!m) return null;
+  const v = m[1].replace(/[\s　]/g, "").split("").map(c => c === "○" || c === "◯");
+  return v.length === n ? v : null;
+};
+// 問題の種類ごとの説明を受け取り、添削と観点ごとの判定を頼む文を作る
+function agPrompt(o) {
+  return `あなたは${o.exam}の採点に慣れた指導者です。受験生の答案を添削し、採点の観点ごとに判定してください。
+
+# ルール
+- 日本語で、受験生に話しかけるように、ていねいに書く。
+- Markdownの記号（#、**、表）は使わない。見出しは【 】で示す。
+- 評価の根拠は、下の「問題」「模範解答」「採点の観点」にある内容に限る。そこにない判例や条文を新たに持ち出す場合は、「（一般論として）」と明記し、事件番号や日付は書かない。
+- 模範解答と言い回しが違っても、内容が同じなら○にする。答案に書かれていない内容は×にする（推測で補わない）。
+${o.rules.map(r => "- " + r).join("\n")}
+
+# 出力の形
+【総評】1〜3文
+【良い点】箇条書き（・）で1〜3個
+【直すとよい点】箇条書き（・）で1〜4個。どこをどう直すか具体的に
+【書き直し例】${o.rewrite}
+最後の1行に「観点判定：」に続けて、採点の観点の番号順に、満たしていれば○、満たしていなければ×を、区切りなしで並べる（例：観点判定：○×○）
+
+# 問題
+${o.question}
+
+# 模範解答
+${o.model}
+
+# 採点の観点${o.items.some(x => x.pts) ? "（かっこ内は配点）" : ""}
+${o.items.map((x, i) => `${i + 1}. ${x.label}${x.pts ? `（${x.pts}点）` : ""}`).join("\n")}
+
+# 受験生の答案
+${o.answer.trim() ? o.answer : "（未記入）"}`;
+}
+// AIのパネルを sec に作る。spec: { key, intro, prompt(), items:[{label, pts}], max, apply(verdict) → bool, after(verdict) }
+function agMount(sec, spec) {
+  sec.classList.add("win", "ai", "agbox"); sec.hidden = true;
+  sec.innerHTML = `<div class="qhead"><span class="tag">AIの添削・採点</span></div>
+    <p class="note agIntro">${spec.intro}</p>
+    <div class="agKey"></div>
+    <div class="row" style="justify-content:flex-start"><button class="btn-gold agGo">AIに添削・採点してもらう</button><button class="agStop" hidden>止める</button></div>
+    <p class="line agScore tnum" hidden></p>
+    <div class="aiout agOut" aria-live="polite"></div>
+    <p class="note agNote" role="status"></p>
+    <p class="note">採点と添削はAIによる参考意見です。まちがえることもあるので、模範解答と観点もあわせて確かめ、ちがうと思うチェックは自分で直してください。</p>`;
+  const q = s => sec.querySelector(s);
+  const go = q(".agGo"), stop = q(".agStop"), out = q(".agOut"), note = q(".agNote"), scoreEl = q(".agScore");
+  const showScore = v => {
+    const got = spec.items.reduce((n, x, i) => n + (v[i] ? (x.pts || 1) : 0), 0), max = spec.max || spec.items.length;
+    scoreEl.hidden = false;
+    scoreEl.textContent = spec.items.some(x => x.pts)
+      ? `AIの採点：${got}点/${max}点（${v.filter(Boolean).length}/${v.length}の観点ができています）`
+      : `AIの採点：${Math.round(got / max * 100)}点/100点・評価 ${rating(got / max)}（${got}/${max}の観点ができています）`;
+  };
+  const hit = AG_CACHE.get(spec.key);
+  if (hit) { out.textContent = agStrip(hit.text); if (hit.v) showScore(hit.v); go.textContent = "もう一度添削・採点してもらう"; }
+  agSample().then(claudeSample => {
+    if (!sec.isConnected) return;
+    const sample = claudeSample || keySample;
+    sec.hidden = false;
+    if (!claudeSample) {
+      const sync = () => { go.disabled = !aiKey(); };
+      keyPanel(q(".agKey"), sync); sync();
+    }
+    let ctl = null;
+    stop.onclick = () => ctl && ctl.abort();
+    go.onclick = async () => {
+      ctl = new AbortController();
+      go.disabled = true; stop.hidden = false; note.textContent = ""; scoreEl.hidden = true;
+      out.textContent = "AIが答案を読んでいます…";
+      try {
+        const { text, truncated } = await sample(spec.prompt(), { signal: ctl.signal, onText: ({ text }) => { out.textContent = agStrip(text); } });
+        out.textContent = agStrip(text);
+        const v = agMarks(text, spec.items.length);
+        AG_CACHE.set(spec.key, { text, v });
+        if (v) {
+          showScore(v);
+          const applied = spec.apply(v);
+          note.textContent = applied ? "AIの判定をチェックの欄に入れました。ちがうと思うところは直せます。" : "";
+          spec.after && spec.after(v);
+        } else note.textContent = "観点ごとの判定が読み取れませんでした。もう一度試すか、自分でチェックしてください。";
+        if (truncated) note.textContent += "添削が途中で切れています。";
+      } catch (e) {
+        out.textContent = e.code === "refused" ? "" : (e.text || "");
+        if (claudeSample && ["not_granted", "sampling_disabled", "capability_disabled", "not_declared"].includes(e.code)) { sec.hidden = true; return; }
+        if (e.code !== "cancelled") note.textContent = AI_ERR[e.code] || "通信がうまくいきませんでした。もう一度試してください。";
+      } finally {
+        if (sec.isConnected) { go.disabled = !claudeSample && !aiKey(); stop.hidden = true; go.textContent = "もう一度添削・採点してもらう"; }
+      }
+    };
+  });
+}
+const agText = el => el ? el.textContent.trim() : "";
+const agItem = (el, ptsSel) => { const t = el.textContent.replace(/\s+/g, " ").trim(), m = t.match(/[（(](\d+)点[）)]\s*$/);
+  return { label: t.replace(/\s*[（(]\d+点[）)]\s*$/, ""), pts: m ? +m[1] : 0 }; };
+// 論文演習（司法試験・予備の実務基礎・労働法）：これまでの「Claudeの添削」を、観点ごとの採点まで自動で入れる形にする
+bindAI = function (p, mine, checks, boxes) {
+  const sec = document.getElementById("ai"); if (!sec) return;
+  const lead = $app.querySelector(".cmpwide"); if (lead) lead.after(sec);  // 答え合わせの画面のいちばん上に出す
+  const items = checks.flat().map(label => ({ label, pts: 0 }));
+  const grade = document.getElementById("grade");
+  agMount(sec, {
+    key: "ron:" + p.id + "\n" + mine.join("\n"),
+    intro: "書いた答案をAIが読み、良い点と直すとよい点を書いて、採点の観点ごとに○×をつけます。点数は、できている観点の割合です。",
+    prompt: () => aiPrompt(p, mine, checks),
+    items,
+    apply: v => { let n = 0; boxes.forEach((b, i) => { if (b.disabled) return; b.checked = v[i]; b.dispatchEvent(new Event("change")); n++; }); return n > 0; },
+    after: () => { if (grade && !grade.disabled) grade.textContent = "この採点で確定"; },
+  });
+};
+// 行政書士の記述式（練習・ミニ模試）：「模範解答と比べる」のあと
+function agGyKiji() {
+  const msg = document.getElementById("msg"), pts = document.getElementById("gyPts");
+  if (!msg || !pts || msg.querySelector(".agbox")) return;
+  const boxes = [...msg.querySelectorAll("input[data-p]")];
+  const items = boxes.map(b => agItem(b.parentElement));
+  const question = agText($app.querySelector("section.win .question")), model = agText(msg.querySelector(".model"));
+  const mine = agText(msg.querySelector(".mine")).replace(/^（未記入）$/, "");
+  const sec = document.createElement("section"); pts.after(sec);
+  agMount(sec, {
+    key: "gy:" + question + "\n" + mine,
+    intro: "書いた解答をAIが読み、良い点と直すとよい点を書いて、観点ごとに採点します（本試験と同じ1問20点）。",
+    prompt: () => agPrompt(gyKijiSpec(question, model, items, mine)),
+    items, max: items.reduce((n, x) => n + x.pts, 0),
+    apply: v => { boxes.forEach((b, i) => { b.checked = v[i]; b.dispatchEvent(new Event("change")); }); return true; },
+    after: () => { pts.textContent = pts.textContent.replace("自己採点", "採点（AIの判定）"); },
+  });
+}
+const gyKijiSpec = (question, model, items, answer) => ({
+  exam: "行政書士試験の記述式（40字程度で書く。1問20点で、観点ごとに部分点がある）", question, model, items, answer,
+  rules: ["本試験の解答欄は45字なので、45字をこえて書いた部分は本番では書けないことを指摘する（採点の観点の判定は書かれた内容で行う）。", "誤字や表記の小さな違いは、意味が通じれば○にする。"],
+  rewrite: "受験生の答案を生かして、40字前後の解答例を1つ書く",
+});
+// 行政書士の本番形式の模試：記述式の採点の画面
+function agGyExam() {
+  const kp = document.getElementById("gxKp");
+  if (!kp || $app.querySelector(".agbox")) return;
+  const boxes = [...$app.querySelectorAll(".checks input[data-k]")];
+  const items = boxes.map(b => agItem(b.parentElement));
+  const question = agText($app.querySelector(".question")), model = agText($app.querySelector(".model"));
+  const mine = agText($app.querySelector(".mine")).replace(/^（未記入）$/, "");
+  const sec = document.createElement("section"); kp.closest("section").after(sec);
+  agMount(sec, {
+    key: "gy:" + question + "\n" + mine,
+    intro: "書いた解答をAIが読み、良い点と直すとよい点を書いて、観点ごとに採点します（本試験と同じ1問20点）。",
+    prompt: () => agPrompt(gyKijiSpec(question, model, items, mine)),
+    items, max: items.reduce((n, x) => n + x.pts, 0),
+    apply: v => { boxes.forEach((b, i) => { if (!b.isConnected) return; b.checked = v[i]; b.dispatchEvent(new Event("change")); }); return true; },
+    after: () => { if (kp.isConnected) kp.textContent = kp.textContent.replace("自己採点", "採点（AIの判定）"); },
+  });
+}
+// 司法書士の記述式：採点の画面（自動の採点は語があるかだけを見るので、AIが内容で判定し直す）
+function agShoshi() {
+  if (!$app.querySelector(".skkeys") || $app.querySelector(".agbox")) return;
+  const btns = [...$app.querySelectorAll(".skkeys button[data-k]")].sort((a, b) => a.dataset.k - b.dataset.k);
+  const items = btns.map(b => ({ label: agText(b).replace(/^[○×]/, "").replace(/\d+点$/, "").trim(), pts: +(agText(b.querySelector(".skp")).replace(/\D/g, "")) || 0 }));
+  const secs = [...$app.querySelectorAll(".skres")];
+  const answer = secs.map(s => `【${agText(s.querySelector("h3"))}】\n` + [...s.querySelectorAll(".skrow")].map(r => `${agText(r.querySelector("h4"))}：${agText(r.querySelector(".skmine")).replace(/^あなたの答え/, "")}`).join("\n")).join("\n\n");
+  const model = secs.map(s => `【${agText(s.querySelector("h3"))}】\n` + [...s.querySelectorAll(".skmodel li")].map(li => agText(li)).join("\n")).join("\n\n");
+  let p = null;  // いま採点している問題（事実関係を頼む文に入れる）
+  try { const x = xmSt("shoshi").kj.cur; p = SH_KJ.find(q => q.id === x.ids[x.i]) || null; } catch {}
+  const question = p ? [...p.facts, ...p.docs.map(([h, t]) => `〔${h}〕${t}`), "問い：" + p.ask].join("\n") : "（事実関係は省略。解答例と採点の観点をもとに判定する）";
+  const done = btns.every(b => b.disabled);
+  const sec = document.createElement("section"); $app.querySelector(".msg").after(sec);
+  agMount(sec, {
+    key: "sk:" + model + "\n" + answer,
+    intro: `答案をAIが読み、良い点と直すとよい点を書いて、採点の観点ごとに判定します（1問70点）。${done ? "採点は確定ずみなので、チェックは変えずに判定と添削だけを出します。" : "判定は下の○×に入ります。"}`,
+    prompt: () => agPrompt({
+      exam: "司法書士試験の記述式（登記の申請書の作成。1問70点で、観点ごとに部分点がある）", question, model, items, answer,
+      rules: ["登記の目的・原因と日付・申請人・添付情報・登録免許税などの欄ごとに、正しく書けているかを見る。", "数字・日付・金額は、表記が違っても同じ値なら○にする。値が違えば×にする。"],
+      rewrite: "いちばん直すとよい欄を1つ選び、正しい書き方を示す",
+    }),
+    items, max: items.reduce((n, x) => n + x.pts, 0),
+    apply: v => {
+      let n = 0;
+      v.forEach((want, j) => { const b = $app.querySelector(`.skkeys button[data-k="${btns[j].dataset.k}"]`);
+        if (b && !b.disabled && (b.getAttribute("aria-pressed") === "true") !== want) { b.click(); n++; } });  // 押すたびに画面が作り直される
+      return !done;
+    },
+  });
+}
+let agQueued = false;
+new MutationObserver(() => {
+  if (agQueued) return; agQueued = true;
+  queueMicrotask(() => { agQueued = false; [agGyKiji, agGyExam, agShoshi].forEach(f => { try { f(); } catch (e) { console.warn("aigrade", e); } }); });
+}).observe($app, { childList: true, subtree: true });
+// ===== AIの添削・採点 ここまで =====
 
 // keyboard: 1-5 / o x to answer, Enter for next
 document.addEventListener("keydown", e => {
