@@ -46,7 +46,13 @@ const head = `<!doctype html>
 </head><body>
 `;
 const tail = `
-<p style="text-align:center;margin:16px 0 24px;font:13px system-ui,sans-serif"><a href="changes.html" style="color:#cfe3d9">更新情報</a>　<a id="kofi" href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener noreferrer" style="color:#cfe3d9">Ko-fi で応援</a></p>
+<p style="text-align:center;margin:16px 0 24px;font:13px system-ui,sans-serif"><a href="changes.html" style="color:#cfe3d9">更新情報</a>　<a id="kofi" href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener noreferrer" style="color:#cfe3d9">☕ Ko-fi で応援</a><br><span style="display:inline-block;margin-top:6px;color:#9fbfb2;font-size:12px">天秤の書は無料・広告なしで、ひとりで作っています。応援は、問題の追加と判例の確かめに使います。</span></p>
+<div id="tenbin-kofi" role="status" style="display:none;position:fixed;left:16px;right:16px;margin:0 auto;bottom:calc(16px + env(safe-area-inset-bottom));z-index:2147483645;max-width:520px;gap:8px 10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border-radius:10px;background:#f4ecd4;color:#14302a;box-shadow:0 4px 16px rgba(0,0,0,.35);font:14px/1.5 system-ui,sans-serif">
+<span id="tenbin-kofi-msg" style="flex:1 1 100%"></span>
+<a id="tenbin-kofi-go" href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener noreferrer" style="font-weight:bold;padding:6px 12px;border-radius:6px;background:#14302a;color:#f4ecd4;text-decoration:none">☕ 応援する</a>
+<button type="button" id="tenbin-kofi-x" style="font:inherit;padding:6px 8px;border:0;background:none;color:#14302a;cursor:pointer;text-decoration:underline">閉じる</button>
+<button type="button" id="tenbin-kofi-never" style="font:inherit;padding:6px 8px;border:0;background:none;color:#14302a;cursor:pointer;text-decoration:underline;margin-left:auto">もう出さない</button>
+</div>
 <div id="tenbin-update" role="status" style="display:none;position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:2147483647;max-width:calc(100% - 32px);gap:12px;align-items:center;padding:10px 14px;border-radius:10px;background:#f4ecd4;color:#14302a;box-shadow:0 4px 16px rgba(0,0,0,.35);font:14px/1.4 system-ui,sans-serif">
 <span>新しい版があります。区切りのよいところで更新してください。</span>
 <button type="button" id="tenbin-update-go" style="font:inherit;font-weight:bold;padding:6px 12px;border:0;border-radius:6px;background:#14302a;color:#f4ecd4;cursor:pointer">更新</button>
@@ -126,6 +132,46 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
     if (b) { b.scrollIntoView({ block: "center", behavior: "smooth" }); b.focus({ preventScroll: true }); }
   };
   document.getElementById("tenbin-backup-x").onclick = () => { put("tenbin-backup-snooze", String(Date.now() + SNOOZE * DAY)); check(); };
+})();
+</script>
+<script>
+// Ko-fi の応援のお願い（PWA版だけ）。
+// Eclipse は「使い始めた瞬間」にお願いを出すようにして寄付が5〜6倍になった（blogs.eclipse.org 2013-04-09）。
+// ここでは、取り組んだ問題の数が節目（10・30・60・100・200…）を越えて目次に戻ったときにだけ、下に1枚出す。
+// 押し付けないように: 前に出してから30日は出さない／記録の控えの案内が出ている間は出さない／「もう出さない」で二度と出さない。
+(() => {
+  const DAY = 864e5, GAP = 30, STEPS = [10, 30, 60, 100, 200, 300, 500, 1000];
+  const get = k => { try { return localStorage.getItem(k); } catch { return null; } };
+  const put = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+  const bar = document.getElementById("tenbin-kofi"), msg = document.getElementById("tenbin-kofi-msg");
+  // 取り組んだ問題の数（論文・事件・択一の記録の数）
+  const done = () => { try { const v = JSON.parse(get("roppo-quest-v2") || "{}");
+    return ["cases", "essays", "stats"].reduce((n, k) => n + (v[k] ? Object.keys(v[k]).length : 0), 0); } catch { return 0; } };
+  const step = n => STEPS.filter(s => n >= s).pop() || 0;
+  const due = () => {
+    if (get("tenbin-kofi-never") || !document.getElementById("expBtn")) return "";
+    const back = document.getElementById("tenbin-backup"), upd = document.getElementById("tenbin-update");
+    if ((back && back.style.display !== "none") || (upd && upd.style.display !== "none")) return "";
+    const n = done(), s = step(n);
+    if (!s || s <= Number(get("tenbin-kofi-step") || 0)) return "";
+    if (Date.now() - Number(get("tenbin-kofi-last") || 0) < GAP * DAY) return "";
+    return "これまでに " + n + " 問に取り組みました。おつかれさまです。天秤の書は無料・広告なしで、ひとりで作っています。役に立っていたら、コーヒー1杯ぶんの応援をもらえると、問題を増やす力になります。";
+  };
+  let shown = false;
+  const hide = () => { shown = false; bar.style.display = "none"; };
+  const seen = () => { put("tenbin-kofi-step", String(step(done()))); put("tenbin-kofi-last", String(Date.now())); };
+  const check = () => {
+    if (shown) { if (!document.getElementById("expBtn")) hide(); return; } // 出したら、目次から離れるまでそのまま
+    const m = due(); if (!m) return;
+    msg.textContent = m; shown = true; bar.style.display = "flex"; seen(); // 一度出したら、次の節目まで出さない
+  };
+  let queued = false;
+  new MutationObserver(() => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; check(); }); } })
+    .observe(document.body, { childList: true, subtree: true });
+  addEventListener("load", () => setTimeout(check, 800)); // 控えの案内のあとに判断する
+  document.getElementById("tenbin-kofi-go").addEventListener("click", hide);
+  document.getElementById("tenbin-kofi-x").onclick = hide;
+  document.getElementById("tenbin-kofi-never").onclick = () => { put("tenbin-kofi-never", "1"); hide(); };
 })();
 </script>
 </body></html>
