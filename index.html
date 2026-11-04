@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611041320";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611041326";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -8864,7 +8864,7 @@ function gyExamBind() {
 //   例：教科書から解いた問題で「やめる」は行政書士の画面へ行く）。今は、通ってきた画面（SCREENS の関数の呼び出し）を順に記録して、そこへ戻す。
 // 問題を解いている途中・模試などの記録しない画面では、後片付けのボタン（中断・やめる）を押してから、問題を始めた画面に戻す。
 (() => {
-  const SCREENS = ["showOffice", "showRonbun", "showGyosei", "showTb", "showTbUnit", "showXm", "showXmList", "showKm", "showKmSub", "showSearch"];  // 記録する画面（新しい画面の関数を作ったらここに足す）
+  const SCREENS = ["showOffice", "showRonbun", "showGyosei", "showTb", "showTbUnit", "showXm", "showXmList", "showKm", "showKmSub", "showSearch", "showRecord"];  // 記録する画面（新しい画面の関数を作ったらここに足す）
   // 記録しない画面（問題を解いている途中・模試など）から出るときに押す「後片付け」のボタン（タイマーを止める・途中を保存する）
   const EXIT = ["#gxPause", "#quit", "#gxBackG", "#xmAgain", "#gyBack"];
   const vis = sel => { const b = document.querySelector(sel); return b && !b.disabled && b.getClientRects().length ? b : null; };
@@ -24657,6 +24657,160 @@ new MutationObserver(() => {
   document.head.appendChild(css);
 })();
 // ===== 組合せ問題の見やすさ ここまで =====
+// ===== 学習の記録：日ごとの学習量のカレンダー・科目ごとの正答率・苦手な問題（2026-11-04） =====
+// 記録は S.log[日] = [解いた択一, 正解, 論文・規範カード]（record / schedule を包んで数える）。教科書は S.tb[単元] = 読んだ日 をそのまま使う。
+// 「今日の学習」の連続日数をボタンにして、この画面を開く。
+S.log = (store.get().log) || {};
+const RC_WEEKS = 16;
+const rcDay = t => { const d = new Date(t * 86400000); return { m: d.getUTCMonth() + 1, d: d.getUTCDate(), w: d.getUTCDay() }; };
+const rcLog = (k, n = 1) => { const t = today(), e = S.log[t] || (S.log[t] = [0, 0, 0]); e[k] += n;
+  const old = Object.keys(S.log).filter(x => +x < t - 400); old.forEach(x => delete S.log[x]); };
+// 日ごとの量：択一1問=1、論文・カード1回=1、教科書1単元=1
+function rcDays() {
+  const out = {}; const add = (t, k, n) => { const e = out[t] || (out[t] = [0, 0, 0, 0]); e[k] += n; };
+  Object.entries(S.log).forEach(([t, e]) => { add(+t, 0, e[0] || 0); add(+t, 1, e[1] || 0); add(+t, 2, e[2] || 0); });
+  Object.values(S.tb || {}).forEach(t => { if (typeof t === "number") add(t, 3, 1); });
+  if (S.streak && S.streak.last != null && !out[S.streak.last]) add(S.streak.last, 3, 0);
+  return out;
+}
+const rcAmt = e => e ? e[0] + e[2] + e[3] : 0;
+const rcLv = n => n <= 0 ? 0 : n < 5 ? 1 : n < 10 ? 2 : n < 20 ? 3 : 4;
+// 科目ごと：解いた問題・正答率・復習待ち（科目別に解く と同じ分け方）
+function rcSubj() {
+  const D = kmData(), t = today();
+  return KM_SUBJ.map(([s, icon]) => { const l = D[s].qs; let r = 0, n = 0, done = 0, due = 0;
+    l.forEach(e => { const st = S.stats[e.q.id]; if (st) { r += st[0]; n += st[1]; done++; } const v = S.srs[e.q.id]; if (v && v.due <= t) due++; });
+    return { s, icon, all: l.length, done, r, n, due, rate: n ? r / n : null };
+  }).filter(x => x.all);
+}
+// 苦手な問題：2回以上解いて半分以上まちがえた問題と、前回まちがえた問題（正答率の低い順）
+function rcWeak() {
+  const D = kmData(), seen = new Set(), out = [];
+  Object.values(D).forEach(d => d.qs.forEach(e => { const st = S.stats[e.q.id], v = S.srs[e.q.id];
+    if (!st || seen.has(e.q.id)) return; seen.add(e.q.id);
+    if ((st[1] >= 2 && st[0] / st[1] <= 0.5) || (v && v.box === 0 && v.due <= today())) out.push({ e, rate: st[0] / st[1], n: st[1] }); }));
+  return out.sort((a, b) => a.rate - b.rate || b.n - a.n).map(x => x.e);
+}
+function showRecord() {
+  quiz = null;
+  const days = rcDays(), t = today(), streak = streakAlive();
+  const sum = (a, b) => { let q = 0, ok = 0, all = 0; for (let x = a; x <= b; x++) { const e = days[x]; if (e) { q += e[0]; ok += e[1]; all += rcAmt(e); } } return { q, ok, all }; };
+  const wk = sum(t - 6, t), pw = sum(t - 13, t - 7);
+  const active = Object.keys(days).filter(x => rcAmt(days[x]) > 0 || +x === (S.streak || {}).last).length;
+  let tq = 0, tr = 0; Object.values(S.stats).forEach(([r, n]) => { tr += r; tq += n; });
+  // カレンダー：左が古く右が今週。縦は日〜土
+  const start = t - rcDay(t).w - (RC_WEEKS - 1) * 7;
+  const cells = [], months = [];
+  for (let w = 0; w < RC_WEEKS; w++) {
+    const d0 = start + w * 7, md = rcDay(d0); months.push(w === 0 || md.d <= 7 ? `${md.m}月` : "");
+    for (let k = 0; k < 7; k++) { const x = d0 + k, e = days[x], n = rcAmt(e), dd = rcDay(x);
+      cells.push(x > t ? `<i class="rcc fut" style="grid-column:${w + 2};grid-row:${k + 2}"></i>`
+        : `<i class="rcc l${rcLv(n)}${x === t ? " now" : ""}" style="grid-column:${w + 2};grid-row:${k + 2}" title="${dd.m}月${dd.d}日 ${n}"></i>`); }
+  }
+  const subj = rcSubj(), weak = rcWeak();
+  const pct = v => v == null ? "－" : `${Math.round(v * 100)}%`;
+  const diff = wk.all - pw.all;
+  const essays = Object.keys(S.essays || {}).length, normsK = Object.values(S.norms || {}).filter(Boolean).length, tbN = Object.keys(S.tb || {}).length;
+  const worst = subj.filter(x => x.n >= 5).sort((a, b) => a.rate - b.rate)[0];
+  $app.innerHTML = `<div class="chapter-head">学習の記録</div>
+    <section class="tiles rctiles" aria-label="まとめ">
+      <div class="rct"><b class="tnum">${streak}</b><p class="note">日連続</p></div>
+      <div class="rct"><b class="tnum">${active}</b><p class="note">学習した日</p></div>
+      <div class="rct"><b class="tnum">${tq}</b><p class="note">解いた択一</p></div>
+    </section>
+    <section class="win rccal">
+      <h2 class="section-label" style="margin:0 0 6px">この${RC_WEEKS}週間</h2>
+      <div class="rcgrid" role="img" aria-label="この${RC_WEEKS}週間に学習した日のカレンダー。今日まで${active}日学習">
+        ${months.map((m, w) => `<span class="rcm" style="grid-column:${w + 2}">${m}</span>`).join("")}
+        ${["日", "", "火", "", "木", "", "土"].map((d, k) => `<span class="rcw" style="grid-row:${k + 2}">${d}</span>`).join("")}
+        ${cells.join("")}
+      </div>
+      <p class="note rclegend">少ない <i class="rcc l1"></i><i class="rcc l2"></i><i class="rcc l3"></i><i class="rcc l4"></i> 多い</p>
+      <p class="note" style="margin:2px 0 0">択一1問・論文や規範カード1回・教科書1単元を、それぞれ1と数えます。</p>
+      <p class="rcweek">この7日：<b class="tnum">${wk.all}</b>（択一 ${wk.q}問・正答率${pct(wk.q ? wk.ok / wk.q : null)}）<span class="note">前の7日より${diff >= 0 ? `${diff}多い` : `${-diff}少ない`}</span></p>
+      ${Object.keys(S.log).length ? "" : `<p class="note">日ごとの記録は、この画面ができた2026年11月4日から数えます（それより前は、教科書を読んだ日と連続日数だけ）。</p>`}
+    </section>
+    <h2 class="section-label">科目ごとの成績（択一）</h2>
+    <section class="win rcsub">
+      <table class="gymr tnum"><tr class="rch"><th>科目</th><th>解いた</th><th>正答率</th><th></th></tr>
+      ${subj.map(x => `<tr class="${worst && x.s === worst.s ? "weak" : ""}"><th>${esc(x.s)}</th><td>${x.done}<span class="note">/${x.all}</span></td>
+        <td><span class="gybar" aria-hidden="true"><i style="width:${x.rate == null ? 0 : Math.round(x.rate * 100)}%"></i></span> <span class="gypc">${pct(x.rate)}</span></td>
+        <td class="gyprac"><button class="gyprac-b" data-s="${esc(x.s)}">${x.due ? `復習${x.due}` : "解く"}</button></td></tr>`).join("")}
+      </table>
+      ${worst ? `<p class="note" style="margin:0">いちばん正答率が低いのは「${esc(worst.s)}」です（5問以上解いた科目で比べています）。</p>` : `<p class="note" style="margin:0">解いた問題がふえると、苦手な科目がわかります。</p>`}
+    </section>
+    <section class="win today rcweak">
+      <p class="pixel" style="margin:0;color:var(--gold)">苦手な問題</p>
+      <p class="note" style="margin:0">${weak.length ? `前回まちがえた問題と、2回以上解いて半分以上まちがえた問題が <b class="tnum">${weak.length}</b>問あります。` : "まだありません。まちがえた問題がここに集まります。"}</p>
+      ${weak.length ? `<button class="btn-gold big" id="rcWeak">苦手な問題を${Math.min(weak.length, 10)}問解く ▶</button>` : ""}
+    </section>
+    <h2 class="section-label">論文・教科書</h2>
+    <section class="win"><ul class="memo" style="margin:0">
+      <li>答案を書いた論文の問題 <b class="tnum">${essays}</b> / ${probs().length}問</li>
+      <li>覚えた規範カード <b class="tnum">${normsK}</b> / ${NORMS().length}枚</li>
+      <li>読んだ教科書の単元 <b class="tnum">${tbN}</b>単元</li></ul></section>
+    <p class="note">記録はこの端末のブラウザにだけ保存されます。別の端末に移すときは、目次の「そのほか」→「ホーム画面に追加・記録の引っ越し」を使ってください。</p>
+    <div class="row"><button class="btn-gold" id="home">目次にもどる</button></div>`;
+  document.getElementById("home").onclick = showOffice;
+  $app.querySelectorAll(".gyprac-b[data-s]").forEach(b => b.onclick = () => showKmSub(b.dataset.s));
+  const wb = document.getElementById("rcWeak");
+  if (wb) wb.onclick = () => kmRun({ s: "学習の記録", deck: weak.slice(0, 10), i: 0, right: 0, title: "苦手な問題" });
+  toTop();
+}
+
+(() => {
+  const css = document.createElement("style");
+  css.textContent = `
+#goRec { min-height: 40px; padding: 2px 10px; font-size: 12.5px; border-color: var(--gold); color: var(--gold); }
+.rctiles { grid-template-columns: repeat(3, 1fr); }
+.rct { display: grid; justify-items: center; gap: 2px; padding: 10px 4px; background: var(--window); border: 1px solid var(--line); border-radius: 3px; text-align: center; }
+.rct b { font-family: var(--font-pixel); color: var(--gold); font-size: 24px; line-height: 1.2; }
+.rct .note { margin: 0; font-size: 11.5px; line-height: 1.4; }
+.rcgrid { display: grid; grid-template-columns: 1.4em repeat(${RC_WEEKS}, minmax(0, 1fr)); grid-template-rows: 1.3em repeat(7, auto); gap: 3px; max-width: 520px; }
+.rcm { grid-row: 1; font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: visible; }
+.rcw { grid-column: 1; font-size: 10.5px; color: var(--muted); line-height: 1; align-self: center; }
+.rcc { display: block; aspect-ratio: 1; border-radius: 2px; background: rgb(255 255 255 / .06); }
+.rcc.fut { background: transparent; }
+.rcc.l1 { background: color-mix(in srgb, var(--gold) 30%, transparent); }
+.rcc.l2 { background: color-mix(in srgb, var(--gold) 55%, transparent); }
+.rcc.l3 { background: color-mix(in srgb, var(--gold) 80%, transparent); }
+.rcc.l4 { background: var(--gold); }
+.rcc.now { outline: 2px solid var(--chalk); outline-offset: -1px; }
+.rclegend { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; margin: 8px 0 0; }
+.rclegend .rcc { width: 12px; }
+.rcweek { margin: 8px 0 0; font-size: 14px; } .rcweek b { color: var(--gold); font-size: 17px; } .rcweek .note { margin-left: 6px; }
+.rcsub .gymr th:first-child { font-weight: 400; word-break: keep-all; overflow-wrap: anywhere; }
+.rcsub .gymr th, .rcsub .gymr td { padding-inline: 3px; font-size: 13px; }
+.rcsub .gyprac-b { padding-inline: 8px; }
+.rcsub .gymr td .note { font-size: 11px; }
+.rcsub .gymr tr.rch th { white-space: nowrap; }`;
+  document.head.appendChild(css);
+  // 数える：択一の答え合わせ（record）と、論文・規範カードの自己判定（schedule）。save の前に足すので一緒に保存される
+  const rec = record;
+  record = function (q, ok) { try { rcLog(0); if (ok) rcLog(1); } catch (e) { console.warn("rec", e); } return rec.apply(this, arguments); };
+  const sch = schedule;
+  schedule = function (key, ok) { try { rcLog(2); } catch (e) { console.warn("rec", e); } return sch.apply(this, arguments); };
+  // 目次：「今日の学習」の連続日数をボタンにする（目次の高さは変えない）
+  const home = showOffice;
+  showOffice = function (...a) {
+    const r = home.apply(this, a);
+    try {
+      const sp = document.querySelector('.today-head [aria-label="連続学習記録"]');
+      if (sp && !document.getElementById("goRec")) {
+        const b = document.createElement("button"); b.id = "goRec"; b.className = "tnum";
+        b.setAttribute("aria-label", `学習の記録を見る（${sp.textContent}）`);
+        b.innerHTML = `${esc(sp.textContent)} <span aria-hidden="true">📊</span>`; sp.replaceWith(b);
+        b.onclick = () => showRecord();
+      }
+    } catch (e) { console.warn("record home", e); }
+    return r;
+  };
+  // 苦手な問題を解いたあと・やめたときは記録の画面へ（kmRun は s の名前で科目の画面にもどすので、その名前で見分ける）
+  const sub = showKmSub;
+  showKmSub = function (s, ...a) { return s === "学習の記録" ? showRecord() : sub.call(this, s, ...a); };
+})();
+// ===== 学習の記録 ここまで =====
+
 // keyboard: 1-5 / o x to answer, Enter for next
 document.addEventListener("keydown", e => {
   const next = document.getElementById("next");
