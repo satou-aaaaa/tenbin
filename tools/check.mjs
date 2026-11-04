@@ -167,6 +167,40 @@ if (process.argv.includes("--browser")) {
     else ng(`応援のお願いの出かたがおかしい（記録なし:${v0}・10問越え:${v1}・2回目:${v2}・もう出さない:${v3}）`);
     await page.close();
   }
+  // 組合せ問題（ア〜オから2つ・ア〜ウの○×）は、ほかの択一と同じ見た目で出ること（2026-11-04 satou「2つ選択するタイプの問題の出題と解説が見づらい」）
+  // 出題：「ア　…」の記述が1つずつ枠（.kmst li）に分かれる。解説：選択肢が組（ア・ウ など）なら「記述ごとの正誤」（.kmw li）が記述の数だけ出て、全部に ○× が付く。
+  // 新しい試験や問題の形を足して、この表示から漏れたら落とす。スマホ幅で横にはみ出さないことも確かめる
+  for (const vp of [{ name: "スマホ", width: 390, height: 844, all: true }, { name: "PC", width: 1280, height: 800, all: false }]) {
+    const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
+    page.on("pageerror", (e) => errors.push(`組合せ問題（${vp.name}）: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
+    const r = await page.evaluate(async (all) => {
+      if (typeof XM_LIST === "undefined" || typeof GY_ALL === "undefined") return null;
+      const tick = () => new Promise((res) => setTimeout(res, 0));
+      const nSt = (q) => { const L = (q.q || "").split("\n").map((s) => s.trim()).filter(Boolean); let n = 0; for (let i = L.length - 1; i >= 0 && /^[ア-オ][　 ]/.test(L[i]); i--) n++; return n >= 3 ? n : 0; };
+      const isLab = (t) => /^[ア-オ](?:[ 　・と]?[ア-オ])+$|^(?:[ア-オ][○×][ 　・]*){2,}$/.test(t.trim());
+      let jobs = [...XM_LIST.flatMap((c) => c.qs.filter(nSt).map((q) => [q, () => xmRun(c, { deck: [q], i: 0, right: 0, title: "検査" })])),
+        ...GY_ALL.filter((q) => gyKind(q) === "go" && nSt(q)).map((q) => [q, () => gyRun({ deck: [q], i: 0, right: 0, title: "検査" })])];
+      if (!all) jobs = jobs.filter((_, i) => i % 25 === 0);
+      const bad = [];
+      for (const [q, go] of jobs) {
+        go(); await tick();
+        const st = $app.querySelectorAll(".kmst li").length, lab = isLab(q.c[q.a] || "");
+        $app.querySelector(".choices button").click(); await tick(); await tick();
+        const w = [...$app.querySelectorAll(".kmw li")];
+        if (st !== nSt(q)) bad.push(`${q.id}：記述が枠に分かれていない（${st}/${nSt(q)}）`);
+        else if (lab && (w.length !== st || w.some((li) => !li.querySelector(".gytf")))) bad.push(`${q.id}：解説に記述ごとの正誤が出ない（${w.length}/${st}）`);
+        if (document.documentElement.scrollWidth > innerWidth + 1) bad.push(`${q.id}：横にはみ出す`);
+        if (bad.length > 10) break;
+      }
+      showOffice(); return { n: jobs.length, bad };
+    }, vp.all);
+    if (r === null) ok(`${vp.name}: 組合せ問題がないので確かめない`);
+    else if (r.bad.length) ng(`${vp.name}: 組合せ問題の表示がおかしい（${r.n}問中）: ${r.bad.join(" / ")}`);
+    else ok(`${vp.name}: 組合せ問題${r.n}問の記述が枠に分かれ、解説に記述ごとの正誤が出る`);
+    await page.close();
+  }
   await browser.close(); server.close();
   if (errors.length) errors.forEach((e) => ng("JS のエラー: " + e)); else ok("JS のエラーなし");
 }
