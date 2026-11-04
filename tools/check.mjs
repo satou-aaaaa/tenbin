@@ -128,6 +128,21 @@ if (process.argv.includes("--browser")) {
     if (jit === null) ok(`${vp.name}: 模試の画面がないので残り時間の幅は確かめない`);
     else if (jit.length === 1) ok(`${vp.name}: 模試の残り時間の幅と位置が変わらない`);
     else ng(`${vp.name}: 模試の残り時間が変わるたびに幅か位置が動く（${jit.join(" , ")}）。.gytimer の幅を固定する`);
+    // 横にはみ出さないこと（文字の大きさ「標準」「大」の両方で、目次・論文式・模試の画面）。
+    // 「大」は .wrap を zoom で拡大するので、端まで貼りつける帯（margin-inline: -16px）が広がって 2px はみ出していた（2026-11-04）
+    const wide = await page.evaluate(() => {
+      const out = [], keepFs = document.documentElement.dataset.fs || "n";
+      const screens = [["目次", () => showOffice()], ["論文式", () => typeof showRonbun === "function" && showRonbun()],
+        ["行政書士の模試", () => { if (typeof gyExamOpen !== "function") return; const k = S.gyExam; gyExamOpen(true); gyExamPause(); S.gyExam = k; }],
+        ...(typeof XM_LIST !== "undefined" ? XM_LIST.filter((c) => c.mocks && c.mocks.length).map((c) => [`${c.short}の模試`, () => { const st = xmSt(c.key), k = st.cur; xmOpen(c, c.mocks[0]); xmPause(); st.cur = k; }]) : [])];
+      for (const fs of ["n", "l"]) {
+        document.documentElement.dataset.fs = fs;
+        for (const [name, go] of screens) { try { go(); } catch (e) { out.push(`${name}（${fs}）: ${e.message}`); continue; }
+          const w = document.documentElement.scrollWidth - innerWidth; if (w > 0) out.push(`${name}（文字${fs === "l" ? "大" : "標準"}）で ${w}px`); }
+      }
+      document.documentElement.dataset.fs = keepFs; showOffice(); return out;
+    });
+    if (wide.length) ng(`${vp.name}: 横にはみ出す: ${wide.join(" / ")}`); else ok(`${vp.name}: 文字の大きさ標準・大で、目次・模試の画面が横にはみ出さない`);
     await page.close();
   }
   // 応援のお願い: 何も解いていないうちは出ない。10問を越えて目次を開くと1回だけ出る。「もう出さない」のあとは出ない

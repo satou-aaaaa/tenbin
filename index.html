@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611041305";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611041314";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -283,6 +283,8 @@ details.jbart > summary { cursor: pointer; }
 .fsw button { min-height: 36px; padding: 4px 12px; font-size: 13px; }
 .fsw button[aria-pressed="true"], .fsw button[aria-pressed="true"]:hover { background: var(--gold); color: var(--deep); border-color: var(--gold); }
 html[data-fs="l"] .wrap { zoom: 1.15; }
+/* 文字の大きさ「大」で端まで貼りつける帯がはみ出さないように（2026-11-04） */
+html[data-fs="l"] .qhead:has(#gxTimer), html[data-fs="l"] .qhead:has(#gyTimer), html[data-fs="l"] .gyq + .gxnav, html[data-fs="l"] #msg:has(.gydet) > .row:last-child { margin-inline: calc(-16px / 1.15); padding-inline: calc(16px / 1.15); }
 .factbtn { position: fixed; right: 16px; bottom: 16px; z-index: 20; border-color: var(--gold); background: var(--window); color: var(--gold); box-shadow: 0 4px 14px rgb(0 0 0 / .45); }
 .factdlg { max-width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; background: var(--window); color: var(--chalk); border: 2px solid var(--gold); border-radius: 6px; padding: 16px; }
 .factdlg::backdrop { background: rgb(0 0 0 / .6); }
