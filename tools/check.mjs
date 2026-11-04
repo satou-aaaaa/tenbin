@@ -63,6 +63,12 @@ else ok("下に Ko-fi の応援リンクがある（ただのリンク）");
 const kofiGo = (html.match(/<a id="tenbin-kofi-go" href="https:\/\/ko-fi\.com\/satouaaaaa"[^>]*>/) || [""])[0];
 if (!/\brel="[^"]*\bnoopener\b/.test(kofiGo) || !html.includes('id="tenbin-kofi-never"')) ng("節目の応援のお願いに、noopener つきのリンクか「もう出さない」が無い");
 else ok("節目の応援のお願いは、ただのリンクで「もう出さない」がある");
+// 3d. 「このアプリについて」（免責・非公式・データの扱い）が外側にあること。宣伝・公開の前提なので、消えたら落とす
+const about = (html.match(/<details id="tenbin-about"[\s\S]*?<\/details>/) || [""])[0];
+const need = ["法律相談ではありません", "非公式", "正確さは保証できない", "過去問の文章は使っていません", "e-Gov 法令検索", "Google Fonts", "Anthropic"];
+const miss = need.filter((w) => !about.includes(w));
+if (miss.length) ng("「このアプリについて」が無いか、次の言葉が抜けている: " + miss.join("・"));
+else ok("「このアプリについて」（免責・非公式・データの扱い）がある");
 
 // 4. アイコンの大きさ（PNG の先頭 IHDR から幅と高さを読む）
 const pngSize = (f) => {
