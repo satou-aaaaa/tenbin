@@ -128,11 +128,12 @@ if (process.argv.includes("--browser")) {
     if (jit === null) ok(`${vp.name}: 模試の画面がないので残り時間の幅は確かめない`);
     else if (jit.length === 1) ok(`${vp.name}: 模試の残り時間の幅と位置が変わらない`);
     else ng(`${vp.name}: 模試の残り時間が変わるたびに幅か位置が動く（${jit.join(" , ")}）。.gytimer の幅を固定する`);
-    // 横にはみ出さないこと（文字の大きさ「標準」「大」の両方で、目次・論文式・模試の画面）。
+    // 横にはみ出さないこと（文字の大きさ「標準」「大」の両方で、目次・論文式・さがす・学習の記録・模試の画面）。
     // 「大」は .wrap を zoom で拡大するので、端まで貼りつける帯（margin-inline: -16px）が広がって 2px はみ出していた（2026-11-04）
     const wide = await page.evaluate(() => {
       const out = [], keepFs = document.documentElement.dataset.fs || "n";
       const screens = [["目次", () => showOffice()], ["論文式", () => typeof showRonbun === "function" && showRonbun()],
+        ["さがす", () => typeof showSearch === "function" && showSearch()], ["学習の記録", () => typeof showRecord === "function" && showRecord()],
         ["行政書士の模試", () => { if (typeof gyExamOpen !== "function") return; const k = S.gyExam; gyExamOpen(true); gyExamPause(); S.gyExam = k; }],
         ...(typeof XM_LIST !== "undefined" ? XM_LIST.filter((c) => c.mocks && c.mocks.length).map((c) => [`${c.short}の模試`, () => { const st = xmSt(c.key), k = st.cur; xmOpen(c, c.mocks[0]); xmPause(); st.cur = k; }]) : [])];
       for (const fs of ["n", "l"]) {
