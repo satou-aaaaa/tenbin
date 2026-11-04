@@ -14,6 +14,7 @@
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
 <script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611041043";</script>
 </head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;600;800&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
@@ -8724,7 +8725,7 @@ function gyExamBind() {
 //   例：教科書から解いた問題で「やめる」は行政書士の画面へ行く）。今は、通ってきた画面（SCREENS の関数の呼び出し）を順に記録して、そこへ戻す。
 // 問題を解いている途中・模試などの記録しない画面では、後片付けのボタン（中断・やめる）を押してから、問題を始めた画面に戻す。
 (() => {
-  const SCREENS = ["showOffice", "showRonbun", "showGyosei", "showTb", "showTbUnit", "showXm", "showXmList", "showKm", "showKmSub"];  // 記録する画面（新しい画面の関数を作ったらここに足す）
+  const SCREENS = ["showOffice", "showRonbun", "showGyosei", "showTb", "showTbUnit", "showXm", "showXmList", "showKm", "showKmSub", "showSearch"];  // 記録する画面（新しい画面の関数を作ったらここに足す）
   // 記録しない画面（問題を解いている途中・模試など）から出るときに押す「後片付け」のボタン（タイマーを止める・途中を保存する）
   const EXIT = ["#gxPause", "#quit", "#gxBackG", "#xmAgain", "#gyBack"];
   const vis = sel => { const b = document.querySelector(sel); return b && !b.disabled && b.getClientRects().length ? b : null; };
@@ -23761,6 +23762,206 @@ tbAdd("hougaku", [
 ` },
 ]);
 
+// ===== さがす：言葉で、論文・教科書・規範カード・判例・条文・択一の問題をまとめて探す（2026-11-04） =====
+// 例：「表現の自由」「177条」「正当防衛」。問題は増やさない。いまあるデータ（probs()・TB_UNITS・NORMS()・CITES・GY_JOBUN・XM_LIST・GY_GO）から引くだけ。
+// 判例を開くと、その判例を使っている論文・教科書・択一の問題も出す（本文に判例の日付があるもので見分ける。citesIn と同じ）。
+// 新しい種類のデータを足したときは、seIndex() に1行足す。画面は SCREENS（戻るの記録）に "showSearch" を入れてある。
+let seLast = "";      // いま探している言葉（「戻る」で戻ったときに同じ結果を出す）
+let seBack = false;   // 検索から答案を開いたら、「目次にもどる」で検索の画面にもどす
+let _seIdx = null;
+const SE_HIST = "tenbin-search-hist";
+const SE_SAMPLE = ["表現の自由", "177条", "正当防衛", "伝聞", "処分性", "債権者代位", "使用者責任", "違法収集証拠"];
+const SE_KIND = [  // [種類, 見出し, 最初に見せる数]
+  ["ron", "論文の問題", 8], ["tb", "教科書の単元", 6], ["norm", "規範カード", 6], ["cite", "判例", 6], ["jobun", "条文", 6], ["q", "択一の問題", 5],
+];
+// 全角・半角をそろえ、小文字にし、空白を1つにする。「第177条」は「177条」として探す
+const seNorm = s => String(s == null ? "" : s).normalize("NFKC").replace(/\s+/g, " ").trim();
+const seTerms = q => seNorm(q).toLowerCase().replace(/第(\d+条)/g, "$1").split(" ").filter(Boolean);
+// 中の文字を全部つなぐ（論文の問題のように入れ子のデータ用）
+const seLeaves = (o, out = []) => { if (o == null) return out; if (typeof o === "string") out.push(o); else if (Array.isArray(o)) o.forEach(x => seLeaves(x, out)); else if (typeof o === "object") Object.values(o).forEach(x => seLeaves(x, out)); return out; };
+const seItem = (kind, title, text, more) => { const t = seNorm(text); return { kind, title: seNorm(title), text: t, low: t.toLowerCase(), tlow: seNorm(title).toLowerCase(), ...more }; };
+function seIndex() {
+  if (_seIdx) return _seIdx;
+  const out = [], add = f => { try { f(); } catch (e) { console.warn("search index", e); } };
+  add(() => probs().forEach(p => out.push(seItem("ron", p.title, seLeaves([p.title, p.kamoku, p.label, p.story, p.toi, p.facts, p.p, p.m, p.k, p.secs]).join(" "), { id: p.id, sub: p.kamoku, big: !!p.big }))));
+  add(() => Object.entries(TB_UNITS).forEach(([book, us]) => us.forEach(u => out.push(seItem("tb", u.title, [u.title, u.sub, u.ch, u.body.replace(/\*\*|^[#>=?!@|-]+ ?/gm, "")].join(" "), { id: u.id, book, sub: `${u.sub}・${(TB_BOOKS[book] || {}).name || book}` })))));
+  add(() => NORMS().forEach(c => out.push(seItem("norm", c.front, [c.front, c.title, c.kamoku, c.back, ...(c.list || [])].join(" "), { id: c.id, sub: `${c.kamoku}・${c.title}`, card: c }))));
+  add(() => CITES.forEach((c, i) => out.push(seItem("cite", c.name, [c.name, c.court, c.date, c.form, c.no, c.report, c.note].join(" "), { id: i, sub: `${c.court} ${c.date}${c.form}`, cite: c }))));
+  add(() => Object.entries(GY_JOBUN).forEach(([key, a]) => out.push(seItem("jobun", key, [key, a.n, a.c, seLeaves(a.p).join(" ")].join(" "), { id: key, sub: a.c || "" }))));
+  add(() => { const seen = new Set(), push = (q, ex) => { if (seen.has(q.id) || !Array.isArray(q.c)) return; seen.add(q.id);
+      out.push(seItem("q", q.topic || q.q, seLeaves([q.topic, q.sub, q.q, q.c, q.e, q.art, q.ex, q.d, q.lead, typeof GY_DETAIL !== "undefined" ? GY_DETAIL[q.id] : null]).join(" "), { id: q.id, sub: `${KM_EXAM[ex] || ex}・${q.sub || ""}`, q, ex })); };
+    XM_LIST.forEach(c => c.qs.filter(q => !q.from).forEach(q => push(q, c.key)));
+    if (typeof GY_GO !== "undefined") GY_GO.forEach(q => push(q, "gyosei")); });
+  return _seIdx = out;
+}
+// 言葉を全部含むものを、題に含むもの → 多く含むものの順に
+function seFind(q) {
+  const ts = seTerms(q); if (!ts.length) return null;
+  const hit = seIndex().filter(it => ts.every(t => it.low.includes(t)));
+  const score = it => ts.reduce((s, t) => s + (it.tlow.includes(t) ? 100 : 0) + Math.min(it.low.split(t).length - 1, 20), 0);
+  const by = {}; SE_KIND.forEach(([k]) => by[k] = []);
+  hit.map(it => [score(it), it]).sort((a, b) => b[0] - a[0]).forEach(([, it]) => by[it.kind].push(it));
+  return { ts, by, n: hit.length };
+}
+// 見つかった所の前後だけを出し、言葉に印をつける
+const seRe = ts => new RegExp(ts.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "gi");
+const seMark = (s, ts) => { if (!ts.length) return esc(s); const re = seRe(ts); let out = "", last = 0, m;
+  while ((m = re.exec(s))) { if (!m[0]) { re.lastIndex++; continue; } out += esc(s.slice(last, m.index)) + `<mark>${esc(m[0])}</mark>`; last = m.index + m[0].length; }
+  return out + esc(s.slice(last)); };
+const seSnip = (it, ts, len = 70) => { const i = Math.max(0, Math.min(...ts.map(t => { const k = it.low.indexOf(t); return k < 0 ? Infinity : k; })));
+  const a = Math.max(0, i - 24), s = it.text.slice(a, a + len);
+  return (a ? "…" : "") + seMark(s, ts) + (a + len < it.text.length ? "…" : ""); };
+// 条文の本文（教科書の「条文を読む」と同じ作り）
+const seJobun = key => { try { GY_JB.__se = [[key, []]]; return gyJobun({ id: "__se" }).replace(/<details class="jobun" open><summary>[^<]*<\/summary>/, '<div class="sejb">').replace(/<p class="jbsrc">[\s\S]*?<\/p><\/details>$/, '<p class="jbsrc">出典：e-Gov 法令検索</p></div>'); } finally { delete GY_JB.__se; } };
+// その判例を使っている論文・教科書・択一
+const seUses = c => { const d = String(c.date || "").replace(/\s/g, ""); if (!d) return [];
+  return seIndex().filter(it => (it.kind === "ron" || it.kind === "tb" || it.kind === "q") && it.text.replace(/\s/g, "").includes(d)); };
+const seHist = () => { try { return JSON.parse(localStorage.getItem(SE_HIST) || "[]").filter(s => typeof s === "string").slice(0, 8); } catch { return []; } };
+const sePutHist = q => { q = seNorm(q); if (!q) return; try { localStorage.setItem(SE_HIST, JSON.stringify([q, ...seHist().filter(s => s !== q)].slice(0, 8))); } catch {} };
+
+function showSearch() {
+  quiz = null; seBack = false;
+  $app.innerHTML = `<div class="chapter-head">さがす</div>
+    <form class="win seform" role="search" id="seForm"><label for="seQ" class="note">言葉で、論文の問題・教科書・規範カード・判例・条文・択一の問題をまとめて探します</label>
+      <div class="sebox"><input type="search" id="seQ" enterkeyhint="search" autocomplete="off" placeholder="例：表現の自由、177条、正当防衛" value="${esc(seLast)}"><button type="submit" class="btn-gold">探す</button></div>
+      <p class="note">言葉を空白で区切ると、全部を含むものを探します（例：「民法 錯誤」）。</p></form>
+    <div id="seOut" aria-live="polite"></div>
+    <div class="row"><button class="btn-gold" id="home">目次にもどる</button></div>`;
+  document.getElementById("home").onclick = showOffice;
+  const inp = document.getElementById("seQ");
+  let tm = 0;
+  inp.oninput = () => { clearTimeout(tm); tm = setTimeout(() => { seLast = inp.value; seRender(); }, 250); };
+  document.getElementById("seForm").onsubmit = e => { e.preventDefault(); clearTimeout(tm); seLast = inp.value; sePutHist(seLast); seRender(); inp.blur(); };
+  seRender();
+  toTop();
+  if (!seLast && !matchMedia("(pointer: coarse)").matches) inp.focus({ preventScroll: true });  // スマホではキーボードを勝手に出さない
+}
+function seRender() {
+  const box = document.getElementById("seOut"); if (!box) return;
+  const r = seFind(seLast);
+  if (!r) {
+    const hist = seHist(), chip = s => `<button type="button" class="sechip" data-q="${esc(s)}">${esc(s)}</button>`;
+    box.innerHTML = `${hist.length ? `<h2 class="section-label">前に探した言葉</h2><div class="sechips">${hist.map(chip).join("")}</div>` : ""}
+      <h2 class="section-label">たとえば</h2><div class="sechips">${SE_SAMPLE.map(chip).join("")}</div>`;
+  } else if (!r.n) {
+    box.innerHTML = `<section class="win"><p style="margin:0">「${esc(seLast)}」は見つかりませんでした。</p><p class="note">言葉を短くするか、言い方を変えてみてください（例：「表現の自由」→「表現」、「第百七十七条」→「177条」）。</p></section>`;
+  } else {
+    const ts = r.ts;
+    const jump = SE_KIND.filter(([k]) => r.by[k].length).map(([k, h]) => `<a href="#se-${k}" class="sechip">${h} <b class="tnum">${r.by[k].length}</b></a>`).join("");
+    box.innerHTML = `<nav class="sechips sejump" aria-label="見つかった種類">${jump}</nav>` + SE_KIND.filter(([k]) => r.by[k].length).map(([k, h, lim]) => seSec(k, h, r.by[k], lim, ts)).join("");
+  }
+  seBind(box, r);
+}
+function seRow(it, ts) {
+  const head = `<span class="ch-title">${it.big ? `<b class="star" aria-hidden="true">★</b>` : ""}${seMark(it.title, ts)}</span><span class="ch-sub">${esc(it.sub)}</span><span class="sesnip">${seSnip(it, ts)}</span>`;
+  if (it.kind === "ron") return `<button class="serow" data-write="${esc(it.id)}">${head}</button>`;
+  if (it.kind === "tb") return `<button class="serow" data-tb="${esc(it.book)}" data-u="${esc(it.id)}">${head}</button>`;
+  if (it.kind === "q") return `<div class="serow seq">${head}</div>`;
+  return `<details class="serow" data-k="${it.kind}" data-id="${esc(String(it.id))}"><summary>${head}</summary><div class="sebody"></div></details>`;
+}
+function seSec(k, h, list, lim, ts) {
+  const rest = list.length - lim;
+  return `<section class="sesec" id="se-${k}"><h2 class="section-label">${h}（${list.length}）</h2>
+    ${k === "q" ? `<div class="row" style="justify-content:flex-start"><button class="btn-gold" id="seRun">見つかった問題を解く（${Math.min(list.length, 20)}問）▶</button></div>` : ""}
+    <div class="selist">${list.slice(0, lim).map(it => seRow(it, ts)).join("")}</div>
+    ${rest > 0 ? `<button class="semore" data-more="${k}">残り${rest}件を見る</button>` : ""}</section>`;
+}
+// 判例：出典と、その判例が出てくる問題
+function seCiteBody(it) {
+  const c = it.cite, uses = seUses(c);
+  const ron = uses.filter(u => u.kind === "ron"), tb = uses.filter(u => u.kind === "tb"), qs = uses.filter(u => u.kind === "q");
+  const btn = u => u.kind === "ron" ? `<button class="tblink" data-write="${esc(u.id)}">論文：${esc(u.title)}（${esc(u.sub)}）</button>` : `<button class="tblink" data-tb="${esc(u.book)}" data-u="${esc(u.id)}">教科書：${esc(u.title)}</button>`;
+  return `<ul class="cites">${citeHTML(c)}</ul>
+    ${ron.length || tb.length || qs.length ? `<p class="note" style="margin:8px 0 0">この判例が出てくるところ</p><div class="seuses">${[...ron, ...tb].map(btn).join("")}</div>
+      ${qs.length ? `<button class="seciterun" data-cite="${it.id}">この判例の択一の問題を解く（${Math.min(qs.length, 20)}問）▶</button>` : ""}` : ""}`;
+}
+function seNormBody(it) {
+  const c = it.card;
+  return (c.list ? `<b>答案に書くこと</b><ul class="memo">${c.list.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : `<div class="back" style="white-space:pre-wrap">${esc(c.back || "")}</div>`)
+    + citeList(c.cite) + `<button class="tblink" data-write="${esc(String(c.id).split("#")[0])}">この論点の論文の問題を書く</button>`;
+}
+function seRun(list, title) {
+  const deck = list.slice(0, 20).map(it => ({ q: it.q, ex: [it.ex], s: "" }));
+  if (deck.length) kmRun({ s: "検索結果", deck, i: 0, right: 0, title });
+}
+function seBind(box, r) {
+  box.querySelectorAll(".sechip[data-q]").forEach(b => b.onclick = () => { const inp = document.getElementById("seQ"); inp.value = seLast = b.dataset.q; sePutHist(seLast); seRender(); });
+  box.querySelectorAll("a.sechip").forEach(a => a.onclick = e => { e.preventDefault(); const t = document.querySelector(a.getAttribute("href")); if (t) t.scrollIntoView({ behavior: reduced() ? "auto" : "smooth" }); });
+  const wire = root => {
+    root.querySelectorAll("[data-write]").forEach(b => b.onclick = () => { sePutHist(seLast); seBack = true; startWrite(b.dataset.write); });
+    root.querySelectorAll("[data-tb]").forEach(b => b.onclick = () => { sePutHist(seLast); showTbUnit(b.dataset.tb, b.dataset.u, 0); });
+    root.querySelectorAll(".seciterun").forEach(b => b.onclick = () => { const it = seIndex().find(x => x.kind === "cite" && x.id === +b.dataset.cite); sePutHist(seLast); seRun(seUses(it.cite).filter(u => u.kind === "q"), `判例：${it.title}`); });
+  };
+  const open = d => { const body = d.querySelector(".sebody"); if (!d.open || body.dataset.done) return; body.dataset.done = 1;
+    const it = seIndex().find(x => x.kind === d.dataset.k && String(x.id) === d.dataset.id); if (!it) return;
+    body.innerHTML = it.kind === "cite" ? seCiteBody(it) : it.kind === "norm" ? seNormBody(it) : seJobun(it.id);
+    wire(body); };
+  const bindRows = root => { root.querySelectorAll("details.serow").forEach(d => d.ontoggle = () => open(d)); wire(root); };
+  bindRows(box);
+  if (!r || !r.n) return;
+  const run = document.getElementById("seRun"); if (run) run.onclick = () => { sePutHist(seLast); seRun(r.by.q, `「${seNorm(seLast)}」の問題`); };
+  box.querySelectorAll(".semore").forEach(b => b.onclick = () => { const k = b.dataset.more, lim = SE_KIND.find(x => x[0] === k)[2], list = box.querySelector(`#se-${k} .selist`);
+    const tmp = document.createElement("div"); tmp.innerHTML = r.by[k].slice(lim).map(it => seRow(it, r.ts)).join("");
+    bindRows(tmp); list.append(...tmp.childNodes); b.remove(); });
+}
+
+(() => {
+  const css = document.createElement("style");
+  css.textContent = `
+.seform { display: grid; gap: 8px; }
+.seform .note { margin: 0; }
+.sebox { display: flex; gap: 8px; }
+.sebox input { flex: 1; min-width: 0; min-height: 48px; font: inherit; font-size: 16px; color: var(--chalk); background: var(--deep); border: 2px solid var(--line); border-radius: 4px; padding: 6px 10px; }
+.sebox input:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; border-color: var(--gold); }
+.sebox button { flex: none; min-height: 48px; }
+.sechips { display: flex; flex-wrap: wrap; gap: 8px; }
+.sechip { min-height: 40px; padding: 6px 12px; border: 1px solid var(--gold); border-radius: 20px; color: var(--gold); background: transparent; font-size: 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+.sejump { margin: 0 0 4px; }
+.sesec { display: grid; gap: 8px; scroll-margin-top: 12px; }
+.selist { display: grid; gap: 6px; }
+.serow { display: grid; gap: 2px; text-align: left; padding: 8px 12px; background: var(--window); border: 1px solid var(--line); border-radius: 3px; min-height: 44px; }
+button.serow { width: 100%; }
+details.serow > summary { display: grid; gap: 2px; min-height: 0; font-family: inherit; color: inherit; }
+details.serow > summary::before { content: none; }
+details.serow[open] { border-color: var(--gold); }
+details.serow[open] .sesnip { display: none; }
+.serow .ch-title { font-family: var(--font-pixel); font-size: 15px; line-height: 1.5; color: var(--chalk); }
+.serow .ch-title .star { color: var(--gold); margin-right: 4px; font-weight: 400; }
+.serow .ch-sub { font-size: 12px; color: var(--gold); }
+.sesnip { font-size: 13px; color: var(--muted); line-height: 1.6; overflow-wrap: anywhere; }
+.serow mark { background: color-mix(in srgb, var(--gold) 35%, transparent); color: var(--chalk); border-radius: 2px; padding: 0 1px; }
+.sebody { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 8px; font-size: 14px; }
+.sebody .memo { margin-top: 4px; }
+.seuses { display: grid; }
+.seciterun, .semore { margin-top: 6px; min-height: 44px; border-color: var(--gold); color: var(--gold); }
+.semore { justify-self: start; }
+.sejb .jbart { margin-top: 0; }
+#goSearch { min-height: 44px; padding: 4px 12px; font-size: 13px; border-color: var(--gold); color: var(--gold); }
+.kmhead .sebtns { display: flex; gap: 8px; }`;
+  document.head.appendChild(css);
+  // 目次：「試験を選ぶ」の右（科目別に解くの左）に小さなボタンで置く（目次の高さは変えない）
+  const home = showOffice;
+  showOffice = function (...a) {
+    if (seBack) { seBack = false; return showSearch(); }
+    const r = home.apply(this, a);
+    try {
+      const km = document.getElementById("goKm");
+      if (km && !document.getElementById("goSearch")) {
+        const g = document.createElement("span"); g.className = "sebtns"; km.replaceWith(g);
+        g.innerHTML = `<button id="goSearch" aria-label="さがす（論文・教科書・判例・条文・択一）"><span aria-hidden="true">🔍</span> さがす</button>`; g.appendChild(km);
+        document.getElementById("goSearch").onclick = () => showSearch();
+      }
+    } catch (e) { console.warn("search home", e); }
+    return r;
+  };
+  // 検索から解いた択一：「やめる」「もどる」で検索の画面へ（kmRun は科目の画面にもどすので、その名前で見分ける）
+  const sub = showKmSub;
+  showKmSub = function (s, ...a) { return s === "検索結果" ? showSearch() : sub.call(this, s, ...a); };
+  const clr = window.__tenbinClearBack;
+  window.__tenbinClearBack = () => { try { clr && clr(); } finally { seBack = false; } };
+})();
+// ===== さがす ここまで =====
+
 // keyboard: 1-5 / o x to answer, Enter for next
 document.addEventListener("keydown", e => {
   const next = document.getElementById("next");
@@ -23777,6 +23978,7 @@ showOffice();
 </script>
 
 
+</body></html>
 <p style="text-align:center;margin:16px 0 24px;font:13px system-ui,sans-serif"><a href="changes.html" style="color:#cfe3d9">更新情報</a>　<a id="kofi" href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener noreferrer" style="color:#cfe3d9">☕ Ko-fi で応援</a><br><span style="display:inline-block;margin-top:6px;color:#9fbfb2;font-size:12px">天秤の書は無料・広告なしで、ひとりで作っています。応援は、問題の追加と判例の確かめに使います。</span></p>
 <details id="tenbin-about" style="max-width:640px;margin:0 auto 24px;padding:0 16px;color:#cfe3d9;font:13px/1.7 system-ui,sans-serif">
 <summary style="text-align:center;cursor:pointer">このアプリについて（ご利用の前に）</summary>
