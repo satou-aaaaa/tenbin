@@ -26,7 +26,14 @@ const unwrap = (html) => {
   if (a < 0 || !ends.length) { console.error("index.html から本体の部分を取り出せない（外側の形が変わっている）"); process.exit(1); }
   return html.slice(a + HEAD_END.length, Math.min(...ends));
 };
-const body = unwrap(fs.readFileSync(src, "utf8"));
+// Artifact の read で取った写しには、公開のときに付く外枠（<!doctype html>…<body> と </body></html>）が付いている。
+// そのまま入れると index.html の中に二つ目の <!doctype> が入る（2026-11-04 #74 で起きた）ので、外枠を外す。
+const stripArtifactFrame = (h) => {
+  const m = h.match(/^<!doctype html><html><head>[\s\S]*?<\/head><body>\n/i);
+  if (!m) return h;
+  return h.slice(m[0].length).replace(/\n*<\/body><\/html>\s*$/i, "\n");
+};
+const body = stripArtifactFrame(unwrap(fs.readFileSync(src, "utf8")));
 fs.mkdirSync(out, { recursive: true });
 const head = `<!doctype html>
 <html lang="ja"><head>
