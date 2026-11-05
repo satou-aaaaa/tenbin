@@ -268,7 +268,7 @@ if (process.argv.includes("--browser")) {
     await page.close();
   }
   // 組合せ問題（ア〜オから2つ・ア〜ウの○×）は、ほかの択一と同じ見た目で出ること（2026-11-04 satou「2つ選択するタイプの問題の出題と解説が見づらい」）
-  // 出題：「ア　…」の記述が1つずつ枠（.kmst li）に分かれる。解説：選択肢が組（ア・ウ など）なら「記述ごとの正誤」（.kmw li）が記述の数だけ出て、全部に ○× が付く。
+  // 出題：「ア　…」の記述が1つずつ枠（.kmst li）に分かれる。解説：選択肢が組（ア・ウ など）なら、ほかの問題と同じ「肢ごとの正誤」（.kmw li）が記述の数だけ出て、全部に記述の文と ○× が付く（2026-11-04 satou「組合せ問題だけ解答に問題文が書かれていない」）。
   // 新しい試験や問題の形を足して、この表示から漏れたら落とす。スマホ幅で横にはみ出さないことも確かめる
   for (const vp of [{ name: "スマホ", width: 390, height: 844, all: true }, { name: "PC", width: 1280, height: 800, all: false }]) {
     const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
@@ -290,7 +290,7 @@ if (process.argv.includes("--browser")) {
         $app.querySelector(".choices button").click(); await tick(); await tick();
         const w = [...$app.querySelectorAll(".kmw li")];
         if (st !== nSt(q)) bad.push(`${q.id}：記述が枠に分かれていない（${st}/${nSt(q)}）`);
-        else if (lab && (w.length !== st || w.some((li) => !li.querySelector(".gytf")))) bad.push(`${q.id}：解説に記述ごとの正誤が出ない（${w.length}/${st}）`);
+        else if (lab && (w.length !== st || w.some((li) => !li.querySelector(".gytf") || !(li.querySelector(".gyct") || {}).textContent))) bad.push(`${q.id}：解説の肢ごとの正誤に、記述の文と○×が出ない（${w.length}/${st}）`);
         if (document.documentElement.scrollWidth > innerWidth + 1) bad.push(`${q.id}：横にはみ出す`);
         if (bad.length > 10) break;
       }
@@ -298,7 +298,7 @@ if (process.argv.includes("--browser")) {
     }, vp.all);
     if (r === null) ok(`${vp.name}: 組合せ問題がないので確かめない`);
     else if (r.bad.length) ng(`${vp.name}: 組合せ問題の表示がおかしい（${r.n}問中）: ${r.bad.join(" / ")}`);
-    else ok(`${vp.name}: 組合せ問題${r.n}問の記述が枠に分かれ、解説に記述ごとの正誤が出る`);
+    else ok(`${vp.name}: 組合せ問題${r.n}問の記述が枠に分かれ、解説の肢ごとの正誤に記述の文と○×が出る`);
     await page.close();
   }
   // 語群から選ぶ問題（行政書士の多肢選択式・社労士の選択式）で、語群の並びから答えが分からないこと（2026-11-05 satou「選択肢が順番に並んでいて答えを推測できてしまう」）。
@@ -355,6 +355,50 @@ if (process.argv.includes("--browser")) {
       else ok(`${name}${items.length}問の語群は、正解の位置が規則的でなく、どの画面でも同じ番号`);
     }
     if (!r.length) ok("語群から選ぶ問題がないので確かめない");
+    await page.close();
+  }
+  // 解説の「肢ごとの正誤」は、どの形式でも「肢の文＝太字・理由＝細字」でそろうこと（2026-11-05 satou「組み合わせ問題以外では、問題文を太字、解説を細字としています。これに合わせるように」）
+  // 形式：ほかの試験の択一・組合せ、行政書士の5肢択一・組合せ（練習）、行政書士の模試の見直し。どれかで肢の文が出ない・太さがちがえば落とす
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`解説の文字の太さ: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
+    const r = await page.evaluate(async () => {
+      if (typeof XM_LIST === "undefined" || typeof GY_ALL === "undefined") return null;
+      const tick = () => new Promise((res) => setTimeout(res, 0)), out = [];
+      const look = async (name, go, answer = true) => {
+        go(); await tick(); if (answer) { $app.querySelector(".choices button").click(); await tick(); }
+        await tick();
+        const li = [...$app.querySelectorAll(".gyex li")].find((l) => l.offsetParent);
+        if (!li) { out.push([name, "肢ごとの正誤が出ない"]); return; }
+        const t = li.querySelector(":scope > p.gyct"), x = li.querySelector(":scope > p.gycx");
+        if (!t || !t.textContent.trim()) { out.push([name, "肢の文が出ない"]); return; }
+        out.push([name, `${getComputedStyle(t).fontWeight}/${x ? getComputedStyle(x).fontWeight : "なし"}`]);
+      };
+      const isK = (q) => /\n[ア-オ][　 ]/.test(q.q || "") && /組合せ/.test(q.q || "");
+      for (const c of XM_LIST) {
+        const n = c.qs.find((q) => !isK(q) && !q.tfq && (q.c || []).length >= 4), k = c.qs.find(isK);
+        if (n) await look(`${c.name}の択一`, () => xmRun(c, { deck: [n], i: 0, right: 0, title: "検査" }));
+        if (k) await look(`${c.name}の組合せ`, () => xmRun(c, { deck: [k], i: 0, right: 0, title: "検査" }));
+      }
+      const gn = GY_ALL.find((q) => gyKind(q) === "go" && !gyKumi(q)), gk = GY_ALL.find((q) => gyKind(q) === "go" && gyKumi(q) && isK(q));
+      await look("行政書士の5肢択一", () => gyRun({ deck: [gn], i: 0, right: 0, title: "検査" }));
+      if (gk) await look("行政書士の組合せ", () => gyRun({ deck: [gk], i: 0, right: 0, title: "検査" }));
+      const keep = S.gyExam;
+      for (const [name, q] of [["行政書士の模試の見直し（択一）", gn], ["行政書士の模試の見直し（組合せ）", gk]]) {
+        if (!q) continue;
+        S.gyExam = { ids: [q.id], perm: { [q.id]: [0, 1, 2, 3, 4] }, ans: { [q.id]: 0 }, flag: {}, kp: {}, used: 0, cur: 0, step: "done", day: "" };
+        await look(name, () => gyExamReview(0, false), false);
+      }
+      S.gyExam = keep; if (typeof gyExamPause === "function") gyExamPause(); showOffice(); return out;
+    });
+    if (r === null) ok("択一の問題がないので解説の文字の太さは確かめない");
+    else {
+      const bad = r.filter(([, v]) => !/^(700|bold)\/(400|normal|なし)$/.test(v));
+      if (bad.length) ng(`解説の肢ごとの正誤で、肢の文が太字・理由が細字になっていない形式がある: ${bad.map(([n, v]) => `${n}（${v}）`).join(" / ")}`);
+      else ok(`解説の肢ごとの正誤は、${r.length}の形式すべてで肢の文が太字・理由が細字`);
+    }
     await page.close();
   }
   await browser.close(); server.close();
