@@ -268,7 +268,7 @@ if (process.argv.includes("--browser")) {
     await page.close();
   }
   // 組合せ問題（ア〜オから2つ・ア〜ウの○×）は、ほかの択一と同じ見た目で出ること（2026-11-04 satou「2つ選択するタイプの問題の出題と解説が見づらい」）
-  // 出題：「ア　…」の記述が1つずつ枠（.kmst li）に分かれる。解説：選択肢が組（ア・ウ など）なら「記述ごとの正誤」（.kmw li）が記述の数だけ出て、全部に ○× が付く。
+  // 出題：「ア　…」の記述が1つずつ枠（.kmst li）に分かれる。解説：選択肢が組（ア・ウ など）なら、ほかの問題と同じ「肢ごとの正誤」（.kmw li）が記述の数だけ出て、全部に記述の文と ○× が付く（2026-11-04 satou「組合せ問題だけ解答に問題文が書かれていない」）。
   // 新しい試験や問題の形を足して、この表示から漏れたら落とす。スマホ幅で横にはみ出さないことも確かめる
   for (const vp of [{ name: "スマホ", width: 390, height: 844, all: true }, { name: "PC", width: 1280, height: 800, all: false }]) {
     const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
@@ -290,7 +290,7 @@ if (process.argv.includes("--browser")) {
         $app.querySelector(".choices button").click(); await tick(); await tick();
         const w = [...$app.querySelectorAll(".kmw li")];
         if (st !== nSt(q)) bad.push(`${q.id}：記述が枠に分かれていない（${st}/${nSt(q)}）`);
-        else if (lab && (w.length !== st || w.some((li) => !li.querySelector(".gytf")))) bad.push(`${q.id}：解説に記述ごとの正誤が出ない（${w.length}/${st}）`);
+        else if (lab && (w.length !== st || w.some((li) => !li.querySelector(".gytf") || !(li.querySelector(".gyct") || {}).textContent))) bad.push(`${q.id}：解説の肢ごとの正誤に、記述の文と○×が出ない（${w.length}/${st}）`);
         if (document.documentElement.scrollWidth > innerWidth + 1) bad.push(`${q.id}：横にはみ出す`);
         if (bad.length > 10) break;
       }
@@ -298,7 +298,7 @@ if (process.argv.includes("--browser")) {
     }, vp.all);
     if (r === null) ok(`${vp.name}: 組合せ問題がないので確かめない`);
     else if (r.bad.length) ng(`${vp.name}: 組合せ問題の表示がおかしい（${r.n}問中）: ${r.bad.join(" / ")}`);
-    else ok(`${vp.name}: 組合せ問題${r.n}問の記述が枠に分かれ、解説に記述ごとの正誤が出る`);
+    else ok(`${vp.name}: 組合せ問題${r.n}問の記述が枠に分かれ、解説の肢ごとの正誤に記述の文と○×が出る`);
     await page.close();
   }
   // 語群から選ぶ問題（行政書士の多肢選択式・社労士の選択式）で、語群の並びから答えが分からないこと（2026-11-05 satou「選択肢が順番に並んでいて答えを推測できてしまう」）。
