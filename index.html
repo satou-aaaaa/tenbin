@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611050919";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611050942";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24474,6 +24474,205 @@ details.serow[open] .sesnip { display: none; }
   window.__tenbinClearBack = () => { try { clr && clr(); } finally { seBack = false; } };
 })();
 // ===== さがす ここまで =====
+
+// ===== AIの添削・採点：文章で答える問題すべてを、AIが添削して観点ごとに採点する（2026-11-04） =====
+// 対象：論文演習（司法試験・予備の実務基礎・労働法。writeCompare → bindAI）、行政書士の記述式（練習・ミニ模試・本番形式の模試）、司法書士の記述式（登記の申請）。
+// AIは観点ごとに ○/× を返し、点数はその観点の配点を足して出す（どの観点で点が入ったかが見えるように）。判定はチェックの欄に自動で入り、遊ぶ人が直せる。
+// claude.ai の中は Claude の利用枠（sample）、外（PWA版）は遊ぶ人自身のAPIキー（keySample・keyPanel）。どちらも使えないときは、これまでどおり自己採点。
+// 画面の作りには手を入れず、採点画面が出たら（$app の変化を見て）パネルを足す。論文演習だけは bindAI を置き換える。
+const AG_CACHE = new Map();   // 同じ答案をもう一度採点させない（画面を行き来しても結果を残す。お金がかかるので）
+let _agSample = null;
+const agSample = () => _agSample || (_agSample = useSample());
+const agStrip = t => t.replace(/\n?観点判定[:：].*$/s, "").trim();
+const agMarks = (text, n) => {
+  const m = text.match(/観点判定[:：]\s*([○◯×xX✕ 　]+)/);
+  if (!m) return null;
+  const v = m[1].replace(/[\s　]/g, "").split("").map(c => c === "○" || c === "◯");
+  return v.length === n ? v : null;
+};
+// 問題の種類ごとの説明を受け取り、添削と観点ごとの判定を頼む文を作る
+function agPrompt(o) {
+  return `あなたは${o.exam}の採点に慣れた指導者です。受験生の答案を添削し、採点の観点ごとに判定してください。
+
+# ルール
+- 日本語で、受験生に話しかけるように、ていねいに書く。
+- Markdownの記号（#、**、表）は使わない。見出しは【 】で示す。
+- 評価の根拠は、下の「問題」「模範解答」「採点の観点」にある内容に限る。そこにない判例や条文を新たに持ち出す場合は、「（一般論として）」と明記し、事件番号や日付は書かない。
+- 模範解答と言い回しが違っても、内容が同じなら○にする。答案に書かれていない内容は×にする（推測で補わない）。
+${o.rules.map(r => "- " + r).join("\n")}
+
+# 出力の形
+【総評】1〜3文
+【良い点】箇条書き（・）で1〜3個
+【直すとよい点】箇条書き（・）で1〜4個。どこをどう直すか具体的に
+【書き直し例】${o.rewrite}
+最後の1行に「観点判定：」に続けて、採点の観点の番号順に、満たしていれば○、満たしていなければ×を、区切りなしで並べる（例：観点判定：○×○）
+
+# 問題
+${o.question}
+
+# 模範解答
+${o.model}
+
+# 採点の観点${o.items.some(x => x.pts) ? "（かっこ内は配点）" : ""}
+${o.items.map((x, i) => `${i + 1}. ${x.label}${x.pts ? `（${x.pts}点）` : ""}`).join("\n")}
+
+# 受験生の答案
+${o.answer.trim() ? o.answer : "（未記入）"}`;
+}
+// AIのパネルを sec に作る。spec: { key, intro, prompt(), items:[{label, pts}], max, apply(verdict) → bool, after(verdict) }
+function agMount(sec, spec) {
+  sec.classList.add("win", "ai", "agbox"); sec.hidden = true;
+  sec.innerHTML = `<div class="qhead"><span class="tag">AIの添削・採点</span></div>
+    <p class="note agIntro">${spec.intro}</p>
+    <div class="agKey"></div>
+    <div class="row" style="justify-content:flex-start"><button class="btn-gold agGo">AIに添削・採点してもらう</button><button class="agStop" hidden>止める</button></div>
+    <p class="line agScore tnum" hidden></p>
+    <div class="aiout agOut" aria-live="polite"></div>
+    <p class="note agNote" role="status"></p>
+    <p class="note">採点と添削はAIによる参考意見です。まちがえることもあるので、模範解答と観点もあわせて確かめ、ちがうと思うチェックは自分で直してください。</p>`;
+  const q = s => sec.querySelector(s);
+  const go = q(".agGo"), stop = q(".agStop"), out = q(".agOut"), note = q(".agNote"), scoreEl = q(".agScore");
+  const showScore = v => {
+    const got = spec.items.reduce((n, x, i) => n + (v[i] ? (x.pts || 1) : 0), 0), max = spec.max || spec.items.length;
+    scoreEl.hidden = false;
+    scoreEl.textContent = spec.items.some(x => x.pts)
+      ? `AIの採点：${got}点/${max}点（${v.filter(Boolean).length}/${v.length}の観点ができています）`
+      : `AIの採点：${Math.round(got / max * 100)}点/100点・評価 ${rating(got / max)}（${got}/${max}の観点ができています）`;
+  };
+  const hit = AG_CACHE.get(spec.key);
+  if (hit) { out.textContent = agStrip(hit.text); if (hit.v) showScore(hit.v); go.textContent = "もう一度添削・採点してもらう"; }
+  agSample().then(claudeSample => {
+    if (!sec.isConnected) return;
+    const sample = claudeSample || keySample;
+    sec.hidden = false;
+    if (!claudeSample) {
+      const sync = () => { go.disabled = !aiKey(); };
+      keyPanel(q(".agKey"), sync); sync();
+    }
+    let ctl = null;
+    stop.onclick = () => ctl && ctl.abort();
+    go.onclick = async () => {
+      ctl = new AbortController();
+      go.disabled = true; stop.hidden = false; note.textContent = ""; scoreEl.hidden = true;
+      out.textContent = "AIが答案を読んでいます…";
+      try {
+        const { text, truncated } = await sample(spec.prompt(), { signal: ctl.signal, onText: ({ text }) => { out.textContent = agStrip(text); } });
+        out.textContent = agStrip(text);
+        const v = agMarks(text, spec.items.length);
+        AG_CACHE.set(spec.key, { text, v });
+        if (v) {
+          showScore(v);
+          const applied = spec.apply(v);
+          note.textContent = applied ? "AIの判定をチェックの欄に入れました。ちがうと思うところは直せます。" : "";
+          spec.after && spec.after(v);
+        } else note.textContent = "観点ごとの判定が読み取れませんでした。もう一度試すか、自分でチェックしてください。";
+        if (truncated) note.textContent += "添削が途中で切れています。";
+      } catch (e) {
+        out.textContent = e.code === "refused" ? "" : (e.text || "");
+        if (claudeSample && ["not_granted", "sampling_disabled", "capability_disabled", "not_declared"].includes(e.code)) { sec.hidden = true; return; }
+        if (e.code !== "cancelled") note.textContent = AI_ERR[e.code] || "通信がうまくいきませんでした。もう一度試してください。";
+      } finally {
+        if (sec.isConnected) { go.disabled = !claudeSample && !aiKey(); stop.hidden = true; go.textContent = "もう一度添削・採点してもらう"; }
+      }
+    };
+  });
+}
+const agText = el => el ? el.textContent.trim() : "";
+const agItem = (el, ptsSel) => { const t = el.textContent.replace(/\s+/g, " ").trim(), m = t.match(/[（(](\d+)点[）)]\s*$/);
+  return { label: t.replace(/\s*[（(]\d+点[）)]\s*$/, ""), pts: m ? +m[1] : 0 }; };
+// 論文演習（司法試験・予備の実務基礎・労働法）：これまでの「Claudeの添削」を、観点ごとの採点まで自動で入れる形にする
+bindAI = function (p, mine, checks, boxes) {
+  const sec = document.getElementById("ai"); if (!sec) return;
+  const lead = $app.querySelector(".cmpwide"); if (lead) lead.after(sec);  // 答え合わせの画面のいちばん上に出す
+  const items = checks.flat().map(label => ({ label, pts: 0 }));
+  const grade = document.getElementById("grade");
+  agMount(sec, {
+    key: "ron:" + p.id + "\n" + mine.join("\n"),
+    intro: "書いた答案をAIが読み、良い点と直すとよい点を書いて、採点の観点ごとに○×をつけます。点数は、できている観点の割合です。",
+    prompt: () => aiPrompt(p, mine, checks),
+    items,
+    apply: v => { let n = 0; boxes.forEach((b, i) => { if (b.disabled) return; b.checked = v[i]; b.dispatchEvent(new Event("change")); n++; }); return n > 0; },
+    after: () => { if (grade && !grade.disabled) grade.textContent = "この採点で確定"; },
+  });
+};
+// 行政書士の記述式（練習・ミニ模試）：「模範解答と比べる」のあと
+function agGyKiji() {
+  const msg = document.getElementById("msg"), pts = document.getElementById("gyPts");
+  if (!msg || !pts || msg.querySelector(".agbox")) return;
+  const boxes = [...msg.querySelectorAll("input[data-p]")];
+  const items = boxes.map(b => agItem(b.parentElement));
+  const question = agText($app.querySelector("section.win .question")), model = agText(msg.querySelector(".model"));
+  const mine = agText(msg.querySelector(".mine")).replace(/^（未記入）$/, "");
+  const sec = document.createElement("section"); pts.after(sec);
+  agMount(sec, {
+    key: "gy:" + question + "\n" + mine,
+    intro: "書いた解答をAIが読み、良い点と直すとよい点を書いて、観点ごとに採点します（本試験と同じ1問20点）。",
+    prompt: () => agPrompt(gyKijiSpec(question, model, items, mine)),
+    items, max: items.reduce((n, x) => n + x.pts, 0),
+    apply: v => { boxes.forEach((b, i) => { b.checked = v[i]; b.dispatchEvent(new Event("change")); }); return true; },
+    after: () => { pts.textContent = pts.textContent.replace("自己採点", "採点（AIの判定）"); },
+  });
+}
+const gyKijiSpec = (question, model, items, answer) => ({
+  exam: "行政書士試験の記述式（40字程度で書く。1問20点で、観点ごとに部分点がある）", question, model, items, answer,
+  rules: ["本試験の解答欄は45字なので、45字をこえて書いた部分は本番では書けないことを指摘する（採点の観点の判定は書かれた内容で行う）。", "誤字や表記の小さな違いは、意味が通じれば○にする。"],
+  rewrite: "受験生の答案を生かして、40字前後の解答例を1つ書く",
+});
+// 行政書士の本番形式の模試：記述式の採点の画面
+function agGyExam() {
+  const kp = document.getElementById("gxKp");
+  if (!kp || $app.querySelector(".agbox")) return;
+  const boxes = [...$app.querySelectorAll(".checks input[data-k]")];
+  const items = boxes.map(b => agItem(b.parentElement));
+  const question = agText($app.querySelector(".question")), model = agText($app.querySelector(".model"));
+  const mine = agText($app.querySelector(".mine")).replace(/^（未記入）$/, "");
+  const sec = document.createElement("section"); kp.closest("section").after(sec);
+  agMount(sec, {
+    key: "gy:" + question + "\n" + mine,
+    intro: "書いた解答をAIが読み、良い点と直すとよい点を書いて、観点ごとに採点します（本試験と同じ1問20点）。",
+    prompt: () => agPrompt(gyKijiSpec(question, model, items, mine)),
+    items, max: items.reduce((n, x) => n + x.pts, 0),
+    apply: v => { boxes.forEach((b, i) => { if (!b.isConnected) return; b.checked = v[i]; b.dispatchEvent(new Event("change")); }); return true; },
+    after: () => { if (kp.isConnected) kp.textContent = kp.textContent.replace("自己採点", "採点（AIの判定）"); },
+  });
+}
+// 司法書士の記述式：採点の画面（自動の採点は語があるかだけを見るので、AIが内容で判定し直す）
+function agShoshi() {
+  if (!$app.querySelector(".skkeys") || $app.querySelector(".agbox")) return;
+  const btns = [...$app.querySelectorAll(".skkeys button[data-k]")].sort((a, b) => a.dataset.k - b.dataset.k);
+  const items = btns.map(b => ({ label: agText(b).replace(/^[○×]/, "").replace(/\d+点$/, "").trim(), pts: +(agText(b.querySelector(".skp")).replace(/\D/g, "")) || 0 }));
+  const secs = [...$app.querySelectorAll(".skres")];
+  const answer = secs.map(s => `【${agText(s.querySelector("h3"))}】\n` + [...s.querySelectorAll(".skrow")].map(r => `${agText(r.querySelector("h4"))}：${agText(r.querySelector(".skmine")).replace(/^あなたの答え/, "")}`).join("\n")).join("\n\n");
+  const model = secs.map(s => `【${agText(s.querySelector("h3"))}】\n` + [...s.querySelectorAll(".skmodel li")].map(li => agText(li)).join("\n")).join("\n\n");
+  let p = null;  // いま採点している問題（事実関係を頼む文に入れる）
+  try { const x = xmSt("shoshi").kj.cur; p = SH_KJ.find(q => q.id === x.ids[x.i]) || null; } catch {}
+  const question = p ? [...p.facts, ...p.docs.map(([h, t]) => `〔${h}〕${t}`), "問い：" + p.ask].join("\n") : "（事実関係は省略。解答例と採点の観点をもとに判定する）";
+  const done = btns.every(b => b.disabled);
+  const sec = document.createElement("section"); $app.querySelector(".msg").after(sec);
+  agMount(sec, {
+    key: "sk:" + model + "\n" + answer,
+    intro: `答案をAIが読み、良い点と直すとよい点を書いて、採点の観点ごとに判定します（1問70点）。${done ? "採点は確定ずみなので、チェックは変えずに判定と添削だけを出します。" : "判定は下の○×に入ります。"}`,
+    prompt: () => agPrompt({
+      exam: "司法書士試験の記述式（登記の申請書の作成。1問70点で、観点ごとに部分点がある）", question, model, items, answer,
+      rules: ["登記の目的・原因と日付・申請人・添付情報・登録免許税などの欄ごとに、正しく書けているかを見る。", "数字・日付・金額は、表記が違っても同じ値なら○にする。値が違えば×にする。"],
+      rewrite: "いちばん直すとよい欄を1つ選び、正しい書き方を示す",
+    }),
+    items, max: items.reduce((n, x) => n + x.pts, 0),
+    apply: v => {
+      let n = 0;
+      v.forEach((want, j) => { const b = $app.querySelector(`.skkeys button[data-k="${btns[j].dataset.k}"]`);
+        if (b && !b.disabled && (b.getAttribute("aria-pressed") === "true") !== want) { b.click(); n++; } });  // 押すたびに画面が作り直される
+      return !done;
+    },
+  });
+}
+let agQueued = false;
+new MutationObserver(() => {
+  if (agQueued) return; agQueued = true;
+  queueMicrotask(() => { agQueued = false; [agGyKiji, agGyExam, agShoshi].forEach(f => { try { f(); } catch (e) { console.warn("aigrade", e); } }); });
+}).observe($app, { childList: true, subtree: true });
+// ===== AIの添削・採点 ここまで =====
 // ===== 学習の記録：日ごとの学習量のカレンダー・科目ごとの正答率・苦手な問題（2026-11-04） =====
 // 記録は S.log[日] = [解いた択一, 正解, 論文・規範カード]（record / schedule を包んで数える）。教科書は S.tb[単元] = 読んだ日 をそのまま使う。
 // 「今日の学習」の連続日数をボタンにして、この画面を開く。
@@ -24644,254 +24843,6 @@ function showRecord() {
   showKmSub = function (s, ...a) { return s === "学習の記録" ? showRecord() : sub.call(this, s, ...a); };
 })();
 // ===== 学習の記録 ここまで =====
-// ===== AIの添削・採点：文章で答える問題すべてを、AIが添削して観点ごとに採点する（2026-11-04） =====
-// 対象：論文演習（司法試験・予備の実務基礎・労働法。writeCompare → bindAI）、行政書士の記述式（練習・ミニ模試・本番形式の模試）、司法書士の記述式（登記の申請）。
-// AIは観点ごとに ○/× を返し、点数はその観点の配点を足して出す（どの観点で点が入ったかが見えるように）。判定はチェックの欄に自動で入り、遊ぶ人が直せる。
-// claude.ai の中は Claude の利用枠（sample）。外（PWA版）は、ふだんの Claude（claude.ai・アプリ）に頼み文を貼って返事を貼り戻す方法（料金なし）を先に出し、
-// 遊ぶ人自身のAPIキー（keySample・keyPanel。料金がかかる）は閉じた欄に入れる（2026-11-05 satou「APIは値段が高いので通常のClaudeを使えるように」）。どちらも使えないときは、これまでどおり自己採点。
-// 画面の作りには手を入れず、採点画面が出たら（$app の変化を見て）パネルを足す。論文演習だけは bindAI を置き換える。
-const AG_CACHE = new Map();   // 同じ答案をもう一度採点させない（画面を行き来しても結果を残す。お金がかかるので）
-let _agSample = null;
-const agSample = () => _agSample || (_agSample = useSample());
-const agStrip = t => t.replace(/\n?観点判定[:：].*$/s, "").trim();
-const agMarks = (text, n) => {
-  const m = text.match(/観点判定[:：]\s*([○◯×xX✕ 　]+)/);
-  if (!m) return null;
-  const v = m[1].replace(/[\s　]/g, "").split("").map(c => c === "○" || c === "◯");
-  return v.length === n ? v : null;
-};
-// 問題の種類ごとの説明を受け取り、添削と観点ごとの判定を頼む文を作る
-function agPrompt(o) {
-  return `あなたは${o.exam}の採点に慣れた指導者です。受験生の答案を添削し、採点の観点ごとに判定してください。
-
-# ルール
-- 日本語で、受験生に話しかけるように、ていねいに書く。
-- Markdownの記号（#、**、表）は使わない。見出しは【 】で示す。
-- 評価の根拠は、下の「問題」「模範解答」「採点の観点」にある内容に限る。そこにない判例や条文を新たに持ち出す場合は、「（一般論として）」と明記し、事件番号や日付は書かない。
-- 模範解答と言い回しが違っても、内容が同じなら○にする。答案に書かれていない内容は×にする（推測で補わない）。
-${o.rules.map(r => "- " + r).join("\n")}
-
-# 出力の形
-【総評】1〜3文
-【良い点】箇条書き（・）で1〜3個
-【直すとよい点】箇条書き（・）で1〜4個。どこをどう直すか具体的に
-【書き直し例】${o.rewrite}
-最後の1行に「観点判定：」に続けて、採点の観点の番号順に、満たしていれば○、満たしていなければ×を、区切りなしで並べる（例：観点判定：○×○）
-
-# 問題
-${o.question}
-
-# 模範解答
-${o.model}
-
-# 採点の観点${o.items.some(x => x.pts) ? "（かっこ内は配点）" : ""}
-${o.items.map((x, i) => `${i + 1}. ${x.label}${x.pts ? `（${x.pts}点）` : ""}`).join("\n")}
-
-# 受験生の答案
-${o.answer.trim() ? o.answer : "（未記入）"}`;
-}
-// AIのパネルを sec に作る。spec: { key, intro, prompt(), items:[{label, pts}], max, apply(verdict) → bool, after(verdict) }
-function agMount(sec, spec) {
-  sec.classList.add("win", "ai", "agbox"); sec.hidden = true;
-  sec.innerHTML = `<div class="qhead"><span class="tag">AIの添削・採点</span></div>
-    <p class="note agIntro">${spec.intro}</p>
-    <div class="aikey agChat" hidden>
-      <p class="note"><b>料金のかからない方法：</b>ふだん使っている Claude（claude.ai やスマホのアプリ）に添削してもらいます。APIキーは要りません（Claude の利用枠を使います）。</p>
-      <ol class="menu"><li>「頼み文をコピーして Claude を開く」をおします。</li><li>開いた Claude の入力欄に貼り付けて、送ります。</li><li>Claude の返事を<b>最後の「観点判定」の行まで</b>全部コピーして、下の欄に貼り付け、「貼った返事で採点する」をおします。</li></ol>
-      <div class="row" style="justify-content:flex-start;margin:0"><button class="btn-gold agCopy">頼み文をコピーして Claude を開く</button></div>
-      <details class="agShow"><summary>頼み文を見る（コピーがうまくいかないとき）</summary><textarea class="agPrompt" readonly rows="6" aria-label="Claudeへの頼み文"></textarea></details>
-      <label>Claude の返事<textarea class="agPaste" rows="5" placeholder="ここに Claude の返事を貼り付けます"></textarea></label>
-      <div class="row" style="justify-content:flex-start;margin:0"><button class="agUse">貼った返事で採点する</button></div>
-      <p class="note">答案は、あなたの Claude のアカウントに送られます。名前・住所・学校名などは書かないでください。Claude は18さい以上の人が使えるサービスです。18さい未満の人は、おうちの人といっしょに使ってください。</p>
-    </div>
-    <div class="agApi">
-    <div class="agKey"></div>
-    <div class="row" style="justify-content:flex-start"><button class="btn-gold agGo">AIに添削・採点してもらう</button><button class="agStop" hidden>止める</button></div>
-    </div>
-    <p class="line agScore tnum" hidden></p>
-    <div class="aiout agOut" aria-live="polite"></div>
-    <p class="note agNote" role="status"></p>
-    <p class="note">採点と添削はAIによる参考意見です。まちがえることもあるので、模範解答と観点もあわせて確かめ、ちがうと思うチェックは自分で直してください。</p>`;
-  const q = s => sec.querySelector(s);
-  const go = q(".agGo"), stop = q(".agStop"), out = q(".agOut"), note = q(".agNote"), scoreEl = q(".agScore");
-  const showScore = v => {
-    const got = spec.items.reduce((n, x, i) => n + (v[i] ? (x.pts || 1) : 0), 0), max = spec.max || spec.items.length;
-    scoreEl.hidden = false;
-    scoreEl.textContent = spec.items.some(x => x.pts)
-      ? `AIの採点：${got}点/${max}点（${v.filter(Boolean).length}/${v.length}の観点ができています）`
-      : `AIの採点：${Math.round(got / max * 100)}点/100点・評価 ${rating(got / max)}（${got}/${max}の観点ができています）`;
-  };
-  const hit = AG_CACHE.get(spec.key);
-  if (hit) { out.textContent = agStrip(hit.text); if (hit.v) showScore(hit.v); go.textContent = "もう一度添削・採点してもらう"; }
-  // AIの返事（観点判定つき）を受け取って、点数とチェックに入れる。APIでも、貼り戻した返事でも同じ
-  const finish = (text, truncated) => {
-    out.textContent = agStrip(text);
-    const v = agMarks(text, spec.items.length);
-    AG_CACHE.set(spec.key, { text, v });
-    if (v) {
-      showScore(v);
-      const applied = spec.apply(v);
-      note.textContent = applied ? "AIの判定をチェックの欄に入れました。ちがうと思うところは直せます。" : "";
-      spec.after && spec.after(v);
-    } else note.textContent = "観点ごとの判定が読み取れませんでした。もう一度試すか、自分でチェックしてください。";
-    if (truncated) note.textContent += "添削が途中で切れています。";
-    return !!v;
-  };
-  agSample().then(claudeSample => {
-    if (!sec.isConnected) return;
-    const sample = claudeSample || keySample;
-    sec.hidden = false;
-    if (!claudeSample) {
-      agChat(sec, spec, finish, note);
-      const sync = () => { go.disabled = !aiKey(); };
-      keyPanel(q(".agKey"), sync); sync();
-    }
-    let ctl = null;
-    stop.onclick = () => ctl && ctl.abort();
-    go.onclick = async () => {
-      ctl = new AbortController();
-      go.disabled = true; stop.hidden = false; note.textContent = ""; scoreEl.hidden = true;
-      out.textContent = "AIが答案を読んでいます…";
-      try {
-        const { text, truncated } = await sample(spec.prompt(), { signal: ctl.signal, onText: ({ text }) => { out.textContent = agStrip(text); } });
-        finish(text, truncated);
-      } catch (e) {
-        out.textContent = e.code === "refused" ? "" : (e.text || "");
-        if (claudeSample && ["not_granted", "sampling_disabled", "capability_disabled", "not_declared"].includes(e.code)) { sec.hidden = true; return; }
-        if (e.code !== "cancelled") note.textContent = AI_ERR[e.code] || "通信がうまくいきませんでした。もう一度試してください。";
-      } finally {
-        if (sec.isConnected) { go.disabled = !claudeSample && !aiKey(); stop.hidden = true; go.textContent = "もう一度添削・採点してもらう"; }
-      }
-    };
-  });
-}
-// claude.ai の外：ふだんの Claude で添削する欄（料金なし）を出し、APIキーの欄は「自分のAPIキーで」の中にしまう
-const AG_CHAT_URL = "https://claude.ai/new";
-function agChat(sec, spec, finish, note) {
-  const q = s => sec.querySelector(s), box = q(".agChat"), api = q(".agApi");
-  box.hidden = false;
-  const det = document.createElement("details"); det.className = "agApiBox";
-  det.innerHTML = `<summary>自分のAPIキーで添削する（1回数円の料金がかかります）</summary>`;
-  api.before(det); det.append(api);
-  const pr = q(".agPrompt"), show = q(".agShow"), paste = q(".agPaste");
-  q(".agCopy").onclick = () => {
-    const t = spec.prompt(); pr.value = t;
-    const said = ok => { note.textContent = ok ? "頼み文をコピーしました。開いた Claude の入力欄に貼り付けて送ってください。" : "コピーできませんでした。「頼み文を見る」の中を全部えらんでコピーしてください。"; if (!ok) show.open = true; };
-    let job; try { job = navigator.clipboard.writeText(t); } catch { job = Promise.reject(); }
-    job.then(() => said(true), () => { let ok = false; try { show.open = true; pr.select(); ok = document.execCommand("copy"); } catch {} said(ok); });
-    window.open(AG_CHAT_URL, "_blank", "noopener");
-  };
-  q(".agUse").onclick = () => {
-    // claude.ai からコピーすると Markdown の記号（**・#）が付くことがあるので外す
-    const t = paste.value.replace(/\*\*|__/g, "").replace(/^\s*#{1,6}\s*/gm, "").trim();
-    if (!t) { note.textContent = "Claude の返事を、上の欄に貼り付けてください。"; paste.focus(); return; }
-    if (finish(t, false)) paste.value = "";
-  };
-}
-if (!document.getElementById("agChatCss")) {
-  const st = document.createElement("style"); st.id = "agChatCss";
-  st.textContent = `.agChat textarea { width: 100%; box-sizing: border-box; min-height: 88px; font: inherit; font-size: 14px; color: var(--chalk); background: var(--deep); border: 2px solid var(--line); border-radius: 4px; padding: 6px 10px; }
-.agChat textarea:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; border-color: var(--gold); }
-.agChat label { display: grid; gap: 4px; }
-.agApiBox { margin: 8px 0; } .agApiBox > summary { cursor: pointer; color: var(--gold); min-height: 32px; }`;
-  document.head.append(st);
-}
-const agText = el => el ? el.textContent.trim() : "";
-const agItem = (el, ptsSel) => { const t = el.textContent.replace(/\s+/g, " ").trim(), m = t.match(/[（(](\d+)点[）)]\s*$/);
-  return { label: t.replace(/\s*[（(]\d+点[）)]\s*$/, ""), pts: m ? +m[1] : 0 }; };
-// 論文演習（司法試験・予備の実務基礎・労働法）：これまでの「Claudeの添削」を、観点ごとの採点まで自動で入れる形にする
-bindAI = function (p, mine, checks, boxes) {
-  const sec = document.getElementById("ai"); if (!sec) return;
-  const lead = $app.querySelector(".cmpwide"); if (lead) lead.after(sec);  // 答え合わせの画面のいちばん上に出す
-  const items = checks.flat().map(label => ({ label, pts: 0 }));
-  const grade = document.getElementById("grade");
-  agMount(sec, {
-    key: "ron:" + p.id + "\n" + mine.join("\n"),
-    intro: "書いた答案をAIが読み、良い点と直すとよい点を書いて、採点の観点ごとに○×をつけます。点数は、できている観点の割合です。",
-    prompt: () => aiPrompt(p, mine, checks),
-    items,
-    apply: v => { let n = 0; boxes.forEach((b, i) => { if (b.disabled) return; b.checked = v[i]; b.dispatchEvent(new Event("change")); n++; }); return n > 0; },
-    after: () => { if (grade && !grade.disabled) grade.textContent = "この採点で確定"; },
-  });
-};
-// 行政書士の記述式（練習・ミニ模試）：「模範解答と比べる」のあと
-function agGyKiji() {
-  const msg = document.getElementById("msg"), pts = document.getElementById("gyPts");
-  if (!msg || !pts || msg.querySelector(".agbox")) return;
-  const boxes = [...msg.querySelectorAll("input[data-p]")];
-  const items = boxes.map(b => agItem(b.parentElement));
-  const question = agText($app.querySelector("section.win .question")), model = agText(msg.querySelector(".model"));
-  const mine = agText(msg.querySelector(".mine")).replace(/^（未記入）$/, "");
-  const sec = document.createElement("section"); pts.after(sec);
-  agMount(sec, {
-    key: "gy:" + question + "\n" + mine,
-    intro: "書いた解答をAIが読み、良い点と直すとよい点を書いて、観点ごとに採点します（本試験と同じ1問20点）。",
-    prompt: () => agPrompt(gyKijiSpec(question, model, items, mine)),
-    items, max: items.reduce((n, x) => n + x.pts, 0),
-    apply: v => { boxes.forEach((b, i) => { b.checked = v[i]; b.dispatchEvent(new Event("change")); }); return true; },
-    after: () => { pts.textContent = pts.textContent.replace("自己採点", "採点（AIの判定）"); },
-  });
-}
-const gyKijiSpec = (question, model, items, answer) => ({
-  exam: "行政書士試験の記述式（40字程度で書く。1問20点で、観点ごとに部分点がある）", question, model, items, answer,
-  rules: ["本試験の解答欄は45字なので、45字をこえて書いた部分は本番では書けないことを指摘する（採点の観点の判定は書かれた内容で行う）。", "誤字や表記の小さな違いは、意味が通じれば○にする。"],
-  rewrite: "受験生の答案を生かして、40字前後の解答例を1つ書く",
-});
-// 行政書士の本番形式の模試：記述式の採点の画面
-function agGyExam() {
-  const kp = document.getElementById("gxKp");
-  if (!kp || $app.querySelector(".agbox")) return;
-  const boxes = [...$app.querySelectorAll(".checks input[data-k]")];
-  const items = boxes.map(b => agItem(b.parentElement));
-  const question = agText($app.querySelector(".question")), model = agText($app.querySelector(".model"));
-  const mine = agText($app.querySelector(".mine")).replace(/^（未記入）$/, "");
-  const sec = document.createElement("section"); kp.closest("section").after(sec);
-  agMount(sec, {
-    key: "gy:" + question + "\n" + mine,
-    intro: "書いた解答をAIが読み、良い点と直すとよい点を書いて、観点ごとに採点します（本試験と同じ1問20点）。",
-    prompt: () => agPrompt(gyKijiSpec(question, model, items, mine)),
-    items, max: items.reduce((n, x) => n + x.pts, 0),
-    apply: v => { boxes.forEach((b, i) => { if (!b.isConnected) return; b.checked = v[i]; b.dispatchEvent(new Event("change")); }); return true; },
-    after: () => { if (kp.isConnected) kp.textContent = kp.textContent.replace("自己採点", "採点（AIの判定）"); },
-  });
-}
-// 司法書士の記述式：採点の画面（自動の採点は語があるかだけを見るので、AIが内容で判定し直す）
-function agShoshi() {
-  if (!$app.querySelector(".skkeys") || $app.querySelector(".agbox")) return;
-  const btns = [...$app.querySelectorAll(".skkeys button[data-k]")].sort((a, b) => a.dataset.k - b.dataset.k);
-  const items = btns.map(b => ({ label: agText(b).replace(/^[○×]/, "").replace(/\d+点$/, "").trim(), pts: +(agText(b.querySelector(".skp")).replace(/\D/g, "")) || 0 }));
-  const secs = [...$app.querySelectorAll(".skres")];
-  const answer = secs.map(s => `【${agText(s.querySelector("h3"))}】\n` + [...s.querySelectorAll(".skrow")].map(r => `${agText(r.querySelector("h4"))}：${agText(r.querySelector(".skmine")).replace(/^あなたの答え/, "")}`).join("\n")).join("\n\n");
-  const model = secs.map(s => `【${agText(s.querySelector("h3"))}】\n` + [...s.querySelectorAll(".skmodel li")].map(li => agText(li)).join("\n")).join("\n\n");
-  let p = null;  // いま採点している問題（事実関係を頼む文に入れる）
-  try { const x = xmSt("shoshi").kj.cur; p = SH_KJ.find(q => q.id === x.ids[x.i]) || null; } catch {}
-  const question = p ? [...p.facts, ...p.docs.map(([h, t]) => `〔${h}〕${t}`), "問い：" + p.ask].join("\n") : "（事実関係は省略。解答例と採点の観点をもとに判定する）";
-  const done = btns.every(b => b.disabled);
-  const sec = document.createElement("section"); $app.querySelector(".msg").after(sec);
-  agMount(sec, {
-    key: "sk:" + model + "\n" + answer,
-    intro: `答案をAIが読み、良い点と直すとよい点を書いて、採点の観点ごとに判定します（1問70点）。${done ? "採点は確定ずみなので、チェックは変えずに判定と添削だけを出します。" : "判定は下の○×に入ります。"}`,
-    prompt: () => agPrompt({
-      exam: "司法書士試験の記述式（登記の申請書の作成。1問70点で、観点ごとに部分点がある）", question, model, items, answer,
-      rules: ["登記の目的・原因と日付・申請人・添付情報・登録免許税などの欄ごとに、正しく書けているかを見る。", "数字・日付・金額は、表記が違っても同じ値なら○にする。値が違えば×にする。"],
-      rewrite: "いちばん直すとよい欄を1つ選び、正しい書き方を示す",
-    }),
-    items, max: items.reduce((n, x) => n + x.pts, 0),
-    apply: v => {
-      let n = 0;
-      v.forEach((want, j) => { const b = $app.querySelector(`.skkeys button[data-k="${btns[j].dataset.k}"]`);
-        if (b && !b.disabled && (b.getAttribute("aria-pressed") === "true") !== want) { b.click(); n++; } });  // 押すたびに画面が作り直される
-      return !done;
-    },
-  });
-}
-let agQueued = false;
-new MutationObserver(() => {
-  if (agQueued) return; agQueued = true;
-  queueMicrotask(() => { agQueued = false; [agGyKiji, agGyExam, agShoshi].forEach(f => { try { f(); } catch (e) { console.warn("aigrade", e); } }); });
-}).observe($app, { childList: true, subtree: true });
-// ===== AIの添削・採点 ここまで =====
-
 // ===== 組合せ問題の見やすさ（2026-11-04 satou「2つ選択するタイプの問題の出題と解説が見づらい」「他のタイプの問題と同様に見やすく」） =====
 // 「アからオまでの記述のうち正しいものの組合せ」「ア〜ウに○×を付けた組合せ」の問題を、ほかの択一と同じ見た目にそろえる。
 // 画面を作る関数はそのままにして、描いたあとに手を加える（練習・模試・見直し、どの試験でも同じ）。
@@ -25059,6 +25010,225 @@ new MutationObserver(() => {
   document.head.appendChild(css);
 })();
 // ===== 組合せ問題の見やすさ ここまで =====
+// ===== 解答からすぐ条文を見る（2026-11-05 satou「解答と条文が離れた位置に置かれていますが、解答からすぐに条文がみれるようにしたい」） =====
+// 答え合わせ・見直し・論文の模範答案・研修の解説の中の「民法96条3項」「5条1項」などを押せるようにし、
+// 押した文のすぐ下に、その条文の本文（GY_JOBUN）を開く。もう一度押すと閉じる。下の「根拠条文（本文）」のまとめはそのまま残す。
+// 画面を作る関数はそのままにして、描いたあとに手を加える（どの試験・練習・模試・見直しにも効く）。部品: tenbin/jlink/
+// 法令名のない「5条1項」は、同じ文の中で前に出た法令名 →「根拠：」の行の法令 → 画面の中で前に出た法令名 の順で決める。
+// 本文がアプリにない条文や、法令名が分からない「〇〇法5条」（知らない法令）は押せるようにしない。
+(() => {
+  if (typeof GY_JOBUN === "undefined") return;
+  // 略称 → GY_JOBUN の法令名
+  const ALIAS = { "日本国憲法": "憲法", "行手法": "行政手続法", "行審法": "行政不服審査法", "行訴法": "行政事件訴訟法", "国賠法": "国家賠償法",
+    "自治法": "地方自治法", "民訴法": "民事訴訟法", "刑訴法": "刑事訴訟法", "民執法": "民事執行法", "民保法": "民事保全法",
+    "不登法": "不動産登記法", "商登法": "商業登記法", "不登規則": "不動産登記規則", "商登規則": "商業登記規則", "不登令": "不動産登記令",
+    "労基法": "労働基準法", "労契法": "労働契約法", "安衛法": "労働安全衛生法", "労災法": "労災保険法", "雇保法": "雇用保険法",
+    "健保法": "健康保険法", "厚年法": "厚生年金保険法", "国年法": "国民年金法", "労組法": "労働組合法", "均等法": "男女雇用機会均等法",
+    "通則法": "法の適用に関する通則法", "区分所有法": "区分所有法", "建物の区分所有等に関する法律": "区分所有法", "宅地建物取引業法": "宅建業法",
+    "個人情報の保護に関する法律": "個人情報保護法", "行政機関の保有する情報の公開に関する法律": "情報公開法", "独禁法": "独占禁止法" };
+  const LAWS = new Set(Object.keys(GY_JOBUN).map(k => k.replace(/\d+条(?:の\d+)*$/, "")));
+  const lawOf = n => !n ? null : ALIAS[n] && LAWS.has(ALIAS[n]) ? ALIAS[n] : LAWS.has(n) ? n : null;
+  const names = [...new Set([...LAWS, ...Object.keys(ALIAS).filter(k => lawOf(k))])].sort((a, b) => b.length - a.length);
+  const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // 1つの参照：〔法令名|同法〕〔第〕N条〔のM…〕〔第P項〕〔第Q号〕、または 同条〔第P項〕〔第Q号〕
+  const RE = new RegExp(`(?<law>${names.map(escRe).join("|")}|同法)?第?(?<n>\\d+)条(?<no>(?:の\\d+)*)(?:第?(?<p>\\d+)項)?(?:第?(?<g>\\d+)号)?|同条(?:第?(?<p2>\\d+)項)?(?:第?(?<g2>\\d+)号)?`, "g");
+  const UNKNOWN_BEFORE = /[法令則約例典]$/; // 「地方公務員法32条」など、知らない法令名の後ろの番号は押せるようにしない
+
+  // どこを調べるか（答え・解説の入れ物）と、どこは調べないか（問題の文・選択肢・自分の答案・下の条文のまとめなど）
+  const ROOTS = ".msg, .cmp";
+  const SKIP = ".question, .choices, .kmst, .kmlead, .mine, .checks, .jobun, .jlbox, .cites, .gytimer, .aiout, button, textarea, select, summary, a, h4, label, script, style";
+  const BLOCK = "li, p, .model, .explain, .gypoint, .gydet, div";
+  const seen = new WeakSet();
+
+  // 「根拠：民法712条・715条、憲法81条」の行から、出てくる順に法令名を集める
+  const ctxOf = root => {
+    const box = root.closest(".msg, section, #app") || root, laws = [], arts = new Set();
+    box.querySelectorAll(".gyart, .article").forEach(el => { const t = el.textContent; if (!/^根拠/.test(t.trim())) return; let last = null;
+      for (const m of t.matchAll(RE)) { const L = lawOf(m.groups.law) || last; if (!L) continue; last = L; if (!laws.includes(L)) laws.push(L); arts.add(L + m.groups.n + "条" + (m.groups.no || "")); } });
+    return { laws, arts };
+  };
+  const choose = (num, ctx, sentLast, pageLast) => {
+    const has = L => L && GY_JOBUN[L + num];
+    if (has(sentLast)) return sentLast;
+    const byArt = ctx.laws.find(L => ctx.arts.has(L + num) && has(L)); if (byArt) return byArt;
+    const any = ctx.laws.find(has); if (any) return any;
+    if (!ctx.laws.length && has(pageLast)) return pageLast;
+    return null;
+  };
+
+  const scanText = (node, st) => {
+    const t = node.nodeValue; RE.lastIndex = 0; let m, pos = 0, frag = null;
+    while ((m = RE.exec(t))) {
+      const g = m.groups; let key = null, p = +(g.p || g.p2 || 0), it = +(g.g || g.g2 || 0);
+      if (m[0].startsWith("同条")) key = st.lastKey;
+      else {
+        const before = t.slice(0, m.index);
+        if (!g.law && UNKNOWN_BEFORE.test(before)) { st.sentLast = null; continue; }
+        if (/(?:旧|改正前の?)$/.test(before)) continue; // 「旧民法733条」など、今はない条文
+        const num = g.n + "条" + (g.no || "");
+        const L = g.law === "同法" ? (st.sentLast || st.pageLast) : lawOf(g.law) || choose(num, st.ctx, st.sentLast, st.pageLast);
+        if (g.law && g.law !== "同法") { st.sentLast = lawOf(g.law); st.pageLast = st.sentLast; }
+        if (L && GY_JOBUN[L + num]) { key = L + num; st.sentLast = L; }
+      }
+      if (!key) continue;
+      st.lastKey = key;
+      const a = GY_JOBUN[key];
+      if (p > a.p.length) p = 0;
+      const sel = p ? [[p, it ? [it] : []]] : it && a.p.length === 1 ? [[1, [it]]] : [];
+      frag = frag || document.createDocumentFragment();
+      if (m.index > pos) frag.append(t.slice(pos, m.index));
+      const b = document.createElement("button"); b.type = "button"; b.className = "jl"; b.textContent = m[0];
+      b.dataset.jl = key; b.dataset.sel = JSON.stringify(sel); b.setAttribute("aria-expanded", "false");
+      b.title = "条文を開く"; frag.append(b); pos = m.index + m[0].length; st.count++;
+    }
+    if (!frag) return;
+    if (pos < t.length) frag.append(t.slice(pos));
+    [...frag.childNodes].forEach(n => n.nodeType === 3 && seen.add(n));
+    node.replaceWith(frag);
+  };
+  const scanRoot = root => {
+    const st = { ctx: ctxOf(root), sentLast: null, pageLast: null, lastKey: null, count: 0 };
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n => {
+      if (seen.has(n) || !/\d条|同条/.test(n.nodeValue)) { seen.add(n); return NodeFilter.FILTER_REJECT; }
+      const el = n.parentElement; return el && !el.closest(SKIP) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT; } });
+    const list = []; let n; while ((n = w.nextNode())) list.push(n);
+    let blk = null;
+    list.forEach(x => { seen.add(x); const b = x.parentElement.closest(BLOCK); if (b !== blk) { blk = b; st.sentLast = null; } scanText(x, st); });
+    return st.count;
+  };
+  const scanAll = () => { const app = document.getElementById("app"); if (!app) return 0; let c = 0;
+    app.querySelectorAll(ROOTS).forEach(r => { if (!r.parentElement.closest(ROOTS)) c += scanRoot(r); }); return c; };
+  window.jlScan = scanAll;
+
+  // 条文の本文（下のまとめと同じ見た目。長い条文も開いた形で出す）
+  const body = (key, sel) => { try { GY_JB.__jl = [[key, sel]]; return gyJobun({ id: "__jl" })
+      .replace(/^<details class="jobun" open><summary>[^<]*<\/summary>/, "").replace(/<p class="jbsrc">[\s\S]*?<\/p><\/details>$/, "")
+      .replace(/<details class="jbart">/g, '<details class="jbart" open>'); } finally { delete GY_JB.__jl; } };
+  // 開く場所：押した語のある文の終わり（。か改行）。見つからなければ、その段落の終わり
+  const place = btn => {
+    let n = btn.nextSibling;
+    while (n) {
+      if (n.nodeType === 3) { const i = n.nodeValue.search(/[。\n]/); if (i >= 0) { const rest = n.splitText(i + 1); seen.add(rest); return [n.parentNode, rest]; } }
+      else if (n.nodeType === 1 && (n.matches("br, .jlbox") || n.matches(BLOCK))) return [n.parentNode, n];
+      n = n.nextSibling;
+    }
+    const blk = btn.parentElement.closest(BLOCK) || btn.parentElement;
+    if (btn.parentElement !== blk && btn.parentElement.closest(BLOCK) === blk) { let e = btn.parentElement; while (e.parentElement !== blk) e = e.parentElement; return [blk, e.nextSibling]; }
+    return [btn.parentNode, null];
+  };
+  let uid = 0;
+  const open = btn => {
+    const sel = JSON.parse(btn.dataset.sel || "[]"), key = btn.dataset.jl, a = GY_JOBUN[key];
+    const box = document.createElement("span"); box.className = "jlbox"; box.id = "jlb" + (++uid); box.setAttribute("role", "region"); box.setAttribute("aria-label", a.n);
+    const draw = s => { box.innerHTML = body(key, s) + `<span class="jlrow">${s.length ? `<button type="button" class="jlall">全文を見る</button>` : ""}<button type="button" class="jlclose">閉じる</button></span>`;
+      const all = box.querySelector(".jlall"); if (all) all.onclick = () => draw([]);
+      box.querySelector(".jlclose").onclick = () => { close(btn); btn.focus({ preventScroll: true }); }; };
+    draw(sel);
+    // 同じ文で開いた箱が先にあれば、その後ろに並べる
+    let [par, ref] = place(btn);
+    while (ref && ref.nodeType === 1 && ref.classList.contains("jlbox")) ref = ref.nextSibling;
+    par.insertBefore(box, ref);
+    btn.setAttribute("aria-expanded", "true"); btn.setAttribute("aria-controls", box.id); btn.title = "条文を閉じる";
+    const r = box.getBoundingClientRect(); if (r.bottom > innerHeight - 80) box.scrollIntoView({ block: "nearest", behavior: typeof reduced === "function" && reduced() ? "auto" : "smooth" });
+  };
+  const close = btn => { const box = document.getElementById(btn.getAttribute("aria-controls")); if (box) box.remove();
+    btn.setAttribute("aria-expanded", "false"); btn.removeAttribute("aria-controls"); btn.title = "条文を開く"; };
+  document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("button.jl"); if (!b) return;
+    e.preventDefault(); e.stopPropagation(); b.getAttribute("aria-expanded") === "true" ? close(b) : open(b); }, true);
+
+  const css = document.createElement("style"); css.id = "jl-css";
+  css.textContent = `
+button.jl { display: inline; min-height: 0; padding: 0 1px; margin: 0; border: 0; border-radius: 2px; background: none; font: inherit; color: var(--gold);
+  text-decoration: underline 1px dotted; text-underline-offset: 3px; cursor: pointer; line-height: inherit; vertical-align: baseline; }
+button.jl::after { content: "▾"; font-size: .75em; margin-left: 1px; text-decoration: none; display: inline-block; }
+button.jl[aria-expanded="true"] { text-decoration-style: solid; background: color-mix(in srgb, var(--gold) 16%, transparent); }
+button.jl[aria-expanded="true"]::after { content: "▴"; }
+button.jl:hover:not(:disabled) { background: color-mix(in srgb, var(--gold) 14%, transparent); }
+@media (pointer: coarse) { button.jl { padding: 3px 2px; margin: -3px 0; } }
+.jlbox { display: block; margin: 6px 0 8px; padding: 6px 10px 8px; border: 1px solid var(--gold); border-left-width: 3px; border-radius: 4px;
+  background: var(--deep); color: var(--chalk); font-weight: normal; font-size: 13.5px; line-height: 1.8; white-space: normal; text-align: left; }
+.jlbox .jbart { margin: 2px 0 0; }
+.jlbox .jbart p { margin: 2px 0 4px; }
+.jlrow { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+.jlrow button { min-height: 36px; padding: 4px 12px; font-size: 13px; }
+`;
+  document.head.append(css);
+  const start = () => { const app = document.getElementById("app"); if (!app) return; let q = false;
+    new MutationObserver(() => { if (q) return; q = true; queueMicrotask(() => { q = false; scanAll(); }); }).observe(app, { childList: true, subtree: true }); scanAll(); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+})();
+// ===== 解答からすぐ条文を見る ここまで =====
+// ===== くわしい解説の見せ方（2026-11-05） =====
+// 答え合わせの「くわしい解説」（.gydet）を、結果のすぐ下（ポイントの後・肢ごとの正誤の前）に移し、正誤に合わせて並べ替える。
+// 中身（GY_DETAIL・q.d）はそのまま。描いたあとに手を加える（練習・模試・見直し、どの試験でも同じ）。
+//  ・間違えたとき：「あなたの選んだ肢Nが違う理由」を先頭に足し、次に「ひっかけ所（落としやすい点）」
+//  ・正解したとき：「関連知識」を先頭に（もう一歩深める）
+//  ・3行を小さなカードに分け、「A→B→C」の流れは段に分けて見せる
+// 根拠：解説つきの答え合わせは正誤だけより効果が大きい（Van der Kleij ほか 2015）。選んだ答えがなぜ違うかを短く小分けに（Shute 2008）。
+(() => {
+  const TRAP = /^(?:ひっかけ所|落としやすい点)$/, MORE = /^関連知識$/;
+  const head = li => ((li.querySelector(":scope > b") || {}).textContent || "").trim();
+  const flow = li => {
+    // 本文が文字だけ（ほかの部品がリンクなどを入れていない）ときだけ、「→」が2つ以上ある文を段に分ける
+    const b = li.querySelector(":scope > b"); if (!b) return;
+    const rest = [...li.childNodes].filter(n => n !== b);
+    if (rest.some(n => n.nodeType !== 3)) return;
+    const t = rest.map(n => n.textContent).join("");
+    const m = t.match(/^(.*?(?:。|：|:)?)([^。：:]*?(?:→[^。→]+){2,})(。?)(.*)$/s);
+    if (!m) return;
+    const steps = m[2].split("→").map(s => s.trim()).filter(Boolean);
+    if (steps.length < 3) return;
+    rest.forEach(n => n.remove());
+    const p1 = document.createElement("span"); p1.textContent = m[1]; li.appendChild(p1);
+    const ol = document.createElement("ol"); ol.className = "dtflow";
+    steps.forEach(s => { const x = document.createElement("li"); x.textContent = s; ol.appendChild(x); });
+    li.appendChild(ol);
+    if (m[4].trim()) { const p2 = document.createElement("span"); p2.textContent = m[4]; li.appendChild(p2); }
+  };
+  const fix = det => {
+    if (det.dataset.dt) return; det.dataset.dt = "1";
+    const box = det.parentElement, res = box && box.querySelector(":scope > .gyres");
+    const ul = det.querySelector(":scope > ul"); if (!ul) return;
+    const items = [...ul.children];
+    items.forEach(li => { li.classList.add("dtc"); const h = head(li);
+      if (TRAP.test(h)) li.classList.add("dttrap"); else if (MORE.test(h)) li.classList.add("dtmore"); flow(li); });
+    if (!res) return; // 見直しの一覧など、結果の見出しがない所は見た目だけ
+    const ok = res.classList.contains("ok");
+    // 結果のすぐ下（ポイントがあればその後）へ
+    const pt = box.querySelector(":scope > .gypoint"), at = pt || res;
+    at.after(det); det.classList.add("dtup");
+    const first = items.find(li => (ok ? MORE : TRAP).test(head(li)));
+    if (first) ul.prepend(first);
+    if (!ok) {
+      const mine = box.querySelector(".gyex li.mine"), why = mine && mine.querySelector(".gycx");
+      const n = mine && mine.querySelector(".gyn");
+      if (why && n && /^\d+$/.test(n.textContent.trim()) && !mine.classList.contains("ans")) { // 組合せ（ア〜オ）は選んだのが組なので出さない
+        const li = document.createElement("li"); li.className = "dtc dtmine";
+        const b = document.createElement("b"); b.textContent = `あなたの選んだ肢${n.textContent.trim()}が違う理由`;
+        li.append(b, document.createTextNode(why.textContent)); ul.prepend(li);
+      }
+    }
+  };
+  const run = () => $app.querySelectorAll(".gydet:not([data-dt])").forEach(d => { try { fix(d); } catch (e) { console.warn("detail", e); } });
+  let busy = false;
+  new MutationObserver(() => { if (busy) return; busy = true; queueMicrotask(() => { try { run(); } finally { busy = false; } }); })
+    .observe($app, { childList: true, subtree: true });
+  run();
+  const css = document.createElement("style");
+  css.textContent = `.gydet.dtup{margin:0 0 14px;border-top:0;padding-top:0}
+.gydet ul:has(> .dtc){list-style:none;padding-left:0;gap:8px}
+.gydet li.dtc{padding:8px 12px;border:1px solid var(--line);border-left:3px solid var(--line);border-radius:4px;background:var(--deep)}
+.gydet li.dtc > b{display:block;margin:0 0 2px;font-size:13px;letter-spacing:.04em}
+.gydet li.dttrap{border-left-color:var(--miss)}.gydet li.dttrap > b{color:var(--miss)}
+.gydet li.dtmine{border-left-color:var(--miss)}.gydet li.dtmine > b{color:var(--miss)}
+.gydet li.dtmore{border-left-color:var(--hit)}.gydet li.dtmore > b{color:var(--hit)}
+.dtflow{margin:6px 0;padding:0;list-style:none;display:grid;gap:0}
+.dtflow li{position:relative;padding:3px 0 3px 1.6em}
+.dtflow li::before{content:counter(list-item);position:absolute;left:0;top:5px;width:1.2em;height:1.2em;border-radius:50%;background:var(--gold);color:var(--deep);font-size:11px;line-height:1.2em;text-align:center;font-weight:700}
+.dtflow li + li::after{content:"";position:absolute;left:.55em;top:-6px;height:9px;border-left:1px solid var(--gold)}`;
+  document.head.appendChild(css);
+})();
+// ===== くわしい解説の見せ方 ここまで =====
 // keyboard: 1-5 / o x to answer, Enter for next
 document.addEventListener("keydown", e => {
   const next = document.getElementById("next");
