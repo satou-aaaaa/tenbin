@@ -346,7 +346,23 @@ if (process.argv.includes("--browser")) {
       for (const [q, go] of jobs) {
         go(); await tick();
         const st = $app.querySelectorAll(".kmst li").length, lab = isLab(q.c[q.a] || "");
-        $app.querySelector(".choices button").click(); await tick(); await tick();
+        // 答え方：組の選択肢なら、ア〜オの文を押して答えられる（2026-11-05 satou「ほかの問題と同様に、文章を選択するような形に」）。正解の組の文を押すと正解になること
+        const ol = $app.querySelector("ol.kmst[data-kp]"), btns = [...$app.querySelectorAll(".choices button")];
+        if (lab && st === nSt(q)) {
+          const t = (btns[q.a].querySelector("span:not(.key)") || {}).textContent || "";
+          if (!ol) bad.push(`${q.id}：文を押して答えられない`);
+          else if (!$app.querySelector(".choices").classList.contains("kmhide")) bad.push(`${q.id}：文で答えるときに番号の選択肢が隠れていない`);
+          else {
+            try {
+              if (ol.dataset.kp === "set") [...t.matchAll(/[ア-オ]/g)].forEach((m) => ol.querySelector(`li[data-k="${m[0]}"]`).click());
+              else [...t.matchAll(/([ア-オ])([○×])/g)].forEach((m) => ol.querySelector(`li[data-k="${m[1]}"] .kmox button[data-v="${m[2] === "○" ? 1 : 0}"]`).click());
+            } catch (e) { bad.push(`${q.id}：文を押せない（${e.message}）`); }
+            await tick(); await tick();
+            if (!quiz.answered || !btns[q.a].classList.contains("right") || $app.querySelector(".choices button.wrong")) bad.push(`${q.id}：正解の組の文を押しても正解にならない`);
+          }
+        }
+        if (!quiz.answered) btns[0].click();
+        await tick(); await tick();
         const w = [...$app.querySelectorAll(".kmw li")];
         if (st !== nSt(q)) bad.push(`${q.id}：記述が枠に分かれていない（${st}/${nSt(q)}）`);
         else if (lab && (w.length !== st || w.some((li) => !li.querySelector(".gytf") || !(li.querySelector(".gyct") || {}).textContent))) bad.push(`${q.id}：解説の肢ごとの正誤に、記述の文と○×が出ない（${w.length}/${st}）`);
@@ -357,7 +373,7 @@ if (process.argv.includes("--browser")) {
     }, vp.all);
     if (r === null) ok(`${vp.name}: 組合せ問題がないので確かめない`);
     else if (r.bad.length) ng(`${vp.name}: 組合せ問題の表示がおかしい（${r.n}問中）: ${r.bad.join(" / ")}`);
-    else ok(`${vp.name}: 組合せ問題${r.n}問の記述が枠に分かれ、解説の肢ごとの正誤に記述の文と○×が出る`);
+    else ok(`${vp.name}: 組合せ問題${r.n}問の記述が枠に分かれ、文を押して答えられ、解説の肢ごとの正誤に記述の文と○×が出る`);
     await page.close();
   }
   // 語群から選ぶ問題（行政書士の多肢選択式・社労士の選択式）で、語群の並びから答えが分からないこと（2026-11-05 satou「選択肢が順番に並んでいて答えを推測できてしまう」）。
