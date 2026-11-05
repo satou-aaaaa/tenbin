@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611050405";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611050919";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24644,155 +24644,6 @@ function showRecord() {
   showKmSub = function (s, ...a) { return s === "学習の記録" ? showRecord() : sub.call(this, s, ...a); };
 })();
 // ===== 学習の記録 ここまで =====
-
-// ===== 組合せ問題の見やすさ（2026-11-04 satou「2つ選択するタイプの問題の出題と解説が見づらい」「他のタイプの問題と同様に見やすく」） =====
-// 「アからオまでの記述のうち正しいものの組合せ」「ア〜ウに○×を付けた組合せ」の問題を、ほかの択一と同じ見た目にそろえる。
-// 画面を作る関数はそのままにして、描いたあとに手を加える（練習・模試・見直し、どの試験でも同じ）。
-//  1. 出題：問いの文に続けて書かれた「ア　…」の記述を、1つずつ枠に入れて並べる（ふつうの肢と同じ形）
-//  2. 選択肢：「アウ」「アとウ」などを「ア・ウ」にそろえる
-//  3. 解説：「記述ごとの正誤」（ア〜オそれぞれに ○正しい／×誤り・理由）を先に出し、
-//     組合せごとの説明は短い一覧に。くわしい解説の中で同じことをくり返す行は隠す
-(() => {
-  const KANA = "アイウエオ";
-  const ST_RE = /^([ア-オ])[　 ]+(.+)$/;
-  const NEG = /誤っている|誤りである|妥当でない|正しくない|適切でない|不適当な|不適切な/;
-  // 組合せの選択肢の文字（「アウ」「ア・ウ」「アとウ」「ア イ」「ア○ イ× ウ○」）を記号の並びにする。合わなければ null
-  const parseLab = t => {
-    t = t.trim();
-    let m = t.match(/^([ア-オ][○×])(?:[ 　・]*[ア-オ][○×])+$/);
-    if (m) return { ox: [...t.matchAll(/([ア-オ])([○×])/g)].map(x => [x[1], x[2] === "○"]) };
-    if (/^[ア-オ](?:[ 　・と]?[ア-オ])+$/.test(t)) return { set: [...t.matchAll(/[ア-オ]/g)].map(x => x[0]) };
-    return null;
-  };
-  const fmtLab = l => l.ox ? l.ox.map(([k, v]) => k + (v ? "○" : "×")).join("　") : l.set.join("・");
-
-  // 1. 出題の記述を枠に分ける（問いの文の後ろに「ア　…」の行が3つ以上あるとき）
-  const splitQ = p => {
-    if (p.dataset.km) return; p.dataset.km = "1";
-    const lines = p.innerHTML.split("\n");
-    let i = lines.length; while (i > 0 && (ST_RE.test(lines[i - 1].trim()) || !lines[i - 1].trim())) i--;
-    const st = lines.slice(i).map(s => s.trim()).filter(Boolean).map(s => s.match(ST_RE));
-    if (st.length < 3 || st.some((m, j) => m[1] !== KANA[j])) return;
-    p.innerHTML = lines.slice(0, i).join("\n").replace(/\s+$/, "");
-    p.classList.add("kmlead");
-    p.insertAdjacentHTML("afterend", `<ol class="kmst" aria-label="記述">${st.map(m => `<li data-k="${m[1]}"><span class="gyn">${m[1]}</span><span class="kmt">${m[2]}</span></li>`).join("")}</ol>`);
-  };
-  // 2. 選択肢の書き方をそろえる
-  const fixLabs = root => root.querySelectorAll(".choices button > span:not(.key), .gyex li > p.gyct").forEach(s => {
-    if (s.dataset.km) return; s.dataset.km = "1";
-    const l = parseLab(s.textContent); if (l) { s.textContent = fmtLab(l); s.classList.add("kmlab"); }
-  });
-
-  // 記述ごとの理由を、組合せの説明・くわしい解説の文から探す
-  const reasons = (texts, ks) => {
-    const all = texts.join("\n"), r = {};
-    const STOP = "(?=[　\\s。]?[ア-オ](?:は(?:正し|誤|妥当|適切|不適)|：|（(?:正しい|誤り)）)|\\n|$)";
-    ks.forEach(k => {
-      let m = all.match(new RegExp(`(?:^|[^ァ-ヴ])${k}は(?:正しい|誤り|誤っている|妥当でない|妥当|正しくない|適切でない|適切)(?:です|もの)?。([\\s\\S]*?)${STOP}`, "m"));
-      if (!m || !m[1].trim()) m = all.match(new RegExp(`(?:^|[^ァ-ヴ])${k}：([\\s\\S]*?)${STOP}`, "m"));
-      if (m && m[1].trim()) r[k] = m[1].trim();
-    });
-    return r;
-  };
-
-  // 3. 解説：記述ごとの正誤を足す
-  const addTable = (w, statements, lead, btns) => {
-    if (w.dataset.km) return; w.dataset.km = "1";
-    const lis = [...w.querySelectorAll(":scope > ol.gyex > li")];
-    // 行政書士の画面は、肢の文が「理由だけ」か「<b>組</b><br>理由」なので、ほかと同じ「組（gyct）＋理由（gycx）」の形にそろえる
-    lis.forEach((li, j) => { if (li.querySelector(".gyct")) return;
-      const p = li.querySelector(":scope > p"); if (!p) return;
-      const b = p.querySelector(":scope > b:first-child"), lab = b ? b.textContent : btns[j] || "";
-      if (!parseLab(lab)) return;
-      if (b) { b.remove(); const br = p.querySelector(":scope > br:first-child"); if (br) br.remove(); }
-      p.classList.add("gycx"); p.insertAdjacentHTML("beforebegin", `<p class="gyct kmlab" data-km="1">${esc(fmtLab(parseLab(lab)))}</p>`); });
-    const labs = lis.map(li => parseLab((li.querySelector(".gyct") || {}).textContent || ""));
-    const ai = lis.findIndex(li => li.classList.contains("ans")), mi = lis.findIndex(li => li.classList.contains("mine"));
-    if (!lis.length || ai < 0) return;
-    const ks = statements.map(s => s.k), mine = mi >= 0 ? labs[mi] : null;
-    const neg = NEG.test(lead); let word = /妥当/.test(lead) ? ["妥当", "妥当でない"] : /正し|誤|適切|不適/.test(lead) ? ["正しい", "誤り"] : ["あてはまる", "あてはまらない"];
-    const det = w.parentElement.querySelector(".gydet");
-    const liText = li => (li.querySelector(".gycx") || li.querySelector(":scope > p:last-of-type") || {}).textContent || "";
-    let truth, inAns = () => false, inMine = () => false, ans = labs[ai], count = false, why0 = {};
-    if (labs.every(Boolean)) {
-      if (ans.ox) { if (ans.ox.some(([k]) => !ks.includes(k))) return;
-        const o = Object.fromEntries(ans.ox), my = mine && mine.ox ? Object.fromEntries(mine.ox) : null;
-        truth = k => o[k]; inMine = k => !!my && my[k] !== o[k]; }
-      else { if (ans.set.some(k => !ks.includes(k))) return; inAns = k => ans.set.includes(k); truth = k => inAns(k) !== neg; inMine = k => !!(mine && mine.set && mine.set.includes(k)); }
-    } else {
-      // 個数問題（正しいものはいくつあるか）：正解の説明の「ア○（理由）、イ×（理由）」から記述ごとの正誤を読む
-      const o = {};
-      for (const m of liText(lis[ai]).matchAll(/([ア-オ])(○|×|違反しない|違反)(?:（((?:[^（）]|（[^（）]*）)*)）)?/g)) { o[m[1]] = m[2] === "○" || m[2] === "違反しない"; if (m[3]) why0[m[1]] = m[3]; }
-      if (!ks.every(k => k in o)) return;
-      if (/違反/.test(liText(lis[ai]))) word = ["違反しない", "違反する"];
-      truth = k => o[k]; count = true; ans = null;
-    }
-    const texts = [...lis.map(liText),
-      ...(det ? [...det.querySelectorAll("li")].map(li => li.textContent.replace(/^([ア-オ])（(?:正しい|誤り)）/, "$1：")) : [])];
-    const why = { ...reasons(texts, ks), ...why0 };
-    const tag = k => inAns(k) ? `<span class="gytag">正解の組</span>` : "";
-    const mtag = k => !inMine(k) || inAns(k) ? "" : ans && ans.ox ? `<span class="gytag mine">あなたは${truth(k) ? "×" : "○"}</span>` : `<span class="gytag mine">あなたが選んだ</span>`;
-    const yes = ks.filter(k => truth(k)), no = ks.filter(k => !truth(k));
-    // 答えのまとめ（ほかの問題の「正解は 2」と同じ位置づけ）：どの記述が○×か、正解の組と、選んだ組のどこがちがうか
-    const labTxt = l => l ? (l.ox ? l.ox.map(([k, v]) => k + (v ? "○" : "×")).join(" ") : l.set.join("・")) : "";
-    const off = mine && mi !== ai ? (mine.set ? mine.set.filter(k => !inAns(k)) : mine.ox ? mine.ox.filter(([k, v]) => v !== truth(k)).map(([k]) => k) : []) : [];
-    const sum = `<p class="kmsum"><span class="t">○ ${word[0]}：<b>${yes.join("・") || "なし"}</b></span><span class="f">× ${word[1]}：<b>${no.join("・") || "なし"}</b></span>`
-      + `<span class="a">正解：<b>${ai + 1}</b>${count ? `（${word[0]}ものは${yes.length}つ）` : `（${esc(labTxt(ans))}）`}</span>`
-      + (mi >= 0 && mi !== ai ? `<span class="m">あなたの解答：<b>${mi + 1}</b>${count ? "" : `（${esc(labTxt(mine))}）`}${off.length ? `…${off.join("・")}が${ans && ans.ox ? "ちがう" : neg ? "正しい記述" : word[1]}` : ""}</span>` : "") + `</p>`;
-    w.insertAdjacentHTML("beforebegin", `<div class="gyexw kmw"><h4>肢ごとの正誤</h4>${sum}<ol class="gyex">${statements.map(({ k, html }) => { const t = truth(k);
-      return `<li class="${inAns(k) ? "ans" : ""}${inMine(k) && !inAns(k) ? " mine" : ""}" data-k="${k}"><span class="gyn">${k}</span><span class="gytf ${t ? "t" : "f"}">${t ? "○ " + word[0] : "× " + word[1]}</span>${tag(k)}${mtag(k)}<p class="gyct">${html}</p>${why[k] ? `<p class="gycx">${esc(why[k])}</p>` : ""}</li>`; }).join("")}</ol></div>`);
-    const h = w.querySelector("h4"); if (h) h.textContent = "選択肢（組合せ）ごとの正誤";
-    // 組の記号を、記述の正誤の色で塗る（どの記述がまちがいで外れるのかが一目で分かる）
-    if (!count) lis.forEach((li, j) => { const l = labs[j], g = li.querySelector(".gyct"); if (!g || !l) return;
-      g.innerHTML = (l.ox ? l.ox.map(([k, v]) => `<span class="km${v === truth(k) ? "t" : "f"}">${k}${v ? "○" : "×"}</span>`) : l.set.map(k => `<span class="km${truth(k) !== neg ? "t" : "f"}">${k}</span>`)).join(l.ox ? "　" : "・"); });
-    // 理由は上の表にあるので、組合せごとの説明は隠して短い一覧にする（正解の組の記述は「正解です。」しか書いていない問題が多いので、理由がなくてもよい）
-    const full = ks.every(k => why[k]), enough = ks.every(k => why[k] || inAns(k));
-    // 理由がそろっていれば、組合せごとの一覧は上のまとめと同じことなので隠す（ほかの問題と同じく「肢ごとの正誤」の一覧ひとつにする）
-    w.classList.add("kmc"); if (enough) w.hidden = true;
-    // くわしい解説で、上の表と同じことをくり返す行を隠す
-    if (det && full) {
-      det.querySelectorAll("li").forEach(li => { const b = (li.querySelector("b") || {}).textContent || "";
-        if (/^(?:正誤の一覧|誤っている記述|正しい記述)$|^[ア-オ](?:[・と][ア-オ])*（(?:正しい|誤り)）$/.test(b)) li.hidden = true; });
-      if (![...det.querySelectorAll("li")].some(li => !li.hidden)) det.hidden = true;
-    }
-  };
-
-  const run = () => {
-    $app.querySelectorAll("p.question").forEach(splitQ);
-    fixLabs($app);
-    // 解説の「肢ごとの正誤」を、直前の組合せ問題の記述と組にする
-    const nodes = [...$app.querySelectorAll("ol.kmst, .gyexw:not(.kmw)")];
-    let cur = null;
-    nodes.forEach(n => {
-      if (n.matches("ol.kmst")) { const lead = n.previousElementSibling, ch = n.parentElement.querySelector(".choices");
-        cur = { lead: lead ? lead.textContent : "", st: [...n.children].map(li => ({ k: li.dataset.k, html: li.querySelector(".kmt").innerHTML })),
-          btns: ch ? [...ch.querySelectorAll("button")].map(b => { const s = b.querySelector("span:not(.key)"); return s ? s.textContent : ""; }) : [] }; }
-      else if (cur) addTable(n, cur.st, cur.lead, cur.btns);
-    });
-  };
-  let busy = false;
-  new MutationObserver(() => { if (busy) return; busy = true; queueMicrotask(() => { try { run(); } catch (e) { console.warn("kumi", e); } busy = false; }); })
-    .observe($app, { childList: true, subtree: true });
-  run();
-  const css = document.createElement("style");
-  css.textContent = `.question.kmlead{margin-bottom:8px}
-.kmst{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:6px}
-.kmst li{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start;padding:8px 10px;border:1px solid var(--line);border-radius:4px;background:var(--deep);font-size:15.5px;line-height:1.75}
-.kmst li .gyn{margin-top:2px}
-.kmlab{letter-spacing:.05em}
-.kmw .gyex li .gytag + .gytag{grid-column:auto}
-.kmc.kmshort .gycx{display:none}
-.kmsum{display:flex;flex-wrap:wrap;gap:2px 14px;margin:0 0 8px;padding:8px 10px;border-radius:4px;background:var(--deep);font-size:14.5px}
-.kmsum .t{color:var(--hit)}.kmsum .f{color:var(--miss)}.kmsum .a,.kmsum .m{flex-basis:100%;color:var(--chalk)}.kmsum .a b{color:var(--hit)}.kmsum .m b{color:var(--miss)}.kmsum b{font-size:16px;letter-spacing:.05em}
-.kmc .gyct .kmt{color:var(--hit)}.kmc .gyct .kmf{color:var(--miss);text-decoration:line-through 1.5px}
-.kmc.kmshort .gyex{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
-.kmc.kmshort .gyex li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;align-content:start}
-.kmc.kmshort .gyex li p.gyct{flex-basis:100%}
-.kmw .gytag,.kmc .gytag{white-space:nowrap}
-.kmc.kmshort .gyex li p.gyct{font-size:14px}`;
-  document.head.appendChild(css);
-})();
-// ===== 組合せ問題の見やすさ ここまで =====
 // ===== AIの添削・採点：文章で答える問題すべてを、AIが添削して観点ごとに採点する（2026-11-04） =====
 // 対象：論文演習（司法試験・予備の実務基礎・労働法。writeCompare → bindAI）、行政書士の記述式（練習・ミニ模試・本番形式の模試）、司法書士の記述式（登記の申請）。
 // AIは観点ごとに ○/× を返し、点数はその観点の配点を足して出す（どの観点で点が入ったかが見えるように）。判定はチェックの欄に自動で入り、遊ぶ人が直せる。
@@ -25041,6 +24892,173 @@ new MutationObserver(() => {
 }).observe($app, { childList: true, subtree: true });
 // ===== AIの添削・採点 ここまで =====
 
+// ===== 組合せ問題の見やすさ（2026-11-04 satou「2つ選択するタイプの問題の出題と解説が見づらい」「他のタイプの問題と同様に見やすく」） =====
+// 「アからオまでの記述のうち正しいものの組合せ」「ア〜ウに○×を付けた組合せ」の問題を、ほかの択一と同じ見た目にそろえる。
+// 画面を作る関数はそのままにして、描いたあとに手を加える（練習・模試・見直し、どの試験でも同じ）。
+//  1. 出題：問いの文に続けて書かれた「ア　…」の記述を、1つずつ枠に入れて並べる（ふつうの肢と同じ形）
+//  2. 選択肢：「アウ」「アとウ」などを「ア・ウ」にそろえる
+//  3. 解説：「記述ごとの正誤」（ア〜オそれぞれに ○正しい／×誤り・理由）を先に出し、
+//     組合せごとの説明は短い一覧に。くわしい解説の中で同じことをくり返す行は隠す
+(() => {
+  const KANA = "アイウエオ";
+  const ST_RE = /^([ア-オ])[　 ]+(.+)$/;
+  const NEG = /誤っている|誤りである|妥当でない|正しくない|適切でない|不適当な|不適切な/;
+  // 組合せの選択肢の文字（「アウ」「ア・ウ」「アとウ」「ア イ」「ア○ イ× ウ○」）を記号の並びにする。合わなければ null
+  const parseLab = t => {
+    t = t.trim();
+    let m = t.match(/^([ア-オ][○×])(?:[ 　・]*[ア-オ][○×])+$/);
+    if (m) return { ox: [...t.matchAll(/([ア-オ])([○×])/g)].map(x => [x[1], x[2] === "○"]) };
+    if (/^[ア-オ](?:[ 　・と]?[ア-オ])+$/.test(t)) return { set: [...t.matchAll(/[ア-オ]/g)].map(x => x[0]) };
+    return null;
+  };
+  const fmtLab = l => l.ox ? l.ox.map(([k, v]) => k + (v ? "○" : "×")).join("　") : l.set.join("・");
+
+  // 1. 出題の記述を枠に分ける（問いの文の後ろに「ア　…」の行が3つ以上あるとき）
+  const splitQ = p => {
+    if (p.dataset.km) return; p.dataset.km = "1";
+    const lines = p.innerHTML.split("\n");
+    let i = lines.length; while (i > 0 && (ST_RE.test(lines[i - 1].trim()) || !lines[i - 1].trim())) i--;
+    const st = lines.slice(i).map(s => s.trim()).filter(Boolean).map(s => s.match(ST_RE));
+    if (st.length < 3 || st.some((m, j) => m[1] !== KANA[j])) return;
+    p.innerHTML = lines.slice(0, i).join("\n").replace(/\s+$/, "");
+    p.classList.add("kmlead");
+    p.insertAdjacentHTML("afterend", `<ol class="kmst" aria-label="記述">${st.map(m => `<li data-k="${m[1]}"><span class="gyn">${m[1]}</span><span class="kmt">${m[2]}</span></li>`).join("")}</ol>`);
+  };
+  // 2. 選択肢の書き方をそろえる
+  const fixLabs = root => root.querySelectorAll(".choices button > span:not(.key), .gyex li > p.gyct").forEach(s => {
+    if (s.dataset.km) return; s.dataset.km = "1";
+    const l = parseLab(s.textContent); if (l) { s.textContent = fmtLab(l); s.classList.add("kmlab"); }
+  });
+
+  // 記述ごとの理由を、組合せの説明・くわしい解説の文から探す
+  const reasons = (texts, ks) => {
+    const all = texts.join("\n"), r = {};
+    const STOP = "(?=[　\\s。]?[ア-オ](?:は(?:正し|誤|妥当|適切|不適)|：|（(?:正しい|誤り)）)|\\n|$)";
+    ks.forEach(k => {
+      let m = all.match(new RegExp(`(?:^|[^ァ-ヴ])${k}は(?:正しい|誤り|誤っている|妥当でない|妥当|正しくない|適切でない|適切)(?:です|もの)?。([\\s\\S]*?)${STOP}`, "m"));
+      if (!m || !m[1].trim()) m = all.match(new RegExp(`(?:^|[^ァ-ヴ])${k}：([\\s\\S]*?)${STOP}`, "m"));
+      if (m && m[1].trim()) r[k] = m[1].trim();
+    });
+    return r;
+  };
+
+  // 3. 解説：記述ごとの正誤を足す
+  const addTable = (w, statements, lead, btns) => {
+    if (w.dataset.km) return; w.dataset.km = "1";
+    const lis = [...w.querySelectorAll(":scope > ol.gyex > li")];
+    // 行政書士の画面は、肢の文が「理由だけ」か「<b>組</b><br>理由」なので、ほかと同じ「組（gyct）＋理由（gycx）」の形にそろえる
+    lis.forEach((li, j) => { if (li.querySelector(".gyct")) return;
+      const p = li.querySelector(":scope > p"); if (!p) return;
+      const b = p.querySelector(":scope > b:first-child"), lab = b ? b.textContent : btns[j] || "";
+      if (!parseLab(lab)) return;
+      if (b) { b.remove(); const br = p.querySelector(":scope > br:first-child"); if (br) br.remove(); }
+      p.classList.add("gycx"); p.insertAdjacentHTML("beforebegin", `<p class="gyct kmlab" data-km="1">${esc(fmtLab(parseLab(lab)))}</p>`); });
+    const labs = lis.map(li => parseLab((li.querySelector(".gyct") || {}).textContent || ""));
+    const ai = lis.findIndex(li => li.classList.contains("ans")), mi = lis.findIndex(li => li.classList.contains("mine"));
+    if (!lis.length || ai < 0) return;
+    const ks = statements.map(s => s.k), mine = mi >= 0 ? labs[mi] : null;
+    const neg = NEG.test(lead); let word = /妥当/.test(lead) ? ["妥当", "妥当でない"] : /正し|誤|適切|不適/.test(lead) ? ["正しい", "誤り"] : ["あてはまる", "あてはまらない"];
+    const det = w.parentElement.querySelector(".gydet");
+    const liText = li => (li.querySelector(".gycx") || li.querySelector(":scope > p:last-of-type") || {}).textContent || "";
+    let truth, inAns = () => false, inMine = () => false, ans = labs[ai], count = false, why0 = {};
+    if (labs.every(Boolean)) {
+      if (ans.ox) { if (ans.ox.some(([k]) => !ks.includes(k))) return;
+        const o = Object.fromEntries(ans.ox), my = mine && mine.ox ? Object.fromEntries(mine.ox) : null;
+        truth = k => o[k]; inMine = k => !!my && my[k] !== o[k]; }
+      else { if (ans.set.some(k => !ks.includes(k))) return; inAns = k => ans.set.includes(k); truth = k => inAns(k) !== neg; inMine = k => !!(mine && mine.set && mine.set.includes(k)); }
+    } else {
+      // 個数問題（正しいものはいくつあるか）：正解の説明の「ア○（理由）、イ×（理由）」から記述ごとの正誤を読む
+      const o = {};
+      for (const m of liText(lis[ai]).matchAll(/([ア-オ])(○|×|違反しない|違反)(?:（((?:[^（）]|（[^（）]*）)*)）)?/g)) { o[m[1]] = m[2] === "○" || m[2] === "違反しない"; if (m[3]) why0[m[1]] = m[3]; }
+      if (!ks.every(k => k in o)) return;
+      if (/違反/.test(liText(lis[ai]))) word = ["違反しない", "違反する"];
+      truth = k => o[k]; count = true; ans = null;
+    }
+    const texts = [...lis.map(liText),
+      ...(det ? [...det.querySelectorAll("li")].map(li => li.textContent.replace(/^([ア-オ])（(?:正しい|誤り)）/, "$1：")) : [])];
+    const why = { ...reasons(texts, ks), ...why0 };
+    const tag = k => inAns(k) ? `<span class="gytag">正解の組</span>` : "";
+    const mtag = k => !inMine(k) || inAns(k) ? "" : ans && ans.ox ? `<span class="gytag mine">あなたは${truth(k) ? "×" : "○"}</span>` : `<span class="gytag mine">あなたが選んだ</span>`;
+    const yes = ks.filter(k => truth(k)), no = ks.filter(k => !truth(k));
+    // 答えのまとめ（ほかの問題の「正解は 2」と同じ位置づけ）：どの記述が○×か、正解の組と、選んだ組のどこがちがうか
+    const labTxt = l => l ? (l.ox ? l.ox.map(([k, v]) => k + (v ? "○" : "×")).join(" ") : l.set.join("・")) : "";
+    const off = mine && mi !== ai ? (mine.set ? mine.set.filter(k => !inAns(k)) : mine.ox ? mine.ox.filter(([k, v]) => v !== truth(k)).map(([k]) => k) : []) : [];
+    const sum = `<p class="kmsum"><span class="t">○ ${word[0]}：<b>${yes.join("・") || "なし"}</b></span><span class="f">× ${word[1]}：<b>${no.join("・") || "なし"}</b></span>`
+      + `<span class="a">正解：<b>${ai + 1}</b>${count ? `（${word[0]}ものは${yes.length}つ）` : `（${esc(labTxt(ans))}）`}</span>`
+      + (mi >= 0 && mi !== ai ? `<span class="m">あなたの解答：<b>${mi + 1}</b>${count ? "" : `（${esc(labTxt(mine))}）`}${off.length ? `…${off.join("・")}が${ans && ans.ox ? "ちがう" : neg ? "正しい記述" : word[1]}` : ""}</span>` : "") + `</p>`;
+    w.insertAdjacentHTML("beforebegin", `<div class="gyexw kmw"><h4>肢ごとの正誤</h4>${sum}<ol class="gyex">${statements.map(({ k, html }) => { const t = truth(k);
+      return `<li class="${inAns(k) ? "ans" : ""}${inMine(k) && !inAns(k) ? " mine" : ""}" data-k="${k}"><span class="gyn">${k}</span><span class="gytf ${t ? "t" : "f"}">${t ? "○ " + word[0] : "× " + word[1]}</span>${tag(k)}${mtag(k)}<p class="gyct">${html}</p>${why[k] ? `<p class="gycx">${esc(why[k])}</p>` : ""}</li>`; }).join("")}</ol></div>`);
+    const h = w.querySelector("h4"); if (h) h.textContent = "選択肢（組合せ）ごとの正誤";
+    // 組の記号を、記述の正誤の色で塗る（どの記述がまちがいで外れるのかが一目で分かる）
+    if (!count) lis.forEach((li, j) => { const l = labs[j], g = li.querySelector(".gyct"); if (!g || !l) return;
+      g.innerHTML = (l.ox ? l.ox.map(([k, v]) => `<span class="km${v === truth(k) ? "t" : "f"}">${k}${v ? "○" : "×"}</span>`) : l.set.map(k => `<span class="km${truth(k) !== neg ? "t" : "f"}">${k}</span>`)).join(l.ox ? "　" : "・"); });
+    // 理由は上の表にあるので、組合せごとの説明は隠して短い一覧にする（正解の組の記述は「正解です。」しか書いていない問題が多いので、理由がなくてもよい）
+    const full = ks.every(k => why[k]), enough = ks.every(k => why[k] || inAns(k));
+    // 理由がそろっていれば、組合せごとの一覧は上のまとめと同じことなので隠す（ほかの問題と同じく「肢ごとの正誤」の一覧ひとつにする）
+    w.classList.add("kmc"); if (enough) w.hidden = true;
+    // くわしい解説で、上の表と同じことをくり返す行を隠す
+    if (det && full) {
+      det.querySelectorAll("li").forEach(li => { const b = (li.querySelector("b") || {}).textContent || "";
+        if (/^(?:正誤の一覧|誤っている記述|正しい記述)$|^[ア-オ](?:[・と][ア-オ])*（(?:正しい|誤り)）$/.test(b)) li.hidden = true; });
+      if (![...det.querySelectorAll("li")].some(li => !li.hidden)) det.hidden = true;
+    }
+  };
+
+  // 4. どの形式でも、解説の「肢ごとの正誤」は「肢の文（太字・.gyct）＋理由（細字・.gycx）」の形にそろえる
+  //    （2026-11-05 satou「組み合わせ問題以外では、解答・解説部分で、問題文を太字、解説を細字としています。これに合わせるように」）
+  //    行政書士の練習は理由だけ、行政書士の模試の見直しは「<b>肢</b><br>理由」なので、肢の文を足して同じ形にする
+  const normLis = w => {
+    if (w.dataset.kn) return; w.dataset.kn = "1";
+    const lis = [...w.querySelectorAll(":scope > ol.gyex > li")], ch = $app.querySelector(".choices");
+    const btns = ch ? [...ch.querySelectorAll("button")].map(b => { const s = b.querySelector("span:not(.key)"); return s ? s.textContent : ""; }) : [];
+    lis.forEach((li, j) => { if (li.querySelector(".gyct")) return;
+      const p = li.querySelector(":scope > p"); if (!p) return;
+      const b = p.querySelector(":scope > b:first-child"), lab = b ? b.textContent : btns.length === lis.length ? btns[j] : "";
+      if (!lab) return;
+      if (b) { b.remove(); const br = p.querySelector(":scope > br:first-child"); if (br) br.remove(); }
+      p.classList.add("gycx"); p.insertAdjacentHTML("beforebegin", `<p class="gyct">${esc(lab)}</p>`); });
+  };
+
+  const run = () => {
+    $app.querySelectorAll("p.question").forEach(splitQ);
+    fixLabs($app);
+    $app.querySelectorAll(".gyexw:not(.kmw)").forEach(normLis);
+    fixLabs($app);
+    // 解説の「肢ごとの正誤」を、直前の組合せ問題の記述と組にする
+    const nodes = [...$app.querySelectorAll("ol.kmst, .gyexw:not(.kmw)")];
+    let cur = null;
+    nodes.forEach(n => {
+      if (n.matches("ol.kmst")) { const lead = n.previousElementSibling, ch = n.parentElement.querySelector(".choices");
+        cur = { lead: lead ? lead.textContent : "", st: [...n.children].map(li => ({ k: li.dataset.k, html: li.querySelector(".kmt").innerHTML })),
+          btns: ch ? [...ch.querySelectorAll("button")].map(b => { const s = b.querySelector("span:not(.key)"); return s ? s.textContent : ""; }) : [] }; }
+      else if (cur) addTable(n, cur.st, cur.lead, cur.btns);
+    });
+  };
+  let busy = false;
+  new MutationObserver(() => { if (busy) return; busy = true; queueMicrotask(() => { try { run(); } catch (e) { console.warn("kumi", e); } busy = false; }); })
+    .observe($app, { childList: true, subtree: true });
+  run();
+  const css = document.createElement("style");
+  css.textContent = `.question.kmlead{margin-bottom:8px}
+.kmst{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:6px}
+.kmst li{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start;padding:8px 10px;border:1px solid var(--line);border-radius:4px;background:var(--deep);font-size:15.5px;line-height:1.75}
+.kmst li .gyn{margin-top:2px}
+.kmlab{letter-spacing:.05em}
+.kmw .gyex li .gytag + .gytag{grid-column:auto}
+.kmc.kmshort .gycx{display:none}
+.gyex li > p.gyct{font-weight:700}
+.gyex li > p.gycx{font-weight:400}
+.kmsum{display:flex;flex-wrap:wrap;gap:2px 14px;margin:0 0 8px;padding:8px 10px;border-radius:4px;background:var(--deep);font-size:14.5px}
+.kmsum .t{color:var(--hit)}.kmsum .f{color:var(--miss)}.kmsum .a,.kmsum .m{flex-basis:100%;color:var(--chalk)}.kmsum .a b{color:var(--hit)}.kmsum .m b{color:var(--miss)}.kmsum b{font-size:16px;letter-spacing:.05em}
+.kmc .gyct .kmt{color:var(--hit)}.kmc .gyct .kmf{color:var(--miss);text-decoration:line-through 1.5px}
+.kmc.kmshort .gyex{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+.kmc.kmshort .gyex li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;align-content:start}
+.kmc.kmshort .gyex li p.gyct{flex-basis:100%}
+.kmw .gytag,.kmc .gytag{white-space:nowrap}
+.kmc.kmshort .gyex li p.gyct{font-size:14px}`;
+  document.head.appendChild(css);
+})();
+// ===== 組合せ問題の見やすさ ここまで =====
 // keyboard: 1-5 / o x to answer, Enter for next
 document.addEventListener("keydown", e => {
   const next = document.getElementById("next");
