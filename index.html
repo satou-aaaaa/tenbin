@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611050939";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611050955";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -508,6 +508,14 @@ details li + li { margin-top: 4px; }
 .chapter-head { font-weight: 600; letter-spacing: .06em; }
 .cmp .model { color: var(--chalk); white-space: pre-wrap; }
 </style>
+<style id="uxw-css">
+/* 日本語を文節で折り返す（短い文字だけ。長い本文はふつうの改行のまま） */
+h1, h2, h3, h4, summary, .ch-sub, .chapter-head, .btn-gold, .linkish, .bunya-label, .kname { word-break: auto-phrase; }
+/* 科目名が長いときは名前のほうを折り返し、棒と数の位置をそろえる */
+.wrap details.kgroup:not(.tbsub) > summary .kname { flex: 0 1 auto; min-width: 0; white-space: normal; }
+</style>
+<script id="uxw-js">if (!document.documentElement.lang) document.documentElement.lang = "ja";</script>
+
 <script id="thm-js">
 // 画面の色（深緑・紙）。2026-11-05 追加。部品: tenbin/theme/（theme.js・apply_theme.py・th_test.cjs）
 // 深緑の装丁がもとの見た目。「紙」は明るい部屋や昼の長文読みのための、生成りの紙に墨の文字。
