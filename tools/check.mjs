@@ -401,6 +401,58 @@ if (process.argv.includes("--browser")) {
     }
     await page.close();
   }
+  // 解答からすぐ条文を見られること（2026-11-05 satou「解答と条文が離れた位置に置かれていますが、解答からすぐに条文がみれるようにしたい」）。
+  // 答え合わせ・見直し・論文の模範答案・研修の解説の中の「民法96条3項」などが押せて（button.jl）、押すとその場に条文が開き、もう一度押すと閉じる。
+  // 落とすもの：①法令名つきで書いた条文で、アプリに本文があるのに押せないもの（すべての択一と論文で数える）
+  // ②形式ごとに、押すと開かない・閉じない・横にはみ出す ③出題中の問題の文・選択肢に出る。新しい試験や画面を足して漏れたら落とす
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`条文を開く: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
+    const r = await page.evaluate(async () => {
+      if (typeof GY_JOBUN === "undefined" || typeof XM_LIST === "undefined") return null;
+      const tick = () => new Promise((res) => setTimeout(res, 0)), bad = [], miss = [], forms = {};
+      const laws = [...new Set(Object.keys(GY_JOBUN).map((k) => k.replace(/\d+条(?:の\d+)*$/, "")))].sort((a, b) => b.length - a.length);
+      const RE = new RegExp(`(?<!旧|改正前の?)(${laws.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})第?(\\d+)条((?:の\\d+)*)`, "g");
+      const SKIP = ".question, .choices, .kmst, .kmlead, .mine, .checks, .jobun, .jlbox, .cites, button, textarea, select, summary, a, h4, label";
+      const look = async (name, id, full) => {
+        await tick(); await tick();
+        const f = forms[name] = forms[name] || { n: 0, open: 0 }; f.n++;
+        if ($app.querySelector(".question button.jl, .choices button.jl, .kmst button.jl, .mine button.jl")) bad.push(`${name} ${id}：問題の文に出る`);
+        const w = document.createTreeWalker($app, NodeFilter.SHOW_TEXT); let n;
+        while ((n = w.nextNode())) { const el = n.parentElement; if (!el.closest(".msg, .cmp") || el.closest(SKIP)) continue;
+          for (const m of n.nodeValue.matchAll(RE)) if (GY_JOBUN[m[1] + m[2] + "条" + (m[3] || "")] && miss.length < 30) miss.push(`${id}「${m[0]}」`); }
+        const b = $app.querySelector("button.jl"); if (!b || !full) return;
+        b.click(); await tick(); const box = document.getElementById(b.getAttribute("aria-controls") || "-");
+        if (!box || !box.querySelector(".jbart")) bad.push(`${name} ${id}：押しても条文が開かない`); else f.open++;
+        if (document.documentElement.scrollWidth > innerWidth + 1) bad.push(`${name} ${id}：開くと横にはみ出す`);
+        b.click(); await tick(); if (b.getAttribute("aria-expanded") !== "false" || (box && box.isConnected)) bad.push(`${name} ${id}：閉じない`);
+      };
+      const every = (l, k) => l.filter((_, i) => i % k === 0);
+      for (const q of GY_ALL) { const k = gyKind(q); gyRun({ deck: [q], i: 0, right: 0, title: "検査" }); await tick();
+        if ($app.querySelector("button.jl")) bad.push(`${q.id}：出題中に出る`);
+        if (k === "go") $app.querySelector(".choices button").click();
+        else if (k === "tashi") { $app.querySelectorAll(".gysel select").forEach((s) => s.value = s.options[1].value); document.getElementById("gyCheck").click(); }
+        else document.getElementById("gyShow").click();
+        await look(`行政書士（${GY_KIND_NAME[k]}）`, q.id, true); }
+      for (const c of XM_LIST) for (const q of c.qs) { xmRun(c, { deck: [q], i: 0, right: 0, title: "検査" }); await tick(); $app.querySelector(".choices button").click(); await look(c.short || c.key, q.id, true); }
+      try { const keep = S.gyExam; S.gyExam = gyExamNew(); gyExamFinish(); for (const i of [0, 20, 40, 45, 50]) { gyExamReview(i); await look("行政書士の模試の見直し", i, true); } S.gyExam = keep; } catch (e) { bad.push("行政書士の模試の見直し：" + e.message); }
+      for (const c of XM_LIST) { if (!(c.mocks || []).length) continue; try { xmOpen(c, c.mocks[0]); await tick(); if ($app.querySelector("button.jl")) bad.push(`${c.key}：模試の出題中に出る`); xmFinish(); for (const i of [0, 3]) { xmReview(i); await look("ほかの試験の模試の見直し", c.key + i, true); } } catch (e) { bad.push(`${c.key} の模試の見直し：` + e.message); } }
+      if (typeof xmIv !== "undefined") clearInterval(xmIv); if (typeof gyExamIv !== "undefined") clearInterval(gyExamIv);
+      for (const p of probs()) { writeCompare(p.id); $app.querySelectorAll("details.modeld").forEach((d) => d.open = true); await look("論文の模範答案", p.id, true); }
+      for (const q of every(AREAS.flatMap((a) => a.qs), 3)) { drillQ({ deck: [q], i: 0, right: 0 }); await tick(); $app.querySelector(".choices button").click(); await look("研修・ドリル", q.id, true); }
+      for (const [name, f] of Object.entries(forms)) if (f.open < f.n * 0.6) bad.push(`${name}：条文を開けた画面が少ない（${f.open}/${f.n}）`);
+      showOffice(); return { bad, miss, forms };
+    });
+    if (r === null) ok("条文のデータがないので、条文を開く検査はしない");
+    else {
+      if (r.miss.length) ng(`解説に法令名つきで書いた条文が押せない（本文はある）: ${r.miss.slice(0, 15).join(" / ")}`);
+      if (r.bad.length) ng(`解説から条文を開けない画面がある: ${r.bad.slice(0, 12).join(" / ")}`);
+      if (!r.miss.length && !r.bad.length) ok(`解説の条文番号を押すとその場で条文が開く（${Object.entries(r.forms).map(([k, f]) => `${k} ${f.open}/${f.n}`).join("・")}）`);
+    }
+    await page.close();
+  }
   await browser.close(); server.close();
   if (errors.length) errors.forEach((e) => ng("JS のエラー: " + e)); else ok("JS のエラーなし");
 }
