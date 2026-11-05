@@ -186,6 +186,24 @@ if (process.argv.includes("--browser")) {
     const wb = await page.evaluate(() => { const e = document.querySelector(".ch-sub"); return e ? [document.documentElement.lang, getComputedStyle(e).wordBreak] : null; });
     if (wb && (wb[0] !== "ja" || wb[1] !== "auto-phrase")) ng(`${vp.name}: 見出しや説明が文節で折り返さない（lang=${wb[0]}・word-break=${wb[1]}）。uxw-css が抜けている`);
     else ok(`${vp.name}: 見出しや説明は文節で折り返す`);
+    // 押す所は高さ 44px 以上（WCAG 2.2 の 2.5.5・Apple HIG の 44pt。2026-11-05 学習の記録・画面の色・さがすの例・なぜこの形？が 28〜40px だった）。
+    // 文の中のリンク（display: inline の a）と条文リンク（.jl）は除く。文の中の小さなボタン .kjb は ::after で上下に広げていればよい
+    const tap = await page.evaluate(() => {
+      const out = [], screens = [["目次", () => { showOffice(); document.querySelectorAll("details").forEach((d) => d.open = true); }],
+        ["さがす", () => typeof showSearch === "function" && showSearch()], ["学習の記録", () => typeof showRecord === "function" && showRecord()]];
+      for (const [name, go] of screens) { try { go(); } catch (e) { out.push(`${name}: ${e.message}`); continue; }
+        for (const e of document.querySelectorAll("#app button, #app summary, #app select, #app a")) {
+          if (e.closest(".jlbox, .kjbox") || e.classList.contains("jl")) continue;
+          const cs = getComputedStyle(e); if (e.tagName === "A" && cs.display === "inline") continue;
+          const r = e.getBoundingClientRect(); if (!r.width || !r.height || cs.visibility === "hidden") continue;
+          let h = r.height; if (e.classList.contains("kjb")) { const t = parseFloat(getComputedStyle(e, "::after").top); if (t < 0) h -= 2 * t; }
+          if (h < 43.5) out.push(`${name}「${(e.textContent || "").trim().slice(0, 12)}」${Math.round(h)}px`);
+        }
+      }
+      showOffice(); return [...new Set(out)];
+    });
+    if (tap.length) ng(`${vp.name}: 押す所が 44px より低い: ${tap.slice(0, 12).join(" / ")}${tap.length > 12 ? ` ほか${tap.length - 12}か所` : ""}`);
+    else ok(`${vp.name}: 目次・さがす・学習の記録の押す所は高さ 44px 以上`);
     await page.close();
   }
   // 応援のお願い: 何も解いていないうちは出ない。10問を越えて目次を開くと1回だけ出る。「もう出さない」のあとは出ない
