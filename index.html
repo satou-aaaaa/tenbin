@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611051020";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611051029";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -508,6 +508,14 @@ details li + li { margin-top: 4px; }
 .chapter-head { font-weight: 600; letter-spacing: .06em; }
 .cmp .model { color: var(--chalk); white-space: pre-wrap; }
 </style>
+<style id="uxw-css">
+/* 日本語を文節で折り返す（短い文字だけ。長い本文はふつうの改行のまま） */
+h1, h2, h3, h4, summary, .ch-sub, .chapter-head, .btn-gold, .linkish, .bunya-label, .kname { word-break: auto-phrase; }
+/* 科目名が長いときは名前のほうを折り返し、棒と数の位置をそろえる */
+.wrap details.kgroup:not(.tbsub) > summary .kname { flex: 0 1 auto; min-width: 0; white-space: normal; }
+</style>
+<script id="uxw-js">if (!document.documentElement.lang) document.documentElement.lang = "ja";</script>
+
 <script id="thm-js">
 // 画面の色（深緑・紙）。2026-11-05 追加。部品: tenbin/theme/（theme.js・apply_theme.py・th_test.cjs）
 // 深緑の装丁がもとの見た目。「紙」は明るい部屋や昼の長文読みのための、生成りの紙に墨の文字。
@@ -24790,79 +24798,7 @@ button.jl:hover:not(:disabled) { background: color-mix(in srgb, var(--gold) 14%,
     new MutationObserver(() => { if (q) return; q = true; queueMicrotask(() => { q = false; scanAll(); }); }).observe(app, { childList: true, subtree: true }); scanAll(); };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
 })();
-// ===== 解答からすぐ条文を見る ここまで =====
-// ===== くわしい解説の見せ方（2026-11-05） =====
-// 答え合わせの「くわしい解説」（.gydet）を、結果のすぐ下（ポイントの後・肢ごとの正誤の前）に移し、正誤に合わせて並べ替える。
-// 中身（GY_DETAIL・q.d）はそのまま。描いたあとに手を加える（練習・模試・見直し、どの試験でも同じ）。
-//  ・間違えたとき：「あなたの選んだ肢Nが違う理由」を先頭に足し、次に「ひっかけ所（落としやすい点）」
-//  ・正解したとき：「関連知識」を先頭に（もう一歩深める）
-//  ・3行を小さなカードに分け、「A→B→C」の流れは段に分けて見せる
-// 根拠：解説つきの答え合わせは正誤だけより効果が大きい（Van der Kleij ほか 2015）。選んだ答えがなぜ違うかを短く小分けに（Shute 2008）。
-(() => {
-  const TRAP = /^(?:ひっかけ所|落としやすい点)$/, MORE = /^関連知識$/;
-  const head = li => ((li.querySelector(":scope > b") || {}).textContent || "").trim();
-  const flow = li => {
-    // 本文が文字だけ（ほかの部品がリンクなどを入れていない）ときだけ、「→」が2つ以上ある文を段に分ける
-    const b = li.querySelector(":scope > b"); if (!b) return;
-    const rest = [...li.childNodes].filter(n => n !== b);
-    if (rest.some(n => n.nodeType !== 3)) return;
-    const t = rest.map(n => n.textContent).join("");
-    const m = t.match(/^(.*?(?:。|：|:)?)([^。：:]*?(?:→[^。→]+){2,})(。?)(.*)$/s);
-    if (!m) return;
-    const steps = m[2].split("→").map(s => s.trim()).filter(Boolean);
-    if (steps.length < 3) return;
-    rest.forEach(n => n.remove());
-    const p1 = document.createElement("span"); p1.textContent = m[1]; li.appendChild(p1);
-    const ol = document.createElement("ol"); ol.className = "dtflow";
-    steps.forEach(s => { const x = document.createElement("li"); x.textContent = s; ol.appendChild(x); });
-    li.appendChild(ol);
-    if (m[4].trim()) { const p2 = document.createElement("span"); p2.textContent = m[4]; li.appendChild(p2); }
-  };
-  const fix = det => {
-    if (det.dataset.dt) return; det.dataset.dt = "1";
-    const box = det.parentElement, res = box && box.querySelector(":scope > .gyres");
-    const ul = det.querySelector(":scope > ul"); if (!ul) return;
-    const items = [...ul.children];
-    items.forEach(li => { li.classList.add("dtc"); const h = head(li);
-      if (TRAP.test(h)) li.classList.add("dttrap"); else if (MORE.test(h)) li.classList.add("dtmore"); flow(li); });
-    if (!res) return; // 見直しの一覧など、結果の見出しがない所は見た目だけ
-    const ok = res.classList.contains("ok");
-    // 結果のすぐ下（ポイントがあればその後）へ
-    const pt = box.querySelector(":scope > .gypoint"), at = pt || res;
-    at.after(det); det.classList.add("dtup");
-    const first = items.find(li => (ok ? MORE : TRAP).test(head(li)));
-    if (first) ul.prepend(first);
-    if (!ok) {
-      const mine = box.querySelector(".gyex li.mine"), why = mine && mine.querySelector(".gycx");
-      const n = mine && mine.querySelector(".gyn");
-      if (why && n && /^\d+$/.test(n.textContent.trim()) && !mine.classList.contains("ans")) { // 組合せ（ア〜オ）は選んだのが組なので出さない
-        const li = document.createElement("li"); li.className = "dtc dtmine";
-        const b = document.createElement("b"); b.textContent = `あなたの選んだ肢${n.textContent.trim()}が違う理由`;
-        li.append(b, document.createTextNode(why.textContent)); ul.prepend(li);
-      }
-    }
-  };
-  const run = () => $app.querySelectorAll(".gydet:not([data-dt])").forEach(d => { try { fix(d); } catch (e) { console.warn("detail", e); } });
-  let busy = false;
-  new MutationObserver(() => { if (busy) return; busy = true; queueMicrotask(() => { try { run(); } finally { busy = false; } }); })
-    .observe($app, { childList: true, subtree: true });
-  run();
-  const css = document.createElement("style");
-  css.textContent = `.gydet.dtup{margin:0 0 14px;border-top:0;padding-top:0}
-.gydet ul:has(> .dtc){list-style:none;padding-left:0;gap:8px}
-.gydet li.dtc{padding:8px 12px;border:1px solid var(--line);border-left:3px solid var(--line);border-radius:4px;background:var(--deep)}
-.gydet li.dtc > b{display:block;margin:0 0 2px;font-size:13px;letter-spacing:.04em}
-.gydet li.dttrap{border-left-color:var(--miss)}.gydet li.dttrap > b{color:var(--miss)}
-.gydet li.dtmine{border-left-color:var(--miss)}.gydet li.dtmine > b{color:var(--miss)}
-.gydet li.dtmore{border-left-color:var(--hit)}.gydet li.dtmore > b{color:var(--hit)}
-.dtflow{margin:6px 0;padding:0;list-style:none;display:grid;gap:0}
-.dtflow li{position:relative;padding:3px 0 3px 1.6em}
-.dtflow li::before{content:counter(list-item);position:absolute;left:0;top:5px;width:1.2em;height:1.2em;border-radius:50%;background:var(--gold);color:var(--deep);font-size:11px;line-height:1.2em;text-align:center;font-weight:700}
-.dtflow li + li::after{content:"";position:absolute;left:.55em;top:-6px;height:9px;border-left:1px solid var(--gold)}`;
-  document.head.appendChild(css);
-})();
-// ===== くわしい解説の見せ方 ここまで =====
-// ===== AIの添削・採点：文章で答える問題すべてを、AIが添削して観点ごとに採点する（2026-11-04） =====
+// ===== 解答からすぐ条文を見る ここまで =====// ===== AIの添削・採点：文章で答える問題すべてを、AIが添削して観点ごとに採点する（2026-11-04） =====
 // 対象：論文演習（司法試験・予備の実務基礎・労働法。writeCompare → bindAI）、行政書士の記述式（練習・ミニ模試・本番形式の模試）、司法書士の記述式（登記の申請）。
 // AIは観点ごとに ○/× を返し、点数はその観点の配点を足して出す（どの観点で点が入ったかが見えるように）。判定はチェックの欄に自動で入り、遊ぶ人が直せる。
 // claude.ai の中は Claude の利用枠（sample）。外（PWA版）は、ふだんの Claude（claude.ai・アプリ）に頼み文を貼って返事を貼り戻す方法（料金なし）を先に出し、
@@ -25110,6 +25046,117 @@ new MutationObserver(() => {
 }).observe($app, { childList: true, subtree: true });
 // ===== AIの添削・採点 ここまで =====
 
+// ===== 学び方の根拠：参考にした研究の一覧と「なぜこの形？」（2026-11-05） =====
+// 2026-11-05 satou「論文を参考にした部分は、その研究も引用したい」→ 2段がまえ（機能のそばに短い理由、くわしくは一覧）。
+//  ・機能のそばの「なぜこの形？」：押すとその場に1〜2行の理由と出典が開く（その場の短い説明と、くわしい説明の置き場所を分ける）
+//  ・一覧の画面 showKonkyo()：「このアプリについて」から開く。研究の書誌（著者・年・題・誌名・巻号・頁・DOI）と確かさの札
+// 書誌は 2026-11-05 に Crossref（api.crossref.org/works/<DOI>）で確かめた。研究を足すときは KONKYO に足し、DOI を Crossref で確かめる。
+// tools/check.mjs が「書誌の欠け・DOI の形・どこからも開けない根拠・押して開かない」を確かめる。
+const KONKYO_KIND = { meta: ["メタ分析", "たくさんの研究の結果をまとめて分析したもの"], review: ["総説", "研究をまとめて、勉強法ごとに評価したもの"], exp: ["実験", "ひとつの研究で、やり方を比べたもの"] };
+const KONKYO = [
+  { id: "spacing", title: "間をあけて復習する", how: "今日のメニュー・規範カード・択一の復習は、1日後・3日後・1週間後…と間をのばして出します。",
+    why: "同じ回数を勉強するなら、続けてくり返すより、日をあけて復習したほうが長く覚えていられます。",
+    refs: [{ a: "Cepeda, Pashler, Vul, Wixted, & Rohrer", y: 2006, t: "Distributed practice in verbal recall tasks: A review and quantitative synthesis", j: "Psychological Bulletin", v: "132(3)", p: "354–380", doi: "10.1037/0033-2909.132.3.354", k: "meta" },
+      { a: "Dunlosky, Rawson, Marsh, Nathan, & Willingham", y: 2013, t: "Improving students' learning with effective learning techniques: Promising directions from cognitive and educational psychology", j: "Psychological Science in the Public Interest", v: "14(1)", p: "4–58", doi: "10.1177/1529100612453266", k: "review" }] },
+  { id: "retrieval", title: "読むより、思い出して書く", how: "論文は自分で答案を書き、規範カードは論点を見て規範を思い出してから「規範を見る」で確かめます。",
+    why: "読み返すより、テストで思い出したほうが、1週間後によく覚えていました。勉強法を比べた総説でも「思い出す練習」はいちばん役に立つ方法とされています。",
+    refs: [{ a: "Roediger & Karpicke", y: 2006, t: "Test-enhanced learning: Taking memory tests improves long-term retention", j: "Psychological Science", v: "17(3)", p: "249–255", doi: "10.1111/j.1467-9280.2006.01693.x", k: "exp" },
+      { a: "Dunlosky, Rawson, Marsh, Nathan, & Willingham", y: 2013, t: "Improving students' learning with effective learning techniques: Promising directions from cognitive and educational psychology", j: "Psychological Science in the Public Interest", v: "14(1)", p: "4–58", doi: "10.1177/1529100612453266", k: "review" }] },
+  { id: "feedback", title: "正誤だけでなく「なぜ」を見せる", how: "答え合わせでは、肢ごとの正誤（肢の文と理由）のあとに「くわしい解説」を出し、まちがえたときはひっかけ所、正解したときは関連知識を先に見せます。論文はAIが観点ごとに直す点を返します。",
+    why: "画面上の学習では、正誤だけの答え合わせはほとんど効かず、解説つきが最も効きました。「なぜ」を示す解説は、新しい問題に応用する力も伸ばします。解説は短く小分けにするのがよいとされます。",
+    refs: [{ a: "Van der Kleij, Feskens, & Eggen", y: 2015, t: "Effects of feedback in a computer-based learning environment on students' learning outcomes: A meta-analysis", j: "Review of Educational Research", v: "85(4)", p: "475–511", doi: "10.3102/0034654314564881", k: "meta" },
+      { a: "Butler, Godbole, & Marsh", y: 2013, t: "Explanation feedback is better than correct answer feedback for promoting transfer of learning", j: "Journal of Educational Psychology", v: "105(2)", p: "290–298", doi: "10.1037/a0031026", k: "exp" },
+      { a: "Shute", y: 2008, t: "Focus on formative feedback", j: "Review of Educational Research", v: "78(1)", p: "153–189", doi: "10.3102/0034654307313795", k: "review" }] },
+  { id: "interleave", title: "科目や論点を混ぜて解く", how: "模試は本番と同じく科目をまぜて出します。今日の学習も、復習の時期が来たものを科目に関係なく並べます。",
+    why: "同じ種類の問題をまとめて解くより、種類をまぜて解いたほうが、練習中は難しく感じても、後のテストの成績がよくなりました。",
+    refs: [{ a: "Rohrer & Taylor", y: 2007, t: "The shuffling of mathematics problems improves learning", j: "Instructional Science", v: "35(6)", p: "481–498", doi: "10.1007/s11251-007-9015-8", k: "exp" },
+      { a: "Dunlosky, Rawson, Marsh, Nathan, & Willingham", y: 2013, t: "Improving students' learning with effective learning techniques: Promising directions from cognitive and educational psychology", j: "Psychological Science in the Public Interest", v: "14(1)", p: "4–58", doi: "10.1177/1529100612453266", k: "review" }] },
+  { id: "story", title: "物語と事例で学ぶ", how: "新人研修は相談者の話から事実を集め、三段論法で答案を組み立てる物語にしています。HPやダメージのようなバトルは入れていません。",
+    why: "遊び方そのものが学ぶ内容と結びついたゲームのほうが、学習効果も取り組む時間も大きくなりました。物語のあるゲーム化は、取り組みを増やす効果が高めでした。",
+    refs: [{ a: "Habgood & Ainsworth", y: 2011, t: "Motivating children to learn effectively: Exploring the value of intrinsic integration in educational games", j: "Journal of the Learning Sciences", v: "20(2)", p: "169–206", doi: "10.1080/10508406.2010.508029", k: "exp" },
+      { a: "Sailer & Homner", y: 2020, t: "The gamification of learning: A meta-analysis", j: "Educational Psychology Review", v: "32(1)", p: "77–112", doi: "10.1007/s10648-019-09498-w", k: "meta" }] },
+  { id: "motivation", title: "目標は自分で選び、順位表は置かない", how: "1日の目標は5・10・20・30から自分で選びます。ほかの人と比べる順位表はなく、比べるのは過去の自分です。",
+    why: "バッジや成績グラフは「できる」感覚を高めましたが、「自分で選べる」感覚は高めませんでした。授業にバッジと順位表を入れたら、やる気と期末試験の成績が下がった例もあります。",
+    refs: [{ a: "Sailer, Hense, Mayr, & Mandl", y: 2017, t: "How gamification motivates: An experimental study of the effects of specific game design elements on psychological need satisfaction", j: "Computers in Human Behavior", v: "69", p: "371–380", doi: "10.1016/j.chb.2016.12.033", k: "exp" },
+      { a: "Hanus & Fox", y: 2015, t: "Assessing the effects of gamification in the classroom: A longitudinal study on intrinsic motivation, social comparison, satisfaction, effort, and academic performance", j: "Computers & Education", v: "80", p: "152–161", doi: "10.1016/j.compedu.2014.08.019", k: "exp" }] },
+];
+// 「なぜこの形？」を置く場所：[探す要素, 根拠の id, 一覧へのボタンを出すか（問題を解いている途中は出さない）, 1画面に1つだけか]
+const KONKYO_SPOTS = [
+  [".win.today:not(.rcweak) > .today-head + p.note", ["spacing", "retrieval"], true],
+  [".gydet > h4", ["feedback"], false],
+  ["details.training > p.note", ["story"], true],
+  [".rcgoal > p.note", ["motivation"], true],
+  [".gymock > h3", ["interleave"], true, true],
+];
+const kjRef = r => `${esc(r.a)} (${r.y}). ${esc(r.t)}. <i>${esc(r.j)}</i>, ${esc(r.v)}, ${esc(r.p)}. <a href="https://doi.org/${esc(r.doi)}" target="_blank" rel="noopener noreferrer">doi:${esc(r.doi)}</a> <span class="kjkind">${KONKYO_KIND[r.k][0]}</span>`;
+function showKonkyo(focus) {
+  quiz = null;
+  $app.innerHTML = `<div class="chapter-head">学び方の根拠</div>
+    <p class="note">このアプリの作りのうち、学習の研究を参考にした所と、その研究です。各機能のそばの「なぜこの形？」からも開けます。</p>
+    <section class="win kjlegend"><p class="pixel" style="margin:0;color:var(--gold)">札の見方</p>
+      <ul class="memo" style="margin:4px 0 0">${Object.values(KONKYO_KIND).map(([k, d]) => `<li><span class="kjkind">${k}</span> ${d}</li>`).join("")}</ul>
+      <p class="note" style="margin:6px 0 0">多くは学校や大学の学習で確かめた研究で、法律の試験勉強そのもので確かめたものではありません。効き方には個人差があります。</p></section>
+    ${KONKYO.map(x => `<section class="win kjitem" id="kj-${x.id}" tabindex="-1"><h2 class="section-label" style="margin:0 0 6px">${esc(x.title)}</h2>
+      <p class="kjhow"><b>このアプリでは</b>${esc(x.how)}</p>
+      <p class="kjwhy"><b>研究では</b>${esc(x.why)}</p>
+      <ol class="kjrefs">${x.refs.map(r => `<li>${kjRef(r)}</li>`).join("")}</ol></section>`).join("")}
+    <p class="note">書誌（著者・年・題・誌名・巻号・頁・DOI）は Crossref で確かめました（2026年11月）。DOI を押すと論文のページが開きます。</p>
+    <div class="row"><button class="btn-gold" id="home">目次にもどる</button></div>`;
+  document.getElementById("home").onclick = showOffice;
+  const f = focus && document.getElementById("kj-" + focus);
+  if (f) { f.scrollIntoView(); f.focus({ preventScroll: true }); } else toTop();
+}
+(() => {
+  const box = (ids, more) => {
+    const d = document.createElement("div"); d.className = "kjbox"; d.hidden = true;
+    d.innerHTML = ids.map(id => KONKYO.find(x => x.id === id)).map(x => `<p><b>${esc(x.title)}</b>${esc(x.why)}</p>
+      <ul>${x.refs.map(r => `<li>${esc(r.a)} (${r.y}) <i>${esc(r.j)}</i> <a href="https://doi.org/${esc(r.doi)}" target="_blank" rel="noopener noreferrer">DOI</a> <span class="kjkind">${KONKYO_KIND[r.k][0]}</span></li>`).join("")}</ul>`).join("")
+      + (more ? `<button class="linkish kjall" data-kj="${ids[0]}">学び方の根拠（研究の一覧）を見る ▶</button>` : `<p class="note" style="margin:0">研究の一覧は、目次の「そのほか」→「このアプリについて」から開けます。</p>`);
+    return d;
+  };
+  let n = 0;
+  const put = () => {
+    for (const [sel, ids, more, once] of KONKYO_SPOTS) {
+      const hosts = [...$app.querySelectorAll(sel)];
+      if (once && $app.querySelector(`.kjb[data-ids="${ids.join(",")}"]`)) continue;
+      for (const h of once ? hosts.slice(0, 1) : hosts) {
+        if (h.querySelector(":scope > .kjb")) continue;
+        const b = document.createElement("button"); b.type = "button"; b.className = "kjb"; b.dataset.ids = ids.join(",");
+        b.textContent = "なぜこの形？"; const d = box(ids, more); d.id = "kjbox" + (++n);
+        b.setAttribute("aria-expanded", "false"); b.setAttribute("aria-controls", d.id);
+        h.append(" ", b); h.after(d);
+      }
+    }
+    // 「このアプリについて」の先頭に、一覧を開くボタン
+    const ab = [...$app.querySelectorAll("details.win > summary")].find(s => s.textContent.startsWith("このアプリについて"));
+    const ul = ab && ab.parentElement.querySelector(":scope > ul");
+    if (ul && !ul.querySelector(".kjall")) { const li = document.createElement("li"); li.className = "kjabout";
+      li.innerHTML = `<b>学び方の根拠：</b>復習の間隔・解説の出し方などは学習の研究を参考にしています。<button class="linkish kjall" data-kj="">参考にした研究の一覧を見る ▶</button>`; ul.prepend(li); }
+  };
+  document.addEventListener("click", e => {
+    const b = e.target.closest && e.target.closest(".kjb");
+    if (b) { const d = document.getElementById(b.getAttribute("aria-controls")); if (!d) return; d.hidden = !d.hidden; b.setAttribute("aria-expanded", String(!d.hidden)); e.stopPropagation(); return; }
+    const a = e.target.closest && e.target.closest(".kjall");
+    if (a) showKonkyo(a.dataset.kj || undefined);
+  }, true);
+  let busy = false;
+  new MutationObserver(() => { if (busy) return; busy = true; queueMicrotask(() => { try { put(); } catch (err) { console.warn("konkyo", err); } finally { busy = false; } }); })
+    .observe($app, { childList: true, subtree: true });
+  put();
+  const css = document.createElement("style");
+  css.textContent = `.kjb{display:inline-block;min-height:28px;padding:0 8px;margin-left:4px;font-size:12px;font-weight:400;line-height:26px;border:1px solid var(--line);border-radius:14px;background:transparent;color:var(--muted);vertical-align:middle;font-family:inherit}
+.kjb[aria-expanded="true"]{border-color:var(--gold);color:var(--gold)}
+.kjbox{margin:6px 0 10px;padding:8px 12px;border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:4px;background:var(--deep);font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+.kjbox p{margin:0 0 4px}.kjbox p b,.kjitem p b{display:block;color:var(--gold);font-size:12.5px}
+.kjbox ul{margin:0 0 6px;padding-left:1.2em;font-size:12px;color:var(--muted)}
+.kjbox .kjall,.kjabout .kjall{display:block;min-height:40px;padding:4px 0;border:0;background:transparent;color:var(--gold);text-align:left;font-size:13px;text-decoration:underline}
+.kjkind{display:inline-block;padding:0 6px;border:1px solid var(--line);border-radius:3px;font-size:11px;line-height:1.6;color:var(--muted);white-space:nowrap}
+.kjitem p{margin:0 0 8px;font-size:14px;line-height:1.75}
+.kjrefs{margin:0;padding-left:1.4em;display:grid;gap:6px;font-size:12.5px;line-height:1.6;color:var(--muted);overflow-wrap:anywhere}
+.kjrefs a,.kjbox a{color:var(--gold)}`;
+  document.head.appendChild(css);
+})();
+// ===== 学び方の根拠 ここまで =====
 // ===== 組合せ問題の見やすさ（2026-11-04 satou「2つ選択するタイプの問題の出題と解説が見づらい」「他のタイプの問題と同様に見やすく」） =====
 // 「アからオまでの記述のうち正しいものの組合せ」「ア〜ウに○×を付けた組合せ」の問題を、ほかの択一と同じ見た目にそろえる。
 // 画面を作る関数はそのままにして、描いたあとに手を加える（練習・模試・見直し、どの試験でも同じ）。
@@ -25389,117 +25436,6 @@ new MutationObserver(() => {
   document.head.appendChild(css);
 })();
 // ===== 組合せ問題の見やすさ ここまで =====
-// ===== 学び方の根拠：参考にした研究の一覧と「なぜこの形？」（2026-11-05） =====
-// 2026-11-05 satou「論文を参考にした部分は、その研究も引用したい」→ 2段がまえ（機能のそばに短い理由、くわしくは一覧）。
-//  ・機能のそばの「なぜこの形？」：押すとその場に1〜2行の理由と出典が開く（その場の短い説明と、くわしい説明の置き場所を分ける）
-//  ・一覧の画面 showKonkyo()：「このアプリについて」から開く。研究の書誌（著者・年・題・誌名・巻号・頁・DOI）と確かさの札
-// 書誌は 2026-11-05 に Crossref（api.crossref.org/works/<DOI>）で確かめた。研究を足すときは KONKYO に足し、DOI を Crossref で確かめる。
-// tools/check.mjs が「書誌の欠け・DOI の形・どこからも開けない根拠・押して開かない」を確かめる。
-const KONKYO_KIND = { meta: ["メタ分析", "たくさんの研究の結果をまとめて分析したもの"], review: ["総説", "研究をまとめて、勉強法ごとに評価したもの"], exp: ["実験", "ひとつの研究で、やり方を比べたもの"] };
-const KONKYO = [
-  { id: "spacing", title: "間をあけて復習する", how: "今日のメニュー・規範カード・択一の復習は、1日後・3日後・1週間後…と間をのばして出します。",
-    why: "同じ回数を勉強するなら、続けてくり返すより、日をあけて復習したほうが長く覚えていられます。",
-    refs: [{ a: "Cepeda, Pashler, Vul, Wixted, & Rohrer", y: 2006, t: "Distributed practice in verbal recall tasks: A review and quantitative synthesis", j: "Psychological Bulletin", v: "132(3)", p: "354–380", doi: "10.1037/0033-2909.132.3.354", k: "meta" },
-      { a: "Dunlosky, Rawson, Marsh, Nathan, & Willingham", y: 2013, t: "Improving students' learning with effective learning techniques: Promising directions from cognitive and educational psychology", j: "Psychological Science in the Public Interest", v: "14(1)", p: "4–58", doi: "10.1177/1529100612453266", k: "review" }] },
-  { id: "retrieval", title: "読むより、思い出して書く", how: "論文は自分で答案を書き、規範カードは論点を見て規範を思い出してから「規範を見る」で確かめます。",
-    why: "読み返すより、テストで思い出したほうが、1週間後によく覚えていました。勉強法を比べた総説でも「思い出す練習」はいちばん役に立つ方法とされています。",
-    refs: [{ a: "Roediger & Karpicke", y: 2006, t: "Test-enhanced learning: Taking memory tests improves long-term retention", j: "Psychological Science", v: "17(3)", p: "249–255", doi: "10.1111/j.1467-9280.2006.01693.x", k: "exp" },
-      { a: "Dunlosky, Rawson, Marsh, Nathan, & Willingham", y: 2013, t: "Improving students' learning with effective learning techniques: Promising directions from cognitive and educational psychology", j: "Psychological Science in the Public Interest", v: "14(1)", p: "4–58", doi: "10.1177/1529100612453266", k: "review" }] },
-  { id: "feedback", title: "正誤だけでなく「なぜ」を見せる", how: "答え合わせのすぐ下に「くわしい解説」を出し、まちがえたときは選んだ肢が違う理由とひっかけ所を先に見せます。論文はAIが観点ごとに直す点を返します。",
-    why: "画面上の学習では、正誤だけの答え合わせはほとんど効かず、解説つきが最も効きました。「なぜ」を示す解説は、新しい問題に応用する力も伸ばします。解説は短く小分けにするのがよいとされます。",
-    refs: [{ a: "Van der Kleij, Feskens, & Eggen", y: 2015, t: "Effects of feedback in a computer-based learning environment on students' learning outcomes: A meta-analysis", j: "Review of Educational Research", v: "85(4)", p: "475–511", doi: "10.3102/0034654314564881", k: "meta" },
-      { a: "Butler, Godbole, & Marsh", y: 2013, t: "Explanation feedback is better than correct answer feedback for promoting transfer of learning", j: "Journal of Educational Psychology", v: "105(2)", p: "290–298", doi: "10.1037/a0031026", k: "exp" },
-      { a: "Shute", y: 2008, t: "Focus on formative feedback", j: "Review of Educational Research", v: "78(1)", p: "153–189", doi: "10.3102/0034654307313795", k: "review" }] },
-  { id: "interleave", title: "科目や論点を混ぜて解く", how: "模試は本番と同じく科目をまぜて出します。今日の学習も、復習の時期が来たものを科目に関係なく並べます。",
-    why: "同じ種類の問題をまとめて解くより、種類をまぜて解いたほうが、練習中は難しく感じても、後のテストの成績がよくなりました。",
-    refs: [{ a: "Rohrer & Taylor", y: 2007, t: "The shuffling of mathematics problems improves learning", j: "Instructional Science", v: "35(6)", p: "481–498", doi: "10.1007/s11251-007-9015-8", k: "exp" },
-      { a: "Dunlosky, Rawson, Marsh, Nathan, & Willingham", y: 2013, t: "Improving students' learning with effective learning techniques: Promising directions from cognitive and educational psychology", j: "Psychological Science in the Public Interest", v: "14(1)", p: "4–58", doi: "10.1177/1529100612453266", k: "review" }] },
-  { id: "story", title: "物語と事例で学ぶ", how: "新人研修は相談者の話から事実を集め、三段論法で答案を組み立てる物語にしています。HPやダメージのようなバトルは入れていません。",
-    why: "遊び方そのものが学ぶ内容と結びついたゲームのほうが、学習効果も取り組む時間も大きくなりました。物語のあるゲーム化は、取り組みを増やす効果が高めでした。",
-    refs: [{ a: "Habgood & Ainsworth", y: 2011, t: "Motivating children to learn effectively: Exploring the value of intrinsic integration in educational games", j: "Journal of the Learning Sciences", v: "20(2)", p: "169–206", doi: "10.1080/10508406.2010.508029", k: "exp" },
-      { a: "Sailer & Homner", y: 2020, t: "The gamification of learning: A meta-analysis", j: "Educational Psychology Review", v: "32(1)", p: "77–112", doi: "10.1007/s10648-019-09498-w", k: "meta" }] },
-  { id: "motivation", title: "目標は自分で選び、順位表は置かない", how: "1日の目標は5・10・20・30から自分で選びます。ほかの人と比べる順位表はなく、比べるのは過去の自分です。",
-    why: "バッジや成績グラフは「できる」感覚を高めましたが、「自分で選べる」感覚は高めませんでした。授業にバッジと順位表を入れたら、やる気と期末試験の成績が下がった例もあります。",
-    refs: [{ a: "Sailer, Hense, Mayr, & Mandl", y: 2017, t: "How gamification motivates: An experimental study of the effects of specific game design elements on psychological need satisfaction", j: "Computers in Human Behavior", v: "69", p: "371–380", doi: "10.1016/j.chb.2016.12.033", k: "exp" },
-      { a: "Hanus & Fox", y: 2015, t: "Assessing the effects of gamification in the classroom: A longitudinal study on intrinsic motivation, social comparison, satisfaction, effort, and academic performance", j: "Computers & Education", v: "80", p: "152–161", doi: "10.1016/j.compedu.2014.08.019", k: "exp" }] },
-];
-// 「なぜこの形？」を置く場所：[探す要素, 根拠の id, 一覧へのボタンを出すか（問題を解いている途中は出さない）, 1画面に1つだけか]
-const KONKYO_SPOTS = [
-  [".win.today:not(.rcweak) > .today-head + p.note", ["spacing", "retrieval"], true],
-  [".gydet > h4", ["feedback"], false],
-  ["details.training > p.note", ["story"], true],
-  [".rcgoal > p.note", ["motivation"], true],
-  [".gymock > h3", ["interleave"], true, true],
-];
-const kjRef = r => `${esc(r.a)} (${r.y}). ${esc(r.t)}. <i>${esc(r.j)}</i>, ${esc(r.v)}, ${esc(r.p)}. <a href="https://doi.org/${esc(r.doi)}" target="_blank" rel="noopener noreferrer">doi:${esc(r.doi)}</a> <span class="kjkind">${KONKYO_KIND[r.k][0]}</span>`;
-function showKonkyo(focus) {
-  quiz = null;
-  $app.innerHTML = `<div class="chapter-head">学び方の根拠</div>
-    <p class="note">このアプリの作りのうち、学習の研究を参考にした所と、その研究です。各機能のそばの「なぜこの形？」からも開けます。</p>
-    <section class="win kjlegend"><p class="pixel" style="margin:0;color:var(--gold)">札の見方</p>
-      <ul class="memo" style="margin:4px 0 0">${Object.values(KONKYO_KIND).map(([k, d]) => `<li><span class="kjkind">${k}</span> ${d}</li>`).join("")}</ul>
-      <p class="note" style="margin:6px 0 0">多くは学校や大学の学習で確かめた研究で、法律の試験勉強そのもので確かめたものではありません。効き方には個人差があります。</p></section>
-    ${KONKYO.map(x => `<section class="win kjitem" id="kj-${x.id}" tabindex="-1"><h2 class="section-label" style="margin:0 0 6px">${esc(x.title)}</h2>
-      <p class="kjhow"><b>このアプリでは</b>${esc(x.how)}</p>
-      <p class="kjwhy"><b>研究では</b>${esc(x.why)}</p>
-      <ol class="kjrefs">${x.refs.map(r => `<li>${kjRef(r)}</li>`).join("")}</ol></section>`).join("")}
-    <p class="note">書誌（著者・年・題・誌名・巻号・頁・DOI）は Crossref で確かめました（2026年11月）。DOI を押すと論文のページが開きます。</p>
-    <div class="row"><button class="btn-gold" id="home">目次にもどる</button></div>`;
-  document.getElementById("home").onclick = showOffice;
-  const f = focus && document.getElementById("kj-" + focus);
-  if (f) { f.scrollIntoView(); f.focus({ preventScroll: true }); } else toTop();
-}
-(() => {
-  const box = (ids, more) => {
-    const d = document.createElement("div"); d.className = "kjbox"; d.hidden = true;
-    d.innerHTML = ids.map(id => KONKYO.find(x => x.id === id)).map(x => `<p><b>${esc(x.title)}</b>${esc(x.why)}</p>
-      <ul>${x.refs.map(r => `<li>${esc(r.a)} (${r.y}) <i>${esc(r.j)}</i> <a href="https://doi.org/${esc(r.doi)}" target="_blank" rel="noopener noreferrer">DOI</a> <span class="kjkind">${KONKYO_KIND[r.k][0]}</span></li>`).join("")}</ul>`).join("")
-      + (more ? `<button class="linkish kjall" data-kj="${ids[0]}">学び方の根拠（研究の一覧）を見る ▶</button>` : `<p class="note" style="margin:0">研究の一覧は、目次の「そのほか」→「このアプリについて」から開けます。</p>`);
-    return d;
-  };
-  let n = 0;
-  const put = () => {
-    for (const [sel, ids, more, once] of KONKYO_SPOTS) {
-      const hosts = [...$app.querySelectorAll(sel)];
-      if (once && $app.querySelector(`.kjb[data-ids="${ids.join(",")}"]`)) continue;
-      for (const h of once ? hosts.slice(0, 1) : hosts) {
-        if (h.querySelector(":scope > .kjb")) continue;
-        const b = document.createElement("button"); b.type = "button"; b.className = "kjb"; b.dataset.ids = ids.join(",");
-        b.textContent = "なぜこの形？"; const d = box(ids, more); d.id = "kjbox" + (++n);
-        b.setAttribute("aria-expanded", "false"); b.setAttribute("aria-controls", d.id);
-        h.append(" ", b); h.after(d);
-      }
-    }
-    // 「このアプリについて」の先頭に、一覧を開くボタン
-    const ab = [...$app.querySelectorAll("details.win > summary")].find(s => s.textContent.startsWith("このアプリについて"));
-    const ul = ab && ab.parentElement.querySelector(":scope > ul");
-    if (ul && !ul.querySelector(".kjall")) { const li = document.createElement("li"); li.className = "kjabout";
-      li.innerHTML = `<b>学び方の根拠：</b>復習の間隔・解説の出し方などは学習の研究を参考にしています。<button class="linkish kjall" data-kj="">参考にした研究の一覧を見る ▶</button>`; ul.prepend(li); }
-  };
-  document.addEventListener("click", e => {
-    const b = e.target.closest && e.target.closest(".kjb");
-    if (b) { const d = document.getElementById(b.getAttribute("aria-controls")); if (!d) return; d.hidden = !d.hidden; b.setAttribute("aria-expanded", String(!d.hidden)); e.stopPropagation(); return; }
-    const a = e.target.closest && e.target.closest(".kjall");
-    if (a) showKonkyo(a.dataset.kj || undefined);
-  }, true);
-  let busy = false;
-  new MutationObserver(() => { if (busy) return; busy = true; queueMicrotask(() => { try { put(); } catch (err) { console.warn("konkyo", err); } finally { busy = false; } }); })
-    .observe($app, { childList: true, subtree: true });
-  put();
-  const css = document.createElement("style");
-  css.textContent = `.kjb{display:inline-block;min-height:28px;padding:0 8px;margin-left:4px;font-size:12px;font-weight:400;line-height:26px;border:1px solid var(--line);border-radius:14px;background:transparent;color:var(--muted);vertical-align:middle;font-family:inherit}
-.kjb[aria-expanded="true"]{border-color:var(--gold);color:var(--gold)}
-.kjbox{margin:6px 0 10px;padding:8px 12px;border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:4px;background:var(--deep);font-size:13px;line-height:1.7;overflow-wrap:anywhere}
-.kjbox p{margin:0 0 4px}.kjbox p b,.kjitem p b{display:block;color:var(--gold);font-size:12.5px}
-.kjbox ul{margin:0 0 6px;padding-left:1.2em;font-size:12px;color:var(--muted)}
-.kjbox .kjall,.kjabout .kjall{display:block;min-height:40px;padding:4px 0;border:0;background:transparent;color:var(--gold);text-align:left;font-size:13px;text-decoration:underline}
-.kjkind{display:inline-block;padding:0 6px;border:1px solid var(--line);border-radius:3px;font-size:11px;line-height:1.6;color:var(--muted);white-space:nowrap}
-.kjitem p{margin:0 0 8px;font-size:14px;line-height:1.75}
-.kjrefs{margin:0;padding-left:1.4em;display:grid;gap:6px;font-size:12.5px;line-height:1.6;color:var(--muted);overflow-wrap:anywhere}
-.kjrefs a,.kjbox a{color:var(--gold)}`;
-  document.head.appendChild(css);
-})();
-// ===== 学び方の根拠 ここまで =====
 // ===== 教科書：分野別の基本（2026-11-05 satou「教科書で学ぶ、という部分が少ない」） =====
 // 教科書のなかった分野（不動産登記法・社会保険・民事執行と民事保全）と、労働基準法の基本を足す。
 // 書き方は行政書士の教科書と同じ（"## 見出し" ごとに1ページ、"> ひとことで" から始め、"= なぜ？" "? たとえば" で中身を説明）。
@@ -25952,6 +25888,67 @@ tbAdd("kihon", [
   showTb = function (...a) { tbField = null; return toc.apply(this, a); };
 })();
 // ===== 分野で学ぶ ここまで =====
+// ===== くわしい解説の見せ方（2026-11-05） =====
+// 答え合わせの「くわしい解説」（.gydet）を、肢ごとの正誤の下（もとの位置）のまま、正誤に合わせて並べ替え、カードで見やすくする。
+// 中身（GY_DETAIL・q.d）はそのまま。描いたあとに手を加える（練習・模試・見直し、どの試験でも同じ）。
+//  ・間違えたとき：「ひっかけ所（落としやすい点）」を先頭に
+//  ・正解したとき：「関連知識」を先頭に（もう一歩深める）
+//  ・3行を小さなカードに分け、「A→B→C」の流れは段に分けて見せる
+// 根拠：解説つきの答え合わせは正誤だけより効果が大きい（Van der Kleij ほか 2015）。選んだ答えがなぜ違うかを短く小分けに（Shute 2008）。
+(() => {
+  const TRAP = /^(?:ひっかけ所|落としやすい点)$/, MORE = /^関連知識$/;
+  const head = li => ((li.querySelector(":scope > b") || {}).textContent || "").trim();
+  const flow = li => {
+    // 本文が文字だけ（ほかの部品がリンクなどを入れていない）ときだけ、「→」が2つ以上ある文を段に分ける
+    const b = li.querySelector(":scope > b"); if (!b) return;
+    const rest = [...li.childNodes].filter(n => n !== b);
+    if (rest.some(n => n.nodeType !== 3)) return;
+    const t = rest.map(n => n.textContent).join("");
+    const m = t.match(/^(.*?(?:。|：|:)?)([^。：:]*?(?:→[^。→]+){2,})(。?)(.*)$/s);
+    if (!m) return;
+    const steps = m[2].split("→").map(s => s.trim()).filter(Boolean);
+    if (steps.length < 3) return;
+    rest.forEach(n => n.remove());
+    const p1 = document.createElement("span"); p1.textContent = m[1]; li.appendChild(p1);
+    const ol = document.createElement("ol"); ol.className = "dtflow";
+    steps.forEach(s => { const x = document.createElement("li"); x.textContent = s; ol.appendChild(x); });
+    li.appendChild(ol);
+    if (m[4].trim()) { const p2 = document.createElement("span"); p2.textContent = m[4]; li.appendChild(p2); }
+  };
+  const fix = det => {
+    if (det.dataset.dt) return; det.dataset.dt = "1";
+    const box = det.parentElement, res = box && box.querySelector(":scope > .gyres");
+    const ul = det.querySelector(":scope > ul"); if (!ul) return;
+    const items = [...ul.children];
+    items.forEach(li => { li.classList.add("dtc"); const h = head(li);
+      if (TRAP.test(h)) li.classList.add("dttrap"); else if (MORE.test(h)) li.classList.add("dtmore"); flow(li); });
+    if (!res) return; // 見直しの一覧など、結果の見出しがない所は見た目だけ
+    // 並びは「結果→ポイント→肢ごとの正誤→根拠→くわしい解説→根拠条文」のまま（2026-11-05 satou「くわしい解説が先に来てしまうとわかりづらい」）。
+    // 位置は動かさず、中の3行の順だけ正誤に合わせる。選んだ肢の理由は上の「肢ごとの正誤」にあるので、ここでは重ねない
+    const ok = res.classList.contains("ok");
+    const first = items.find(li => (ok ? MORE : TRAP).test(head(li)));
+    if (first) ul.prepend(first);
+  };
+  const run = () => $app.querySelectorAll(".gydet:not([data-dt])").forEach(d => { try { fix(d); } catch (e) { console.warn("detail", e); } });
+  let busy = false;
+  new MutationObserver(() => { if (busy) return; busy = true; queueMicrotask(() => { try { run(); } finally { busy = false; } }); })
+    .observe($app, { childList: true, subtree: true });
+  run();
+  const css = document.createElement("style");
+  css.textContent = `#msg > *{min-width:0} 
+.jbart > summary,.jbh{overflow-wrap:anywhere} /* 答え合わせの枠（grid）が、長い条文の見出し（独立行政法人…法第十三条など）で横にはみ出さないように */
+.gydet ul:has(> .dtc){list-style:none;padding-left:0;gap:8px}
+.gydet li.dtc{padding:8px 12px;border:1px solid var(--line);border-left:3px solid var(--line);border-radius:4px;background:var(--deep)}
+.gydet li.dtc > b{display:block;margin:0 0 2px;font-size:13px;letter-spacing:.04em}
+.gydet li.dttrap{border-left-color:var(--miss)}.gydet li.dttrap > b{color:var(--miss)}
+.gydet li.dtmore{border-left-color:var(--hit)}.gydet li.dtmore > b{color:var(--hit)}
+.dtflow{margin:6px 0;padding:0;list-style:none;display:grid;gap:0}
+.dtflow li{position:relative;padding:3px 0 3px 1.6em}
+.dtflow li::before{content:counter(list-item);position:absolute;left:0;top:5px;width:1.2em;height:1.2em;border-radius:50%;background:var(--gold);color:var(--deep);font-size:11px;line-height:1.2em;text-align:center;font-weight:700}
+.dtflow li + li::after{content:"";position:absolute;left:.55em;top:-6px;height:9px;border-left:1px solid var(--gold)}`;
+  document.head.appendChild(css);
+})();
+// ===== くわしい解説の見せ方 ここまで =====
 // keyboard: 1-5 / o x to answer, Enter for next
 document.addEventListener("keydown", e => {
   const next = document.getElementById("next");
@@ -25965,147 +25962,6 @@ document.addEventListener("keydown", e => {
 });
 
 showOffice();
-</script>
-
-
-<p style="text-align:center;margin:16px 0 24px;font:13px system-ui,sans-serif"><a href="changes.html" style="color:#cfe3d9">更新情報</a>　<a id="kofi" href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener noreferrer" style="color:#cfe3d9">☕ Ko-fi で応援</a><br><span style="display:inline-block;margin-top:6px;color:#9fbfb2;font-size:12px">天秤の書は無料・広告なしで、ひとりで作っています。応援は、問題の追加と判例の確かめに使います。</span></p>
-<details id="tenbin-about" style="max-width:640px;margin:0 auto 24px;padding:0 16px;color:#cfe3d9;font:13px/1.7 system-ui,sans-serif">
-<summary style="text-align:center;cursor:pointer">このアプリについて（ご利用の前に）</summary>
-<ul style="margin:8px 0 0;padding-left:1.2em">
-<li>学習用のアプリで、法律相談ではありません。実際のトラブルは、弁護士や法テラスに相談してください。AIの添削欄にも、実際のトラブルは書かないでください。</li>
-<li>司法試験・予備試験・行政書士試験・宅建試験・社労士試験・司法書士試験などの実施団体とは関係のない、個人が作った非公式のアプリです。</li>
-<li>問題・模範答案・解説は、作者がAI（Claude）を使って作り、条文と判例を確かめています。それでも誤りや、法改正で古くなった内容がありえます。内容の正確さは保証できないので、大事なところは条文・判決文や教科書で確かめてください。</li>
-<li>問題はすべてこのアプリのために作ったもので、過去問の文章は使っていません。条文は e-Gov 法令検索（デジタル庁）のデータをもとに作者が加工しています。判決文は裁判所ウェブサイトなどによります。</li>
-<li>進み具合と答案は、この端末のブラウザの中にだけ保存し、作者には届きません。AIの添削を使ったときだけ、答案と問題の文が Anthropic へ送られます。文字の表示のため Google Fonts を読み込むので、そのとき通信の情報（IPアドレスなど）が Google に届きます。</li>
-<li>問題と解説の文章の著作権は作者にあります。転載したいときは、Ko-fi のページからご連絡ください。</li>
-</ul>
-</details>
-<div id="tenbin-kofi" role="status" style="display:none;position:fixed;left:16px;right:16px;margin:0 auto;bottom:calc(16px + env(safe-area-inset-bottom));z-index:2147483645;max-width:520px;gap:8px 10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border-radius:10px;background:#f4ecd4;color:#14302a;box-shadow:0 4px 16px rgba(0,0,0,.35);font:14px/1.5 system-ui,sans-serif">
-<span id="tenbin-kofi-msg" style="flex:1 1 100%"></span>
-<a id="tenbin-kofi-go" href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener noreferrer" style="font-weight:bold;padding:6px 12px;border-radius:6px;background:#14302a;color:#f4ecd4;text-decoration:none">☕ 応援する</a>
-<button type="button" id="tenbin-kofi-x" style="font:inherit;padding:6px 8px;border:0;background:none;color:#14302a;cursor:pointer;text-decoration:underline">閉じる</button>
-<button type="button" id="tenbin-kofi-never" style="font:inherit;padding:6px 8px;border:0;background:none;color:#14302a;cursor:pointer;text-decoration:underline;margin-left:auto">もう出さない</button>
-</div>
-<div id="tenbin-update" role="status" style="display:none;position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:2147483647;max-width:calc(100% - 32px);gap:12px;align-items:center;padding:10px 14px;border-radius:10px;background:#f4ecd4;color:#14302a;box-shadow:0 4px 16px rgba(0,0,0,.35);font:14px/1.4 system-ui,sans-serif">
-<span>新しい版があります。区切りのよいところで更新してください。</span>
-<button type="button" id="tenbin-update-go" style="font:inherit;font-weight:bold;padding:6px 12px;border:0;border-radius:6px;background:#14302a;color:#f4ecd4;cursor:pointer">更新</button>
-<button type="button" id="tenbin-update-x" aria-label="閉じる" style="font:inherit;padding:6px 8px;border:0;background:none;color:#14302a;cursor:pointer">×</button>
-</div>
-<script>
-// Service Worker の登録と、新しい版の案内。
-// 答案の途中で画面が勝手に入れ替わらないよう、自動では再読み込みしない（「更新」を押したときだけ）。
-if ("serviceWorker" in navigator && location.protocol !== "file:") {
-  const sw = navigator.serviceWorker, bar = document.getElementById("tenbin-update");
-  document.getElementById("tenbin-update-go").onclick = () => location.reload();
-  document.getElementById("tenbin-update-x").onclick = () => { bar.style.display = "none"; };
-  // 新しい SW が有効になったら版を聞き、この画面より新しければ案内を出す
-  sw.addEventListener("message", e => { if (e.data && e.data.version && e.data.version !== window.TENBIN_VER) bar.style.display = "flex"; });
-  sw.addEventListener("controllerchange", () => { if (sw.controller) sw.controller.postMessage("version"); });
-  addEventListener("load", () => sw.register("sw.js").then(reg => {
-    // 開いたままにする人のために、画面に戻ったとき（最短1時間おき）にも新しい版を確かめる
-    let last = Date.now();
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && Date.now() - last > 36e5) { last = Date.now(); reg.update().catch(() => {}); }
-    });
-  }).catch(() => {}));
-}
-</script>
-<div id="tenbin-backup" role="status" style="display:none;position:fixed;left:16px;right:16px;margin:0 auto;top:calc(12px + env(safe-area-inset-top));z-index:2147483646;max-width:520px;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-radius:10px;background:#f4ecd4;color:#14302a;box-shadow:0 4px 16px rgba(0,0,0,.35);font:14px/1.4 system-ui,sans-serif">
-<span id="tenbin-backup-msg"></span>
-<button type="button" id="tenbin-backup-go" style="font:inherit;font-weight:bold;padding:6px 12px;border:0;border-radius:6px;background:#14302a;color:#f4ecd4;cursor:pointer">書き出しへ</button>
-<button type="button" id="tenbin-backup-x" style="font:inherit;padding:6px 8px;border:0;background:none;color:#14302a;cursor:pointer;text-decoration:underline">あとで</button>
-</div>
-<script>
-// 記録を消えにくくする（PWA版だけ。claude.ai版には入らない）。
-// 1. 永続ストレージを頼む: 容量が足りないときにブラウザが記録を消す対象から外してもらう。
-//    web.dev の勧めに従い、読み込み直後ではなく最初の操作のときに1回だけ頼む（Firefox は確認を出すため）。
-// 2. バックアップの案内: 書き出したことが無いか、最後の書き出しから14日たったら、目次の画面で上に案内を出す。
-//    「あとで」で3日は出さない。書き出すと消える。
-(() => {
-  const DAY = 864e5, EVERY = 14, SNOOZE = 3;
-  const get = k => { try { return localStorage.getItem(k); } catch { return null; } };
-  const put = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
-  const st = navigator.storage;
-  if (st && st.persist && st.persisted) {
-    const ask = () => {
-      removeEventListener("pointerdown", ask, true); removeEventListener("keydown", ask, true);
-      st.persisted().then(p => p || st.persist()).catch(() => {});
-    };
-    addEventListener("pointerdown", ask, true); addEventListener("keydown", ask, true);
-  }
-  const bar = document.getElementById("tenbin-backup"), msg = document.getElementById("tenbin-backup-msg");
-  // 記録が少しでもあるか（何も解いていないうちは案内しない）
-  const hasData = () => { try { const v = JSON.parse(get("roppo-quest-v2") || "{}");
-    return ["cases", "stats", "essays", "drafts", "norms"].some(k => v[k] && Object.keys(v[k]).length); } catch { return false; } };
-  const due = () => {
-    if (Date.now() < Number(get("tenbin-backup-snooze") || 0) || !hasData()) return "";
-    const last = Number(get("tenbin-lastexp") || 0);
-    if (!last) return "記録はこの端末のブラウザの中だけにあります。消えたときのために、書き出して控えを取っておきましょう。";
-    const d = Math.floor((Date.now() - last) / DAY);
-    return d >= EVERY ? "最後に記録を書き出してから" + d + "日たちました。控えを取り直しておきましょう。" : "";
-  };
-  // 書き出しボタンがある画面（目次）のときだけ出す
-  let shown = false;
-  const check = () => {
-    const m = document.getElementById("expBtn") ? due() : "";
-    if (m && msg.textContent !== m) msg.textContent = m; // 同じ文なら触らない（監視が回り続けないように）
-    if (!!m !== shown) { shown = !!m; bar.style.display = m ? "flex" : "none"; }
-  };
-  let queued = false;
-  new MutationObserver(() => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; check(); }); } })
-    .observe(document.body, { childList: true, subtree: true });
-  check();
-  document.addEventListener("click", e => {
-    if (e.target.closest && e.target.closest("#expBtn")) { put("tenbin-lastexp", String(Date.now())); check(); }
-  }, true);
-  document.getElementById("tenbin-backup-go").onclick = () => {
-    const b = document.getElementById("expBtn");
-    // 書き出しボタンを包む折りたたみ（「その他」→「記録の引っ越し」）を全部開く
-    for (let d = b && b.closest("details"); d; d = d.parentElement && d.parentElement.closest("details")) d.open = true;
-    if (b) { b.scrollIntoView({ block: "center", behavior: "smooth" }); b.focus({ preventScroll: true }); }
-  };
-  document.getElementById("tenbin-backup-x").onclick = () => { put("tenbin-backup-snooze", String(Date.now() + SNOOZE * DAY)); check(); };
-})();
-</script>
-<script>
-// Ko-fi の応援のお願い（PWA版だけ）。
-// Eclipse は「使い始めた瞬間」にお願いを出すようにして寄付が5〜6倍になった（blogs.eclipse.org 2013-04-09）。
-// ここでは、取り組んだ問題の数が節目（10・30・60・100・200…）を越えて目次に戻ったときにだけ、下に1枚出す。
-// 押し付けないように: 前に出してから30日は出さない／記録の控えの案内が出ている間は出さない／「もう出さない」で二度と出さない。
-(() => {
-  const DAY = 864e5, GAP = 30, STEPS = [10, 30, 60, 100, 200, 300, 500, 1000];
-  const get = k => { try { return localStorage.getItem(k); } catch { return null; } };
-  const put = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
-  const bar = document.getElementById("tenbin-kofi"), msg = document.getElementById("tenbin-kofi-msg");
-  // 取り組んだ問題の数（論文・事件・択一の記録の数）
-  const done = () => { try { const v = JSON.parse(get("roppo-quest-v2") || "{}");
-    return ["cases", "essays", "stats"].reduce((n, k) => n + (v[k] ? Object.keys(v[k]).length : 0), 0); } catch { return 0; } };
-  const step = n => STEPS.filter(s => n >= s).pop() || 0;
-  const due = () => {
-    if (get("tenbin-kofi-never") || !document.getElementById("expBtn")) return "";
-    const back = document.getElementById("tenbin-backup"), upd = document.getElementById("tenbin-update");
-    if ((back && back.style.display !== "none") || (upd && upd.style.display !== "none")) return "";
-    const n = done(), s = step(n);
-    if (!s || s <= Number(get("tenbin-kofi-step") || 0)) return "";
-    if (Date.now() - Number(get("tenbin-kofi-last") || 0) < GAP * DAY) return "";
-    return "これまでに " + n + " 問に取り組みました。おつかれさまです。天秤の書は無料・広告なしで、ひとりで作っています。役に立っていたら、コーヒー1杯ぶんの応援をもらえると、問題を増やす力になります。";
-  };
-  let shown = false;
-  const hide = () => { shown = false; bar.style.display = "none"; };
-  const seen = () => { put("tenbin-kofi-step", String(step(done()))); put("tenbin-kofi-last", String(Date.now())); };
-  const check = () => {
-    if (shown) { if (!document.getElementById("expBtn")) hide(); return; } // 出したら、目次から離れるまでそのまま
-    const m = due(); if (!m) return;
-    msg.textContent = m; shown = true; bar.style.display = "flex"; seen(); // 一度出したら、次の節目まで出さない
-  };
-  let queued = false;
-  new MutationObserver(() => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; check(); }); } })
-    .observe(document.body, { childList: true, subtree: true });
-  addEventListener("load", () => setTimeout(check, 800)); // 控えの案内のあとに判断する
-  document.getElementById("tenbin-kofi-go").addEventListener("click", hide);
-  document.getElementById("tenbin-kofi-x").onclick = hide;
-  document.getElementById("tenbin-kofi-never").onclick = () => { put("tenbin-kofi-never", "1"); hide(); };
-})();
 </script>
 
 <p style="text-align:center;margin:16px 0 24px;font:13px system-ui,sans-serif"><a href="changes.html" style="color:#cfe3d9">更新情報</a>　<a id="kofi" href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener noreferrer" style="color:#cfe3d9">☕ Ko-fi で応援</a><br><span style="display:inline-block;margin-top:6px;color:#9fbfb2;font-size:12px">天秤の書は無料・広告なしで、ひとりで作っています。応援は、問題の追加と判例の確かめに使います。</span></p>
