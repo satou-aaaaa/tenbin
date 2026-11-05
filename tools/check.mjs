@@ -33,10 +33,11 @@ scripts.forEach((m, i) => {
 {
   const names = (h) => new Set([...h.matchAll(/^(?:async\s+)?function\s+([\w$]+)\s*\(|^(?:const|let)\s+([\w$]+)\s*=/gm)].map((m) => m[1] || m[2]));
   let base = null;
-  try {
-    execFileSync("git", ["fetch", "-q", "--depth=1", "origin", "main"], { stdio: "pipe" });
-    base = execFileSync("git", ["show", "FETCH_HEAD:index.html"], { stdio: "pipe", maxBuffer: 64 << 20 }).toString();
-  } catch { base = null; }
+  // 手元に origin/main があればそれを使う（fetch --depth=1 は手元の履歴を浅くしてしまうので、CI など無いときだけ）
+  const show = (ref) => execFileSync("git", ["show", `${ref}:index.html`], { stdio: "pipe", maxBuffer: 64 << 20 }).toString();
+  try { base = show("origin/main"); } catch {
+    try { execFileSync("git", ["fetch", "-q", "--depth=1", "origin", "main"], { stdio: "pipe" }); base = show("FETCH_HEAD"); } catch { base = null; }
+  }
   if (!base) ok("main の index.html が取れないので、消えた関数は確かめない");
   else {
     const allow = new Set(existsSync("tools/removed-ok.txt") ? readFileSync("tools/removed-ok.txt", "utf8").split(/\r?\n/).map((s) => s.trim()).filter(Boolean) : []);
@@ -476,9 +477,9 @@ if (process.argv.includes("--browser")) {
     }
     await page.close();
   }
-  // 「くわしい解説」は答え合わせの結果のすぐ下（肢ごとの正誤より上）に出て、間違えたら「選んだ肢が違う理由・ひっかけ所」、正解なら「関連知識」が先頭に来ること
-  // （2026-11-05 satou「くわしい解説の部分も改善できるかも」。スマホでは肢ごとの正誤の下＝約2,300px下にあり読まれにくかった。research/detail-explain-2026-11-05.md）
-  // 新しい試験や形式を足して、解説が出ない・下に残る・並びが違えば落とす。択一は全部、間違い（1番目）と正解の両方で確かめる
+  // 「くわしい解説」は答え合わせで肢ごとの正誤（肢の文と理由）より下に出て、間違えたら「ひっかけ所」、正解なら「関連知識」が先頭に来ること
+  // （2026-11-05 satou「くわしい解説が先に来てしまうとわかりづらい」。v129 で結果のすぐ下へ移したのを v135 で戻した。上へ移す変更が入ったら落とす）
+  // 新しい試験や形式を足して、解説が出ない・肢ごとの正誤より上に来る・並びが違えば落とす。択一は全部、間違い（1番目）と正解の両方で確かめる
   {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     page.on("pageerror", (e) => errors.push(`くわしい解説: ${e.message}`));
@@ -496,8 +497,8 @@ if (process.argv.includes("--browser")) {
         const det = $app.querySelector(".gydet"), res = $app.querySelector(".gyres"), ex = $app.querySelector(".gyexw");
         if (!det) { bad.push(`${q.id}：くわしい解説が出ない`); continue; }
         const ok = res && res.classList.contains("ok"), heads = [...det.querySelectorAll("li.dtc > b")].map((b) => b.textContent);
-        const key = ok ? /^関連知識$/ : /^(?:あなたの選んだ肢\d+が違う理由|ひっかけ所|落としやすい点)$/;
-        if (!det.classList.contains("dtup") || (ex && !(det.compareDocumentPosition(ex) & 4))) bad.push(`${q.id}：くわしい解説が結果のすぐ下にない`);
+        const key = ok ? /^関連知識$/ : /^(?:ひっかけ所|落としやすい点)$/;
+        if (!det.dataset.dt || (ex && !(det.compareDocumentPosition(ex) & 2))) bad.push(`${q.id}：くわしい解説が肢ごとの正誤より上にある（または並べ替えの部品が効いていない）`);
         else if (heads.some((h) => (ok ? /^関連知識$/ : /^(?:ひっかけ所|落としやすい点)$/).test(h)) && !key.test(heads[0] || "")) bad.push(`${q.id}：${ok ? "正解" : "不正解"}なのに先頭が「${heads[0]}」`);
         if (bad.length > 10) break;
       }
@@ -505,7 +506,7 @@ if (process.argv.includes("--browser")) {
     });
     if (r === null) ok("択一の問題がないので、くわしい解説の位置は確かめない");
     else if (r.bad.length) ng(`くわしい解説の位置・並びがおかしい（${r.n}回中）: ${r.bad.join(" / ")}`);
-    else ok(`くわしい解説は、択一${r.n}回の答え合わせすべてで結果のすぐ下に出て、正誤に合わせて並ぶ`);
+    else ok(`くわしい解説は、択一${r.n}回の答え合わせすべてで肢ごとの正誤の下に出て、正誤に合わせて並ぶ`);
     await page.close();
   }
   // 解答からすぐ条文を見られること（2026-11-05 satou「解答と条文が離れた位置に置かれていますが、解答からすぐに条文がみれるようにしたい」）。
