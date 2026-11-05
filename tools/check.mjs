@@ -301,6 +301,62 @@ if (process.argv.includes("--browser")) {
     else ok(`${vp.name}: 組合せ問題${r.n}問の記述が枠に分かれ、解説に記述ごとの正誤が出る`);
     await page.close();
   }
+  // 語群から選ぶ問題（行政書士の多肢選択式・社労士の選択式）で、語群の並びから答えが分からないこと（2026-11-05 satou「選択肢が順番に並んでいて答えを推測できてしまう」）。
+  // 本試験の語群はばらばらの順（行政書士 令和7年度 問題41〜43）。データは正解をまとまりの先頭に書きがちなので、画面に出た順で確かめる。
+  // 落とす並び：①データの順のまま ②正解の位置が等間隔（1・5・9・13 など） ③正解が続きの位置に固まる ④同じ試験の3問以上で正解の位置が同じ
+  // ⑤練習と模試で語群の番号が違う ⑥開き直すと並びが変わる ⑦正解の語が語群にない・同じ語が二つある。新しい問題・試験を足して漏れたら落とす
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`語群の並び: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
+    const r = await page.evaluate(async () => {
+      const tick = () => new Promise((res) => setTimeout(res, 0)), sets = [];
+      const shown = (sel) => [...$app.querySelectorAll(sel)].map((li) => li.textContent.replace(/^[①-⑳]/, "").trim());
+      if (typeof GY_ALL !== "undefined") {
+        const qs = GY_ALL.filter((q) => gyKind(q) === "tashi"), items = [], keep = S.gyExam;
+        for (const q of qs) {
+          gyRun({ deck: [q], i: 0, right: 0, title: "検査" }); await tick(); const a = shown(".gywords li");
+          gyRun({ deck: [q], i: 0, right: 0, title: "検査" }); await tick(); const a2 = shown(".gywords li");
+          S.gyExam = { ids: [q.id], cur: 0, ans: {}, perm: {}, flag: {}, t0: 0, used: 0, back: "" }; gyExamQ(); await tick(); const b = shown(".gywords li");
+          items.push({ id: q.id, data: q.words, ans: q.ans.map((i) => q.words[i]), views: [["練習", a], ["練習（開き直し）", a2], ["模試", b]] });
+        }
+        S.gyExam = keep; if (typeof gyExamPause === "function") gyExamPause();
+        sets.push(["行政書士 多肢選択式", items]);
+      }
+      if (typeof SR_SEN !== "undefined") {
+        const items = [];
+        for (const q of SR_SEN) { srPractice({ key: "sharoshi" }, [q], 0, "検査"); await tick(); const a = shown(".srwords li");
+          srPractice({ key: "sharoshi" }, [q], 0, "検査"); await tick();
+          items.push({ id: q.id, data: [...q.ans, ...q.w], ans: q.ans, views: [["練習", a], ["練習（開き直し）", shown(".srwords li")]] }); }
+        if (typeof srPause === "function") srPause();
+        sets.push(["社労士 選択式", items]);
+      }
+      showOffice(); return sets;
+    });
+    for (const [name, items] of r) {
+      const bad = [], seen = {};
+      for (const it of items) {
+        const [[, v0]] = it.views, p = it.ans.map((w) => v0.indexOf(w)), k = p.length;
+        if (new Set(it.data).size !== it.data.length) bad.push(`${it.id}：語群に同じ語が二つある`);
+        if (p.includes(-1)) { bad.push(`${it.id}：正解の語が語群に出ていない`); continue; }
+        const diff = it.views.find(([, v]) => v.join("|") !== v0.join("|"));
+        if (diff) bad.push(`${it.id}：「${it.views[0][0]}」と「${diff[0]}」で語群の順が違う`);
+        const raw = it.views.find(([, v]) => v.join("|") === it.data.join("|"));
+        if (raw) bad.push(`${it.id}：「${raw[0]}」の語群がデータの順のまま`);
+        const g = p.slice(1).map((x, i) => x - p[i]);
+        if (k >= 3 && g.every((d) => d === g[0])) bad.push(`${it.id}：正解の位置が等間隔（${p.map((x) => x + 1).join("・")}）`);
+        if (Math.max(...p) - Math.min(...p) <= k) bad.push(`${it.id}：正解が続きの位置に固まる（${p.map((x) => x + 1).join("・")}）`);
+        const key = p.join(","); (seen[key] = seen[key] || []).push(it.id);
+      }
+      for (const [key, ids] of Object.entries(seen)) if (ids.length >= 3) bad.push(`${ids.length}問で正解の位置が同じ（${key.split(",").map((x) => +x + 1).join("・")}：${ids.slice(0, 5).join("・")}）`);
+      if (!items.length) ok(`${name}: 問題がないので確かめない`);
+      else if (bad.length) ng(`${name}の語群から答えが推測できる（${items.length}問中）: ${bad.slice(0, 12).join(" / ")}`);
+      else ok(`${name}${items.length}問の語群は、正解の位置が規則的でなく、どの画面でも同じ番号`);
+    }
+    if (!r.length) ok("語群から選ぶ問題がないので確かめない");
+    await page.close();
+  }
   await browser.close(); server.close();
   if (errors.length) errors.forEach((e) => ng("JS のエラー: " + e)); else ok("JS のエラーなし");
 }
