@@ -168,6 +168,63 @@ if (process.argv.includes("--browser")) {
     else ng(`応援のお願いの出かたがおかしい（記録なし:${v0}・10問越え:${v1}・2回目:${v2}・もう出さない:${v3}）`);
     await page.close();
   }
+  // 択一の答えと解説が食い違わないこと（2026-11-05）。毎日問題を足すので、手で見落としても CI で止める。
+  // 1) 形：選択肢2つ以上・空や重複なし・正解の番号が範囲内・肢ごとの解説の数＝選択肢の数・id の重複なし
+  // 2) 「正解です」で始まる解説は正解の肢だけ。「正しいものはどれか」で正解でない肢の解説が「正しい」で始まる（逆も）ものはだめ
+  // 3) 組合せ（ア・ウ など）：答えの組と問いの向き（正しい／誤り）から決まる記述ごとの正誤と、解説・詳しい解説の「アは誤り」などが合うこと
+  //    （画面の「肢ごとの正誤」は答えから○×を付け、理由は解説から取るので、食い違うと○なのに理由が「誤り」になる）
+  // 4) 個数問題：正解の解説の「ア○ イ×…」の数と答え（一つ〜五つ）が合うこと
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`答えの点検: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
+    const r = await page.evaluate(() => {
+      const lists = [], seen = new Set(), names = new Set();
+      for (const sc of document.scripts) for (const m of sc.textContent.matchAll(/(?:^|[;\n]\s*)(?:const|let|var)\s+([A-Z][A-Z0-9_]+)\s*=/g)) names.add(m[1]);
+      const walk = (v, path, depth) => { if (!v || typeof v !== "object" || seen.has(v) || depth > 4) return; seen.add(v);
+        if (Array.isArray(v)) { const qs = v.filter((x) => x && typeof x === "object" && Array.isArray(x.c) && "a" in x && !seen.has(x)); if (qs.length) { qs.forEach((x) => seen.add(x)); lists.push([path, qs]); }
+          v.forEach((x, i) => { if (x && typeof x === "object" && !Array.isArray(x.c)) walk(x, `${path}[${i}]`, depth + 1); }); }
+        else for (const k of Object.keys(v)) walk(v[k], `${path}.${k}`, depth + 1); };
+      for (const n of names) { let v; try { v = (0, eval)(n); } catch { continue; } walk(v, n, 0); }
+      const NEG = /誤っている|誤りである|妥当でない|正しくない|適切でない|不適当な|不適切な/;
+      const LAB = /^[ア-オ](?:[ 　・と]?[ア-オ])+$/, NUM = { "一つ": 1, "二つ": 2, "三つ": 3, "四つ": 4, "五つ": 5 };
+      const ASSERT = /([ア-オ](?:[・と][ア-オ])*)(?:は|が|も|とも)(?:、)?(?:ともに|いずれも|どちらも)?(妥当でない|正しくない|適切でない|誤り|誤って|誤った|妥当|正しい|適切)/g;
+      const bad = [], ids = new Map(); let n = 0;
+      for (const [src, qs] of lists) for (const q of qs) {
+        n++; const id = q.id || src, P = (m) => bad.push(`${id}：${m}`), c = q.c, lead = String(q.q || "").split("\n")[0], neg = NEG.test(lead);
+        if (q.id) { if (ids.has(q.id)) P(`id が ${ids.get(q.id)} と重複`); else ids.set(q.id, src); }
+        if (c.length < 2) P("選択肢が2つ未満");
+        if (c.some((x) => typeof x !== "string" || !x.trim())) P("空の選択肢がある");
+        else if (new Set(c.map((x) => x.trim())).size !== c.length) P("同じ選択肢が2つある");
+        if (!Number.isInteger(q.a) || q.a < 0 || q.a >= c.length) { P(`正解の番号が範囲外（a=${q.a}）`); continue; }
+        const ex = Array.isArray(q.ex) ? q.ex.map(String) : null;
+        if (ex) {
+          if (ex.length !== c.length) P(`肢ごとの解説の数（${ex.length}）と選択肢の数（${c.length}）が違う`);
+          ex.forEach((e, i) => { if (i !== q.a && /^正解/.test(e)) P(`正解でない肢${i + 1}の解説が「正解」で始まる`); });
+          if (/どれか|選べ/.test(lead)) ex.forEach((e, i) => {
+            const says = /^(正しい|妥当です|適切です)/.test(e) ? true : /^(誤り|誤っ|妥当でない|正しくない|適切でない|不適切)/.test(e) ? false : null;
+            if (says !== null && says !== ((i === q.a) !== neg)) P(`肢${i + 1}の解説「${e.slice(0, 20)}…」が、答え（${q.a + 1}）と問いの向き（${neg ? "誤り" : "正しい"}を選ぶ）に合わない`); });
+          if (c.every((x) => x in NUM) && /いくつ/.test(lead)) {
+            const e = ex[q.a] || "", o = (e.match(/[ア-オ]○/g) || []).length, x = (e.match(/[ア-オ]×/g) || []).length;
+            if (o + x >= 3 && (neg ? x : o) !== NUM[c[q.a]]) P(`個数問題：正解の解説は○${o}・×${x}なのに答えが「${c[q.a]}」`);
+          }
+        }
+        if (c.every((t) => LAB.test(t.trim()))) {
+          const set = c[q.a].match(/[ア-オ]/g), truth = (k) => set.includes(k) !== neg, off = new Set();
+          for (const t of [...(ex || [String(q.ex || "")]), ...(q.d || []).map((r) => [].concat(r).join(" "))])
+            for (const m of t.matchAll(ASSERT)) { const pos = /^(妥当|正しい|適切)$/.test(m[2]);
+              for (const k of m[1].match(/[ア-オ]/g)) if (truth(k) !== pos) off.add(`答えからは${k}が${truth(k) ? "正しい" : "誤り"}なのに解説は「${m[0]}」`); }
+          if (off.size) P(`組合せ（答え「${c[q.a]}」）：${[...off].join(" / ")}`);
+        }
+      }
+      return { n, lists: lists.length, bad };
+    });
+    if (r.n < 100) ng(`択一の問題が見つからない（${r.n}問）。check.mjs の探し方を見直す`);
+    else if (r.bad.length) ng(`択一の答えと解説が食い違う（${r.n}問中 ${r.bad.length}件）: ${r.bad.slice(0, 15).join(" / ")}`);
+    else ok(`択一${r.n}問（${r.lists}か所）の答え・選択肢・解説が食い違っていない`);
+    await page.close();
+  }
   // 組合せ問題（ア〜オから2つ・ア〜ウの○×）は、ほかの択一と同じ見た目で出ること（2026-11-04 satou「2つ選択するタイプの問題の出題と解説が見づらい」）
   // 出題：「ア　…」の記述が1つずつ枠（.kmst li）に分かれる。解説：選択肢が組（ア・ウ など）なら「記述ごとの正誤」（.kmw li）が記述の数だけ出て、全部に ○× が付く。
   // 新しい試験や問題の形を足して、この表示から漏れたら落とす。スマホ幅で横にはみ出さないことも確かめる
