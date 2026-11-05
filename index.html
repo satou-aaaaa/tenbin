@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611050939";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611050948";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24959,6 +24959,77 @@ button.jl:hover:not(:disabled) { background: color-mix(in srgb, var(--gold) 14%,
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
 })();
 // ===== 解答からすぐ条文を見る ここまで =====
+// ===== くわしい解説の見せ方（2026-11-05） =====
+// 答え合わせの「くわしい解説」（.gydet）を、結果のすぐ下（ポイントの後・肢ごとの正誤の前）に移し、正誤に合わせて並べ替える。
+// 中身（GY_DETAIL・q.d）はそのまま。描いたあとに手を加える（練習・模試・見直し、どの試験でも同じ）。
+//  ・間違えたとき：「あなたの選んだ肢Nが違う理由」を先頭に足し、次に「ひっかけ所（落としやすい点）」
+//  ・正解したとき：「関連知識」を先頭に（もう一歩深める）
+//  ・3行を小さなカードに分け、「A→B→C」の流れは段に分けて見せる
+// 根拠：解説つきの答え合わせは正誤だけより効果が大きい（Van der Kleij ほか 2015）。選んだ答えがなぜ違うかを短く小分けに（Shute 2008）。
+(() => {
+  const TRAP = /^(?:ひっかけ所|落としやすい点)$/, MORE = /^関連知識$/;
+  const head = li => ((li.querySelector(":scope > b") || {}).textContent || "").trim();
+  const flow = li => {
+    // 本文が文字だけ（ほかの部品がリンクなどを入れていない）ときだけ、「→」が2つ以上ある文を段に分ける
+    const b = li.querySelector(":scope > b"); if (!b) return;
+    const rest = [...li.childNodes].filter(n => n !== b);
+    if (rest.some(n => n.nodeType !== 3)) return;
+    const t = rest.map(n => n.textContent).join("");
+    const m = t.match(/^(.*?(?:。|：|:)?)([^。：:]*?(?:→[^。→]+){2,})(。?)(.*)$/s);
+    if (!m) return;
+    const steps = m[2].split("→").map(s => s.trim()).filter(Boolean);
+    if (steps.length < 3) return;
+    rest.forEach(n => n.remove());
+    const p1 = document.createElement("span"); p1.textContent = m[1]; li.appendChild(p1);
+    const ol = document.createElement("ol"); ol.className = "dtflow";
+    steps.forEach(s => { const x = document.createElement("li"); x.textContent = s; ol.appendChild(x); });
+    li.appendChild(ol);
+    if (m[4].trim()) { const p2 = document.createElement("span"); p2.textContent = m[4]; li.appendChild(p2); }
+  };
+  const fix = det => {
+    if (det.dataset.dt) return; det.dataset.dt = "1";
+    const box = det.parentElement, res = box && box.querySelector(":scope > .gyres");
+    const ul = det.querySelector(":scope > ul"); if (!ul) return;
+    const items = [...ul.children];
+    items.forEach(li => { li.classList.add("dtc"); const h = head(li);
+      if (TRAP.test(h)) li.classList.add("dttrap"); else if (MORE.test(h)) li.classList.add("dtmore"); flow(li); });
+    if (!res) return; // 見直しの一覧など、結果の見出しがない所は見た目だけ
+    const ok = res.classList.contains("ok");
+    // 結果のすぐ下（ポイントがあればその後）へ
+    const pt = box.querySelector(":scope > .gypoint"), at = pt || res;
+    at.after(det); det.classList.add("dtup");
+    const first = items.find(li => (ok ? MORE : TRAP).test(head(li)));
+    if (first) ul.prepend(first);
+    if (!ok) {
+      const mine = box.querySelector(".gyex li.mine"), why = mine && mine.querySelector(".gycx");
+      const n = mine && mine.querySelector(".gyn");
+      if (why && n && /^\d+$/.test(n.textContent.trim()) && !mine.classList.contains("ans")) { // 組合せ（ア〜オ）は選んだのが組なので出さない
+        const li = document.createElement("li"); li.className = "dtc dtmine";
+        const b = document.createElement("b"); b.textContent = `あなたの選んだ肢${n.textContent.trim()}が違う理由`;
+        li.append(b, document.createTextNode(why.textContent)); ul.prepend(li);
+      }
+    }
+  };
+  const run = () => $app.querySelectorAll(".gydet:not([data-dt])").forEach(d => { try { fix(d); } catch (e) { console.warn("detail", e); } });
+  let busy = false;
+  new MutationObserver(() => { if (busy) return; busy = true; queueMicrotask(() => { try { run(); } finally { busy = false; } }); })
+    .observe($app, { childList: true, subtree: true });
+  run();
+  const css = document.createElement("style");
+  css.textContent = `.gydet.dtup{margin:0 0 14px;border-top:0;padding-top:0}
+.gydet ul:has(> .dtc){list-style:none;padding-left:0;gap:8px}
+.gydet li.dtc{padding:8px 12px;border:1px solid var(--line);border-left:3px solid var(--line);border-radius:4px;background:var(--deep)}
+.gydet li.dtc > b{display:block;margin:0 0 2px;font-size:13px;letter-spacing:.04em}
+.gydet li.dttrap{border-left-color:var(--miss)}.gydet li.dttrap > b{color:var(--miss)}
+.gydet li.dtmine{border-left-color:var(--miss)}.gydet li.dtmine > b{color:var(--miss)}
+.gydet li.dtmore{border-left-color:var(--hit)}.gydet li.dtmore > b{color:var(--hit)}
+.dtflow{margin:6px 0;padding:0;list-style:none;display:grid;gap:0}
+.dtflow li{position:relative;padding:3px 0 3px 1.6em}
+.dtflow li::before{content:counter(list-item);position:absolute;left:0;top:5px;width:1.2em;height:1.2em;border-radius:50%;background:var(--gold);color:var(--deep);font-size:11px;line-height:1.2em;text-align:center;font-weight:700}
+.dtflow li + li::after{content:"";position:absolute;left:.55em;top:-6px;height:9px;border-left:1px solid var(--gold)}`;
+  document.head.appendChild(css);
+})();
+// ===== くわしい解説の見せ方 ここまで =====
 // ===== AIの添削・採点：文章で答える問題すべてを、AIが添削して観点ごとに採点する（2026-11-04） =====
 // 対象：論文演習（司法試験・予備の実務基礎・労働法。writeCompare → bindAI）、行政書士の記述式（練習・ミニ模試・本番形式の模試）、司法書士の記述式（登記の申請）。
 // AIは観点ごとに ○/× を返し、点数はその観点の配点を足して出す（どの観点で点が入ったかが見えるように）。判定はチェックの欄に自動で入り、遊ぶ人が直せる。
