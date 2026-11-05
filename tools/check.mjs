@@ -163,6 +163,47 @@ if (process.argv.includes("--browser")) {
       document.documentElement.dataset.fs = keepFs; showOffice(); return out;
     });
     if (wide.length) ng(`${vp.name}: 横にはみ出す: ${wide.join(" / ")}`); else ok(`${vp.name}: 文字の大きさ標準・大で、目次・模試の画面が横にはみ出さない`);
+    // 折りたたみ見出し（summary）の中身が枠の右からはみ出さず、科目一覧の進み具合の棒が縦にそろうこと。
+    // 枠の外へ押し出されても画面の横はみ出しには出ない（2026-11-05 論文式の「法律実務基礎（民事）」で棒と数が右にずれていた）
+    const sum = await page.evaluate(() => {
+      if (typeof showRonbun !== "function") return null;
+      const out = [], keepFs = document.documentElement.dataset.fs || "n";
+      for (const fs of ["n", "l"]) {
+        document.documentElement.dataset.fs = fs; showRonbun();
+        const ss = [...document.querySelectorAll("details.kgroup:not(.tbsub) > summary")].filter((s) => s.getClientRects().length);
+        // CI は外のフォントを読まず字の幅が狭くなるので、いちばん下の科目名をわざと長くして確かめる
+        const kn = ss.length && ss[ss.length - 1].querySelector(".kname"); if (kn) kn.textContent += "（長い科目名の検査）";
+        for (const s of ss) { const r = s.getBoundingClientRect();
+          for (const c of s.children) { const cr = c.getBoundingClientRect(); if (cr.width && cr.right > r.right + 0.5) out.push(`${s.textContent.trim().slice(0, 12)}（文字${fs === "l" ? "大" : "標準"}）が ${Math.round(cr.right - r.right)}px はみ出す`); } }
+        const xs = new Set(ss.map((s) => s.querySelector(".mbar")).filter((b) => b && b.getClientRects().length).map((b) => Math.round(b.getBoundingClientRect().left)));
+        if (xs.size > 1) out.push(`科目の棒の位置がそろわない（文字${fs === "l" ? "大" : "標準"}: ${[...xs].join(",")}px）`);
+      }
+      document.documentElement.dataset.fs = keepFs; showOffice(); return out;
+    });
+    if (sum === null) ok(`${vp.name}: 論文式の画面がないので科目一覧のそろいは確かめない`);
+    else if (sum.length) ng(`${vp.name}: 論文式の科目一覧: ${sum.join(" / ")}`); else ok(`${vp.name}: 論文式の科目一覧で、名前・棒・数が枠に収まり棒がそろう`);
+    // 短い文字（見出し・試験の説明など）は文節で折り返す（「記述307／問」のように数字と単位が割れないように。2026-11-05）
+    const wb = await page.evaluate(() => { const e = document.querySelector(".ch-sub"); return e ? [document.documentElement.lang, getComputedStyle(e).wordBreak] : null; });
+    if (wb && (wb[0] !== "ja" || wb[1] !== "auto-phrase")) ng(`${vp.name}: 見出しや説明が文節で折り返さない（lang=${wb[0]}・word-break=${wb[1]}）。uxw-css が抜けている`);
+    else ok(`${vp.name}: 見出しや説明は文節で折り返す`);
+    // 押す所は高さ 44px 以上（WCAG 2.2 の 2.5.5・Apple HIG の 44pt。2026-11-05 学習の記録・画面の色・さがすの例・なぜこの形？が 28〜40px だった）。
+    // 文の中のリンク（display: inline の a）と条文リンク（.jl）は除く。文の中の小さなボタン .kjb は ::after で上下に広げていればよい
+    const tap = await page.evaluate(() => {
+      const out = [], screens = [["目次", () => { showOffice(); document.querySelectorAll("details").forEach((d) => d.open = true); }],
+        ["さがす", () => typeof showSearch === "function" && showSearch()], ["学習の記録", () => typeof showRecord === "function" && showRecord()]];
+      for (const [name, go] of screens) { try { go(); } catch (e) { out.push(`${name}: ${e.message}`); continue; }
+        for (const e of document.querySelectorAll("#app button, #app summary, #app select, #app a")) {
+          if (e.closest(".jlbox, .kjbox") || e.classList.contains("jl")) continue;
+          const cs = getComputedStyle(e); if (e.tagName === "A" && cs.display === "inline") continue;
+          const r = e.getBoundingClientRect(); if (!r.width || !r.height || cs.visibility === "hidden") continue;
+          let h = r.height; if (e.classList.contains("kjb")) { const t = parseFloat(getComputedStyle(e, "::after").top); if (t < 0) h -= 2 * t; }
+          if (h < 43.5) out.push(`${name}「${(e.textContent || "").trim().slice(0, 12)}」${Math.round(h)}px`);
+        }
+      }
+      showOffice(); return [...new Set(out)];
+    });
+    if (tap.length) ng(`${vp.name}: 押す所が 44px より低い: ${tap.slice(0, 12).join(" / ")}${tap.length > 12 ? ` ほか${tap.length - 12}か所` : ""}`);
+    else ok(`${vp.name}: 目次・さがす・学習の記録の押す所は高さ 44px 以上`);
     await page.close();
   }
   // 応援のお願い: 何も解いていないうちは出ない。10問を越えて目次を開くと1回だけ出る。「もう出さない」のあとは出ない
