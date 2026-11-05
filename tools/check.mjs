@@ -28,6 +28,23 @@ scripts.forEach((m, i) => {
   try { execFileSync(process.execPath, ["--check", f], { stdio: "pipe" }); ok(`index.html の <script> ${i + 1} 番目の文法`); }
   catch (e) { ng(`index.html の <script> ${i + 1} 番目に文法の誤り: ${String(e.stderr).split("\n").slice(0, 5).join(" ")}`); }
 });
+// 1b. main にある関数が消えていないか（2026-11-05：古い Artifact を土台に作り直して、PR #87 の agChat「ふだんのClaudeで添削」が消えかけた）
+// 生成物は本体（Artifact）からまるごと作るので、土台が古いと main の機能が黙って消える。わざと消すときは tools/removed-ok.txt に名前を1行ずつ書く
+{
+  const names = (h) => new Set([...h.matchAll(/^(?:async\s+)?function\s+([\w$]+)\s*\(|^(?:const|let)\s+([\w$]+)\s*=/gm)].map((m) => m[1] || m[2]));
+  let base = null;
+  try {
+    execFileSync("git", ["fetch", "-q", "--depth=1", "origin", "main"], { stdio: "pipe" });
+    base = execFileSync("git", ["show", "FETCH_HEAD:index.html"], { stdio: "pipe", maxBuffer: 64 << 20 }).toString();
+  } catch { base = null; }
+  if (!base) ok("main の index.html が取れないので、消えた関数は確かめない");
+  else {
+    const allow = new Set(existsSync("tools/removed-ok.txt") ? readFileSync("tools/removed-ok.txt", "utf8").split(/\r?\n/).map((s) => s.trim()).filter(Boolean) : []);
+    const now = names(html), gone = [...names(base)].filter((n) => !now.has(n) && !allow.has(n));
+    if (gone.length) ng(`main にある関数が index.html から消えている: ${gone.slice(0, 15).join(", ")}。最新の本体（Artifact・共有フォルダ）から作り直したか確かめる。わざと消したなら tools/removed-ok.txt に書く`);
+    else ok("main にある関数は index.html に全部ある");
+  }
+}
 try { execFileSync(process.execPath, ["--check", "sw.js"], { stdio: "pipe" }); ok("sw.js の文法"); }
 catch (e) { ng("sw.js に文法の誤り: " + String(e.stderr).split("\n")[0]); }
 
@@ -441,6 +458,38 @@ if (process.argv.includes("--browser")) {
       if (bad.length) ng(`解説の肢ごとの正誤で、肢の文が太字・理由が細字になっていない形式がある: ${bad.map(([n, v]) => `${n}（${v}）`).join(" / ")}`);
       else ok(`解説の肢ごとの正誤は、${r.length}の形式すべてで肢の文が太字・理由が細字`);
     }
+    await page.close();
+  }
+  // 「くわしい解説」は答え合わせの結果のすぐ下（肢ごとの正誤より上）に出て、間違えたら「選んだ肢が違う理由・ひっかけ所」、正解なら「関連知識」が先頭に来ること
+  // （2026-11-05 satou「くわしい解説の部分も改善できるかも」。スマホでは肢ごとの正誤の下＝約2,300px下にあり読まれにくかった。research/detail-explain-2026-11-05.md）
+  // 新しい試験や形式を足して、解説が出ない・下に残る・並びが違えば落とす。択一は全部、間違い（1番目）と正解の両方で確かめる
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`くわしい解説: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
+    const r = await page.evaluate(async () => {
+      if (typeof XM_LIST === "undefined" || typeof GY_ALL === "undefined") return null;
+      const tick = () => new Promise((res) => setTimeout(res, 0)), bad = []; let n = 0;
+      const jobs = [...XM_LIST.flatMap((c) => c.qs.map((q) => [q, () => xmRun(c, { deck: [q], i: 0, right: 0, title: "検査" })])),
+        ...GY_ALL.filter((q) => gyKind(q) !== "kiji").map((q) => [q, () => gyRun({ deck: [q], i: 0, right: 0, title: "検査" })])];
+      for (const [q, go] of jobs) for (const last of [false, true]) {
+        go(); await tick();
+        const bs = [...$app.querySelectorAll(".choices button")]; if (!bs.length) continue;
+        n++; bs[last ? bs.length - 1 : 0].click(); await tick(); await tick();
+        const det = $app.querySelector(".gydet"), res = $app.querySelector(".gyres"), ex = $app.querySelector(".gyexw");
+        if (!det) { bad.push(`${q.id}：くわしい解説が出ない`); continue; }
+        const ok = res && res.classList.contains("ok"), heads = [...det.querySelectorAll("li.dtc > b")].map((b) => b.textContent);
+        const key = ok ? /^関連知識$/ : /^(?:あなたの選んだ肢\d+が違う理由|ひっかけ所|落としやすい点)$/;
+        if (!det.classList.contains("dtup") || (ex && !(det.compareDocumentPosition(ex) & 4))) bad.push(`${q.id}：くわしい解説が結果のすぐ下にない`);
+        else if (heads.some((h) => (ok ? /^関連知識$/ : /^(?:ひっかけ所|落としやすい点)$/).test(h)) && !key.test(heads[0] || "")) bad.push(`${q.id}：${ok ? "正解" : "不正解"}なのに先頭が「${heads[0]}」`);
+        if (bad.length > 10) break;
+      }
+      showOffice(); return { n, bad };
+    });
+    if (r === null) ok("択一の問題がないので、くわしい解説の位置は確かめない");
+    else if (r.bad.length) ng(`くわしい解説の位置・並びがおかしい（${r.n}回中）: ${r.bad.join(" / ")}`);
+    else ok(`くわしい解説は、択一${r.n}回の答え合わせすべてで結果のすぐ下に出て、正誤に合わせて並ぶ`);
     await page.close();
   }
   // 解答からすぐ条文を見られること（2026-11-05 satou「解答と条文が離れた位置に置かれていますが、解答からすぐに条文がみれるようにしたい」）。
