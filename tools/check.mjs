@@ -400,7 +400,18 @@ if (process.argv.includes("--browser")) {
               else [...t.matchAll(/([ア-オ])([○×])/g)].forEach((m) => ol.querySelector(`li[data-k="${m[1]}"] .kmox button[data-v="${m[2] === "○" ? 1 : 0}"]`).click());
             } catch (e) { bad.push(`${q.id}：文を押せない（${e.message}）`); }
             await tick(); await tick();
-            if (!quiz.answered || !btns[q.a].classList.contains("right") || $app.querySelector(".choices button.wrong")) bad.push(`${q.id}：正解の組の文を押しても正解にならない`);
+            // わかりやすさ（2026-11-06 satou「やはり組み合わせ問題の表示がわかりづらい」）：
+            //  答え方の説明は記述の上・選べる組合せの札は選択肢の数だけ・そろっても勝手に答えず「この組合せで答える」で答える・答えたら正解の組の記述に緑の枠
+            const top = ol.previousElementSibling, chips = $app.querySelectorAll(".kmchips li"), goB = $app.querySelector(".kmgo");
+            if (!top || !top.classList.contains("kmtop") || !/答え方/.test(top.textContent)) bad.push(`${q.id}：答え方の説明が記述の上にない`);
+            else if (chips.length !== btns.length) bad.push(`${q.id}：選べる組合せの札が選択肢の数と合わない（${chips.length}/${btns.length}）`);
+            else if (quiz.answered) bad.push(`${q.id}：文を選んだだけで答えてしまう（答えるボタンを待たない）`);
+            else if (!goB || goB.disabled || !$app.querySelector(".kmchips li.hit")) bad.push(`${q.id}：正解の組を選んでも「答える」ボタンが押せない・札が光らない`);
+            else {
+              goB.click(); await tick(); await tick();
+              if (!quiz.answered || !btns[q.a].classList.contains("right") || $app.querySelector(".choices button.wrong")) bad.push(`${q.id}：正解の組の文を選んで答えても正解にならない`);
+              else if (ol.dataset.kp === "set" && ol.querySelectorAll("li.kmr").length !== [...t.matchAll(/[ア-オ]/g)].length) bad.push(`${q.id}：答えたあと、正解の組の記述に印が付かない`);
+            }
           }
         }
         if (!quiz.answered) btns[0].click();
@@ -415,7 +426,7 @@ if (process.argv.includes("--browser")) {
     }, vp.all);
     if (r === null) ok(`${vp.name}: 組合せ問題がないので確かめない`);
     else if (r.bad.length) ng(`${vp.name}: 組合せ問題の表示がおかしい（${r.n}問中）: ${r.bad.join(" / ")}`);
-    else ok(`${vp.name}: 組合せ問題${r.n}問の記述が枠に分かれ、文を押して答えられ、解説の肢ごとの正誤に記述の文と○×が出る`);
+    else ok(`${vp.name}: 組合せ問題${r.n}問の記述が枠に分かれ、文を選び「答える」で答えられ、答え方の説明が記述の上にあり、解説の肢ごとの正誤に記述の文と○×が出る`);
     await page.close();
   }
   // 語群から選ぶ問題（行政書士の多肢選択式・社労士の選択式）で、語群の並びから答えが分からないこと（2026-11-05 satou「選択肢が順番に並んでいて答えを推測できてしまう」）。
