@@ -134,6 +134,7 @@ if (process.argv.includes("--browser")) {
       const out = [], keepFs = document.documentElement.dataset.fs || "n";
       const screens = [["目次", () => showOffice()], ["論文式", () => typeof showRonbun === "function" && showRonbun()],
         ["さがす", () => typeof showSearch === "function" && showSearch()], ["学習の記録", () => typeof showRecord === "function" && showRecord()],
+        ["学び方の根拠", () => typeof showKonkyo === "function" && showKonkyo()],
         ["行政書士の模試", () => { if (typeof gyExamOpen !== "function") return; const k = S.gyExam; gyExamOpen(true); gyExamPause(); S.gyExam = k; }],
         ...(typeof XM_LIST !== "undefined" ? XM_LIST.filter((c) => c.mocks && c.mocks.length).map((c) => [`${c.short}の模試`, () => { const st = xmSt(c.key), k = st.cur; xmOpen(c, c.mocks[0]); xmPause(); st.cur = k; }]) : [])];
       for (const fs of ["n", "l"]) {
@@ -246,6 +247,7 @@ if (process.argv.includes("--browser")) {
           let b = parse(getComputedStyle(document.body).backgroundColor) || [255, 255, 255, 1]; for (let i = L.length - 1; i >= 0; i--) b = blend(L[i], b); return b; };
         const screens = [["目次", () => { showOffice(); document.querySelectorAll("#app details").forEach((d) => d.open = true); }], ["論文式", () => showRonbun()],
           ["学習の記録", () => typeof showRecord === "function" && showRecord()],
+          ["学び方の根拠", () => typeof showKonkyo === "function" && showKonkyo()],
           ["択一の解説", () => { const c = XM_LIST[0]; xmRun(c, { deck: [c.qs[0]], i: 0, right: 0, title: "検査" }); $app.querySelectorAll(".choices button")[1].click(); }],
           ["行政書士の模試", () => { if (typeof gyExamOpen !== "function") return; const k = S.gyExam; gyExamOpen(true); gyExamPause(); S.gyExam = k; }]];
         const out = [], theme = document.documentElement.dataset.theme || "dark";
@@ -265,6 +267,46 @@ if (process.argv.includes("--browser")) {
       else if (r.out.length) ng(`画面の色「${th === "paper" ? "紙" : "深緑"}」で読みにくい文字がある: ${r.out.slice(0, 10).join(" / ")}`);
       else ok(`画面の色「${th === "paper" ? "紙" : "深緑"}」で、目次・論文式・学習の記録・解説・模試の文字が読める濃さ`);
     }
+    await page.close();
+  }
+  // 学び方の根拠（2026-11-05 satou「論文を参考にした部分は、その研究も引用したい」）：研究の一覧（showKonkyo）と機能のそばの「なぜこの形？」。
+  // 書誌の欠け・DOI の形・どこからも開けない根拠・押しても開かない／閉じない・横にはみ出す・本体の作り直しで部品が抜けた、を落とす
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`学び方の根拠: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
+    const r = await page.evaluate(async () => {
+      if (typeof KONKYO === "undefined" || typeof showKonkyo !== "function") return null;
+      const tick = () => new Promise((res) => setTimeout(res, 30)), out = [], seen = new Set();
+      const wide = (n) => { const w = document.documentElement.scrollWidth - innerWidth; if (w > 0) out.push(`${n}で ${w}px はみ出す`); };
+      for (const x of KONKYO) for (const f of x.refs) {
+        for (const k of ["a", "y", "t", "j", "v", "p", "doi", "k"]) if (!f[k]) out.push(`${x.id} の書誌に ${k} がない`);
+        if (!/^10\.\d{4,9}\/\S+$/.test(f.doi || "")) out.push(`${x.id} の DOI の形がおかしい: ${f.doi}`);
+        if (!KONKYO_KIND[f.k]) out.push(`${x.id} の確かさの札 ${f.k} がない`);
+      }
+      const press = async (n) => { const bs = [...$app.querySelectorAll(".kjb")]; if (!bs.length) { out.push(`${n}に「なぜこの形？」がない`); return; }
+        for (const b of bs) { b.click(); await tick(); const d = document.getElementById(b.getAttribute("aria-controls"));
+          if (!d || d.hidden || !d.getClientRects().length) out.push(`${n}：押しても開かない`); b.dataset.ids.split(",").forEach((i) => seen.add(i)); wide(`${n}で開いたとき`);
+          b.click(); await tick(); if (d && !d.hidden) out.push(`${n}：閉じない`); } };
+      try {
+        showOffice(); await tick(); await press("目次の今日の学習");
+        $app.querySelectorAll("details").forEach((d) => d.open = true); await tick(); await press("目次（新人研修）");
+        const all = $app.querySelector(".kjabout .kjall"); if (!all) out.push("「このアプリについて」に研究の一覧を開くボタンがない");
+        else { all.click(); await tick(); if ($app.querySelectorAll(".kjitem").length !== KONKYO.length) out.push("研究の一覧の数が合わない"); }
+        if (typeof showRecord === "function") { showRecord(); await tick(); await press("学習の記録"); }
+        const c = XM_LIST[0]; xmRun(c, { deck: [c.qs[0]], i: 0, right: 0, title: "検査" }); await tick(); $app.querySelectorAll(".choices button")[1].click(); await tick(); await press("択一の解説");
+        if ($app.querySelector(".kjbox .kjall")) out.push("解いている途中の解説に、一覧へ移るボタンがある（解いている問題から離れてしまう）");
+        showGyosei(); await tick(); await press("行政書士の画面"); if ($app.querySelectorAll(".kjb").length > 1) out.push("行政書士の画面に「なぜこの形？」が2つ以上");
+        showOffice(); await tick(); const b0 = $app.querySelector(".kjb"); b0.click(); await tick(); document.getElementById(b0.getAttribute("aria-controls")).querySelector(".kjall").click(); await tick();
+        if (!document.activeElement || !document.activeElement.id.startsWith("kj-")) out.push("「なぜこの形？」から一覧の該当の項目に移らない");
+      } catch (e) { out.push(e.message); }
+      for (const x of KONKYO) if (!seen.has(x.id)) out.push(`根拠「${x.title}」がどの「なぜこの形？」からも開けない`);
+      showOffice(); return { out, n: KONKYO.length, refs: new Set(KONKYO.flatMap((x) => x.refs.map((f) => f.doi))).size };
+    });
+    if (r === null) ng("学び方の根拠（KONKYO・showKonkyo）が本体にない。本体を作り直したときに部品 konkyo.js が抜けた（apply_konkyo.py で入れ直す）");
+    else if (r.out.length) ng(`学び方の根拠: ${r.out.slice(0, 12).join(" / ")}`);
+    else ok(`学び方の根拠：${r.n}項目・研究${r.refs}本の書誌がそろい、どの「なぜこの形？」も開いて閉じる`);
     await page.close();
   }
   // 組合せ問題（ア〜オから2つ・ア〜ウの○×）は、ほかの択一と同じ見た目で出ること（2026-11-04 satou「2つ選択するタイプの問題の出題と解説が見づらい」）
