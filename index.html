@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611050117";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611050303";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -508,6 +508,69 @@ details li + li { margin-top: 4px; }
 .chapter-head { font-weight: 600; letter-spacing: .06em; }
 .cmp .model { color: var(--chalk); white-space: pre-wrap; }
 </style>
+<script id="thm-js">
+// 画面の色（深緑・紙）。2026-11-05 追加。部品: tenbin/theme/（theme.js・apply_theme.py・th_test.cjs）
+// 深緑の装丁がもとの見た目。「紙」は明るい部屋や昼の長文読みのための、生成りの紙に墨の文字。
+// 色はすべて :root の変数を差し替えて変える。新しい画面で色を書くときも var(--chalk) などの変数を使えば両方に効く。
+// 白を薄く重ねる色（rgb(255 255 255 / .06) など）は紙では見えなくなるので、ここで黒の薄い重ねに置きかえる。
+(() => {
+  const KEY = "tenbin-theme", META = "#14302a", META_PAPER = "#efe8d6";
+  const css = document.createElement("style"); css.id = "thm-css";
+  css.textContent = `
+html[data-theme="paper"] {
+  --night: #efe8d6; --window: #faf6ec; --deep: #fffdf6; --chalk: #1d2a24; --muted: #4c5b53;
+  --line: #c4b48c; --gold: #7a5810; --hit: #19663a; --miss: #a3321d; color-scheme: light;
+}
+html[data-theme="paper"] body { background-image: radial-gradient(circle at 50% -10%, #f8f3e6 0%, transparent 55%), repeating-linear-gradient(45deg, rgb(0 0 0 / .015) 0 2px, transparent 2px 5px); }
+html[data-theme="paper"] button:hover:not(:disabled):not([aria-pressed="true"]):not(.btn-gold) { background: #efe6cf; }
+html[data-theme="paper"] .btn-gold { color: #fffdf6; }
+html[data-theme="paper"] .btn-gold:hover:not(:disabled) { background: #8d6816; }
+html[data-theme="paper"] .hpbar { background: #e9dcc0; }
+html[data-theme="paper"] .choices button.right { background: rgb(25 102 58 / .08); }
+html[data-theme="paper"] .choices button.wrong { background: rgb(163 50 29 / .07); }
+html[data-theme="paper"] .factpick button[aria-pressed="true"] { background: #f1e6c4; }
+html[data-theme="paper"] textarea::placeholder { color: #6d7a72; }
+html[data-theme="paper"] .checks label:hover { background: rgb(0 0 0 / .04); }
+html[data-theme="paper"] .checks label:has(input:checked) { background: rgb(122 88 16 / .10); }
+html[data-theme="paper"] .todo .linkish:hover:not(:disabled), html[data-theme="paper"] .tbex { background: rgb(0 0 0 / .03); }
+html[data-theme="paper"] .tbt thead th { background: rgb(122 88 16 / .08); }
+html[data-theme="paper"] .tbkey { background: rgb(122 88 16 / .08); }
+html[data-theme="paper"] .qhead:has(#gxTimer), html[data-theme="paper"] .qhead:has(#gyTimer) { box-shadow: 0 6px 10px -8px rgb(0 0 0 / .25); }
+html[data-theme="paper"] .factbtn { box-shadow: 0 4px 14px rgb(0 0 0 / .18); }
+html[data-theme="paper"] .stickybar { box-shadow: 0 -6px 16px rgb(0 0 0 / .12); }
+html[data-theme="paper"] .rcc { background: rgb(0 0 0 / .07); }
+html[data-theme="paper"] .rcc.fut { background: transparent; }
+html[data-theme="paper"] .rcc.l1 { background: color-mix(in srgb, var(--gold) 30%, transparent); }
+html[data-theme="paper"] .rcc.l2 { background: color-mix(in srgb, var(--gold) 55%, transparent); }
+html[data-theme="paper"] .rcc.l3 { background: color-mix(in srgb, var(--gold) 80%, transparent); }
+html[data-theme="paper"] .rcc.l4 { background: var(--gold); }
+html[data-theme="paper"] .hurt { animation-name: hurtPaper; }
+@keyframes hurtPaper { 0%,100%{background:var(--night)} 40%{background:#f2d9cf} }
+`;
+  (document.currentScript || document.body.lastChild).before(css);
+  const get = () => { try { return localStorage.getItem(KEY) === "paper" ? "paper" : "dark"; } catch { return "dark"; } };
+  const apply = (v) => {
+    if (v === "paper") document.documentElement.dataset.theme = "paper"; else delete document.documentElement.dataset.theme;
+    const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = v === "paper" ? META_PAPER : META;
+  };
+  window.setTheme = (v) => { v = v === "paper" ? "paper" : "dark"; try { localStorage.setItem(KEY, v); } catch {} apply(v); };
+  apply(get());
+  // 「そのほか」の「文字の大きさ」の下に「画面の色」を置く（目次を描き直すたびに足す）
+  const addUI = () => {
+    const fs = document.querySelector('.fsw[aria-label="文字の大きさ"]');
+    if (!fs || fs.parentNode.querySelector('.fsw[aria-label="画面の色"]')) return;
+    const cur = document.documentElement.dataset.theme === "paper" ? "paper" : "dark";
+    const g = document.createElement("div"); g.className = "fsw"; g.setAttribute("role", "group"); g.setAttribute("aria-label", "画面の色");
+    g.innerHTML = `<span class="note" style="margin:0">画面の色</span>` + [["dark", "深緑"], ["paper", "紙（明るい）"]].map(([v, t]) => `<button data-th="${v}" aria-pressed="${cur === v}">${t}</button>`).join("");
+    g.querySelectorAll("button").forEach((b) => b.onclick = () => { setTheme(b.dataset.th); g.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b)); });
+    fs.after(g);
+    const sum = fs.closest("details")?.querySelector(":scope > summary");
+    if (sum && !/画面の色/.test(sum.textContent)) sum.textContent = sum.textContent.replace("文字の大きさ", "文字の大きさ・画面の色");
+  };
+  const start = () => { const app = document.getElementById("app"); if (app) new MutationObserver(addUI).observe(app, { childList: true, subtree: true }); addUI(); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+})();
+</script>
 
 <div class="wrap" id="app"></div>
 
@@ -7639,7 +7702,7 @@ function showOffice() {
   bindXfer();
 }
 // ===== 記録の書き出し・読み込み（別の端末やPWA版へ移すため） =====
-const XFER_KEYS = ["roppo-quest-v2", "tenbin-fs", "tenbin-open"];
+const XFER_KEYS = ["roppo-quest-v2", "tenbin-fs", "tenbin-open", "tenbin-theme"];
 function bindXfer() {
   const box = document.getElementById("xferBox"), msg = document.getElementById("xferMsg");
   document.getElementById("expBtn").onclick = async () => {

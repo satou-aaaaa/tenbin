@@ -225,6 +225,48 @@ if (process.argv.includes("--browser")) {
     else ok(`択一${r.n}問（${r.lists}か所）の答え・選択肢・解説が食い違っていない`);
     await page.close();
   }
+  // 画面の色（深緑・紙）：どちらでも文字が背景に埋もれないこと（WCAG の 4.5:1、大きな字は 3:1）。2026-11-05「紙」を追加。
+  // 色を変数（var(--chalk) など）でなく直に書くと、片方の色で読めなくなるので落とす。選んだ色は読み込み直しても残ること
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`画面の色: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
+    const hasTheme = await page.evaluate(() => typeof setTheme === "function");
+    if (!hasTheme) ok("画面の色の切り替えがない版なので確かめない");
+    else for (const th of ["dark", "paper"]) {
+      await page.evaluate((t) => localStorage.setItem("tenbin-theme", t), th);
+      await page.reload({ waitUntil: "load" }); await page.waitForTimeout(1500);
+      const r = await page.evaluate(async () => {
+        const tick = () => new Promise((res) => setTimeout(res, 50));
+        const parse = (c) => { const m = String(c).match(/rgba?\(([^)]+)\)/); if (!m) return null; const v = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [v[0], v[1], v[2], v.length > 3 ? v[3] : 1]; };
+        const lum = ([r, g, b]) => { const f = (x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+        const blend = (t, u) => [0, 1, 2].map((i) => t[i] * t[3] + u[i] * (1 - t[3])).concat(1);
+        const bgOf = (el) => { const L = []; for (let e = el; e; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor); if (c && c[3] > 0) { L.push(c); if (c[3] >= 1) break; } }
+          let b = parse(getComputedStyle(document.body).backgroundColor) || [255, 255, 255, 1]; for (let i = L.length - 1; i >= 0; i--) b = blend(L[i], b); return b; };
+        const screens = [["目次", () => { showOffice(); document.querySelectorAll("#app details").forEach((d) => d.open = true); }], ["論文式", () => showRonbun()],
+          ["学習の記録", () => typeof showRecord === "function" && showRecord()],
+          ["択一の解説", () => { const c = XM_LIST[0]; xmRun(c, { deck: [c.qs[0]], i: 0, right: 0, title: "検査" }); $app.querySelectorAll(".choices button")[1].click(); }],
+          ["行政書士の模試", () => { if (typeof gyExamOpen !== "function") return; const k = S.gyExam; gyExamOpen(true); gyExamPause(); S.gyExam = k; }]];
+        const out = [], theme = document.documentElement.dataset.theme || "dark";
+        for (const [name, go] of screens) {
+          try { go(); } catch (e) { out.push(`${name}: ${e.message}`); continue; } await tick();
+          const w = document.createTreeWalker($app, NodeFilter.SHOW_TEXT), seen = new Set();
+          while (w.nextNode()) { const el = w.currentNode.parentElement; if (!w.currentNode.textContent.trim() || !el.getClientRects().length || el.closest("button:disabled")) continue;
+            const cs = getComputedStyle(el); if (cs.visibility === "hidden" || +cs.opacity < 0.5) continue; const fg0 = parse(cs.color); if (!fg0) continue;
+            const bg = bgOf(el), fg = blend(fg0, bg), a = lum(fg), b = lum(bg), cr = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+            const size = parseFloat(cs.fontSize), need = size >= 24 || (+cs.fontWeight >= 700 && size >= 18.66) ? 3 : 4.5;
+            const key = `${el.tagName}.${el.className}`; if (cr < need && !seen.has(key)) { seen.add(key); out.push(`${name}の「${w.currentNode.textContent.trim().slice(0, 12)}」（${key}）が ${cr.toFixed(1)}:1`); } }
+        }
+        showOffice(); return { theme, out };
+      });
+      const want = th === "paper" ? "paper" : "dark";
+      if (r.theme !== want) ng(`画面の色「${th}」を選んで読み込み直すと「${r.theme}」になる（選んだ色が残らない）`);
+      else if (r.out.length) ng(`画面の色「${th === "paper" ? "紙" : "深緑"}」で読みにくい文字がある: ${r.out.slice(0, 10).join(" / ")}`);
+      else ok(`画面の色「${th === "paper" ? "紙" : "深緑"}」で、目次・論文式・学習の記録・解説・模試の文字が読める濃さ`);
+    }
+    await page.close();
+  }
   // 組合せ問題（ア〜オから2つ・ア〜ウの○×）は、ほかの択一と同じ見た目で出ること（2026-11-04 satou「2つ選択するタイプの問題の出題と解説が見づらい」）
   // 出題：「ア　…」の記述が1つずつ枠（.kmst li）に分かれる。解説：選択肢が組（ア・ウ など）なら「記述ごとの正誤」（.kmw li）が記述の数だけ出て、全部に ○× が付く。
   // 新しい試験や問題の形を足して、この表示から漏れたら落とす。スマホ幅で横にはみ出さないことも確かめる
