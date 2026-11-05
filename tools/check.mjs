@@ -168,6 +168,105 @@ if (process.argv.includes("--browser")) {
     else ng(`応援のお願いの出かたがおかしい（記録なし:${v0}・10問越え:${v1}・2回目:${v2}・もう出さない:${v3}）`);
     await page.close();
   }
+  // 択一の答えと解説が食い違わないこと（2026-11-05）。毎日問題を足すので、手で見落としても CI で止める。
+  // 1) 形：選択肢2つ以上・空や重複なし・正解の番号が範囲内・肢ごとの解説の数＝選択肢の数・id の重複なし
+  // 2) 「正解です」で始まる解説は正解の肢だけ。「正しいものはどれか」で正解でない肢の解説が「正しい」で始まる（逆も）ものはだめ
+  // 3) 組合せ（ア・ウ など）：答えの組と問いの向き（正しい／誤り）から決まる記述ごとの正誤と、解説・詳しい解説の「アは誤り」などが合うこと
+  //    （画面の「肢ごとの正誤」は答えから○×を付け、理由は解説から取るので、食い違うと○なのに理由が「誤り」になる）
+  // 4) 個数問題：正解の解説の「ア○ イ×…」の数と答え（一つ〜五つ）が合うこと
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`答えの点検: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
+    const r = await page.evaluate(() => {
+      const lists = [], seen = new Set(), names = new Set();
+      for (const sc of document.scripts) for (const m of sc.textContent.matchAll(/(?:^|[;\n]\s*)(?:const|let|var)\s+([A-Z][A-Z0-9_]+)\s*=/g)) names.add(m[1]);
+      const walk = (v, path, depth) => { if (!v || typeof v !== "object" || seen.has(v) || depth > 4) return; seen.add(v);
+        if (Array.isArray(v)) { const qs = v.filter((x) => x && typeof x === "object" && Array.isArray(x.c) && "a" in x && !seen.has(x)); if (qs.length) { qs.forEach((x) => seen.add(x)); lists.push([path, qs]); }
+          v.forEach((x, i) => { if (x && typeof x === "object" && !Array.isArray(x.c)) walk(x, `${path}[${i}]`, depth + 1); }); }
+        else for (const k of Object.keys(v)) walk(v[k], `${path}.${k}`, depth + 1); };
+      for (const n of names) { let v; try { v = (0, eval)(n); } catch { continue; } walk(v, n, 0); }
+      const NEG = /誤っている|誤りである|妥当でない|正しくない|適切でない|不適当な|不適切な/;
+      const LAB = /^[ア-オ](?:[ 　・と]?[ア-オ])+$/, NUM = { "一つ": 1, "二つ": 2, "三つ": 3, "四つ": 4, "五つ": 5 };
+      const ASSERT = /([ア-オ](?:[・と][ア-オ])*)(?:は|が|も|とも)(?:、)?(?:ともに|いずれも|どちらも)?(妥当でない|正しくない|適切でない|誤り|誤って|誤った|妥当|正しい|適切)/g;
+      const bad = [], ids = new Map(); let n = 0;
+      for (const [src, qs] of lists) for (const q of qs) {
+        n++; const id = q.id || src, P = (m) => bad.push(`${id}：${m}`), c = q.c, lead = String(q.q || "").split("\n")[0], neg = NEG.test(lead);
+        if (q.id) { if (ids.has(q.id)) P(`id が ${ids.get(q.id)} と重複`); else ids.set(q.id, src); }
+        if (c.length < 2) P("選択肢が2つ未満");
+        if (c.some((x) => typeof x !== "string" || !x.trim())) P("空の選択肢がある");
+        else if (new Set(c.map((x) => x.trim())).size !== c.length) P("同じ選択肢が2つある");
+        if (!Number.isInteger(q.a) || q.a < 0 || q.a >= c.length) { P(`正解の番号が範囲外（a=${q.a}）`); continue; }
+        const ex = Array.isArray(q.ex) ? q.ex.map(String) : null;
+        if (ex) {
+          if (ex.length !== c.length) P(`肢ごとの解説の数（${ex.length}）と選択肢の数（${c.length}）が違う`);
+          ex.forEach((e, i) => { if (i !== q.a && /^正解/.test(e)) P(`正解でない肢${i + 1}の解説が「正解」で始まる`); });
+          if (/どれか|選べ/.test(lead)) ex.forEach((e, i) => {
+            const says = /^(正しい|妥当です|適切です)/.test(e) ? true : /^(誤り|誤っ|妥当でない|正しくない|適切でない|不適切)/.test(e) ? false : null;
+            if (says !== null && says !== ((i === q.a) !== neg)) P(`肢${i + 1}の解説「${e.slice(0, 20)}…」が、答え（${q.a + 1}）と問いの向き（${neg ? "誤り" : "正しい"}を選ぶ）に合わない`); });
+          if (c.every((x) => x in NUM) && /いくつ/.test(lead)) {
+            const e = ex[q.a] || "", o = (e.match(/[ア-オ]○/g) || []).length, x = (e.match(/[ア-オ]×/g) || []).length;
+            if (o + x >= 3 && (neg ? x : o) !== NUM[c[q.a]]) P(`個数問題：正解の解説は○${o}・×${x}なのに答えが「${c[q.a]}」`);
+          }
+        }
+        if (c.every((t) => LAB.test(t.trim()))) {
+          const set = c[q.a].match(/[ア-オ]/g), truth = (k) => set.includes(k) !== neg, off = new Set();
+          for (const t of [...(ex || [String(q.ex || "")]), ...(q.d || []).map((r) => [].concat(r).join(" "))])
+            for (const m of t.matchAll(ASSERT)) { const pos = /^(妥当|正しい|適切)$/.test(m[2]);
+              for (const k of m[1].match(/[ア-オ]/g)) if (truth(k) !== pos) off.add(`答えからは${k}が${truth(k) ? "正しい" : "誤り"}なのに解説は「${m[0]}」`); }
+          if (off.size) P(`組合せ（答え「${c[q.a]}」）：${[...off].join(" / ")}`);
+        }
+      }
+      return { n, lists: lists.length, bad };
+    });
+    if (r.n < 100) ng(`択一の問題が見つからない（${r.n}問）。check.mjs の探し方を見直す`);
+    else if (r.bad.length) ng(`択一の答えと解説が食い違う（${r.n}問中 ${r.bad.length}件）: ${r.bad.slice(0, 15).join(" / ")}`);
+    else ok(`択一${r.n}問（${r.lists}か所）の答え・選択肢・解説が食い違っていない`);
+    await page.close();
+  }
+  // 画面の色（深緑・紙）：どちらでも文字が背景に埋もれないこと（WCAG の 4.5:1、大きな字は 3:1）。2026-11-05「紙」を追加。
+  // 色を変数（var(--chalk) など）でなく直に書くと、片方の色で読めなくなるので落とす。選んだ色は読み込み直しても残ること
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`画面の色: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
+    const hasTheme = await page.evaluate(() => typeof setTheme === "function");
+    if (!hasTheme) ok("画面の色の切り替えがない版なので確かめない");
+    else for (const th of ["dark", "paper"]) {
+      await page.evaluate((t) => localStorage.setItem("tenbin-theme", t), th);
+      await page.reload({ waitUntil: "load" }); await page.waitForTimeout(1500);
+      const r = await page.evaluate(async () => {
+        const tick = () => new Promise((res) => setTimeout(res, 50));
+        const parse = (c) => { const m = String(c).match(/rgba?\(([^)]+)\)/); if (!m) return null; const v = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [v[0], v[1], v[2], v.length > 3 ? v[3] : 1]; };
+        const lum = ([r, g, b]) => { const f = (x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+        const blend = (t, u) => [0, 1, 2].map((i) => t[i] * t[3] + u[i] * (1 - t[3])).concat(1);
+        const bgOf = (el) => { const L = []; for (let e = el; e; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor); if (c && c[3] > 0) { L.push(c); if (c[3] >= 1) break; } }
+          let b = parse(getComputedStyle(document.body).backgroundColor) || [255, 255, 255, 1]; for (let i = L.length - 1; i >= 0; i--) b = blend(L[i], b); return b; };
+        const screens = [["目次", () => { showOffice(); document.querySelectorAll("#app details").forEach((d) => d.open = true); }], ["論文式", () => showRonbun()],
+          ["学習の記録", () => typeof showRecord === "function" && showRecord()],
+          ["択一の解説", () => { const c = XM_LIST[0]; xmRun(c, { deck: [c.qs[0]], i: 0, right: 0, title: "検査" }); $app.querySelectorAll(".choices button")[1].click(); }],
+          ["行政書士の模試", () => { if (typeof gyExamOpen !== "function") return; const k = S.gyExam; gyExamOpen(true); gyExamPause(); S.gyExam = k; }]];
+        const out = [], theme = document.documentElement.dataset.theme || "dark";
+        for (const [name, go] of screens) {
+          try { go(); } catch (e) { out.push(`${name}: ${e.message}`); continue; } await tick();
+          const w = document.createTreeWalker($app, NodeFilter.SHOW_TEXT), seen = new Set();
+          while (w.nextNode()) { const el = w.currentNode.parentElement; if (!w.currentNode.textContent.trim() || !el.getClientRects().length || el.closest("button:disabled")) continue;
+            const cs = getComputedStyle(el); if (cs.visibility === "hidden" || +cs.opacity < 0.5) continue; const fg0 = parse(cs.color); if (!fg0) continue;
+            const bg = bgOf(el), fg = blend(fg0, bg), a = lum(fg), b = lum(bg), cr = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+            const size = parseFloat(cs.fontSize), need = size >= 24 || (+cs.fontWeight >= 700 && size >= 18.66) ? 3 : 4.5;
+            const key = `${el.tagName}.${el.className}`; if (cr < need && !seen.has(key)) { seen.add(key); out.push(`${name}の「${w.currentNode.textContent.trim().slice(0, 12)}」（${key}）が ${cr.toFixed(1)}:1`); } }
+        }
+        showOffice(); return { theme, out };
+      });
+      const want = th === "paper" ? "paper" : "dark";
+      if (r.theme !== want) ng(`画面の色「${th}」を選んで読み込み直すと「${r.theme}」になる（選んだ色が残らない）`);
+      else if (r.out.length) ng(`画面の色「${th === "paper" ? "紙" : "深緑"}」で読みにくい文字がある: ${r.out.slice(0, 10).join(" / ")}`);
+      else ok(`画面の色「${th === "paper" ? "紙" : "深緑"}」で、目次・論文式・学習の記録・解説・模試の文字が読める濃さ`);
+    }
+    await page.close();
+  }
   // 組合せ問題（ア〜オから2つ・ア〜ウの○×）は、ほかの択一と同じ見た目で出ること（2026-11-04 satou「2つ選択するタイプの問題の出題と解説が見づらい」）
   // 出題：「ア　…」の記述が1つずつ枠（.kmst li）に分かれる。解説：選択肢が組（ア・ウ など）なら「記述ごとの正誤」（.kmw li）が記述の数だけ出て、全部に ○× が付く。
   // 新しい試験や問題の形を足して、この表示から漏れたら落とす。スマホ幅で横にはみ出さないことも確かめる
