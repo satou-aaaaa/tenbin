@@ -243,7 +243,7 @@ if (process.argv.includes("--browser")) {
     await page.close();
   }
   // 論文の問題と解説（2026-11-06）：どの論文も目次の分野に入り、模範答案・解説に書いた判例の日付はすべて参考判例（CITES）にある。
-  // 解説（KAISETSU）は実在の問題にだけ付き、3項目そろい、模範答案の下・参考判例の上に出る
+  // 解説（KAISETSU）はすべての論文（予備試験の実務基礎も）にあり、実在の問題にだけ付き、3項目そろい、模範答案の下・参考判例の上に出る
   {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     page.on("pageerror", (e) => errors.push(`論文の解説: ${e.message}`));
@@ -257,6 +257,7 @@ if (process.argv.includes("--browser")) {
         if (!p.big && !/^yb-/.test(p.id) && RONBUN.includes(p) && !inBunya.has(p.id)) bad.push(`${p.id}：目次の分野にない`);
         const t = JSON.stringify([p.m, p.secs, KAISETSU[p.id]]).replace(/\s/g, "");
         for (const m of t.matchAll(DT)) if (!dates.has(m[1])) bad.push(`${p.id}：判例 ${m[1]} が参考判例にない`);
+        if (!KAISETSU[p.id]) bad.push(`${p.id}：解説がない（KAISETSU に3項目を足す）`);
       }
       let shown = 0;
       for (const [id, x] of Object.entries(KAISETSU)) {
@@ -273,7 +274,7 @@ if (process.argv.includes("--browser")) {
     });
     if (r === null) ok("論文の解説のデータがないので、解説の検査はしない");
     else if (r.bad.length) ng(`論文の問題・解説: ${r.bad.slice(0, 12).join(" / ")}`);
-    else ok(`論文${r.n}問が分野に入り、判例はすべて参考判例にあり、解説${r.shown}問が模範答案の下に出る`);
+    else ok(`論文${r.n}問が分野に入り、判例はすべて参考判例にあり、全${r.shown}問の解説が模範答案の下に出る`);
     await page.close();
   }
   // 択一の答えと解説が食い違わないこと（2026-11-05）。毎日問題を足すので、手で見落としても CI で止める。
