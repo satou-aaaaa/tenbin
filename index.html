@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611060118";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611060129";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26000,7 +26000,6 @@ new MutationObserver(() => {
   queueMicrotask(() => { agQueued = false; [agGyKiji, agGyExam, agShoshi].forEach(f => { try { f(); } catch (e) { console.warn("aigrade", e); } }); });
 }).observe($app, { childList: true, subtree: true });
 // ===== AIの添削・採点 ここまで =====
-
 // ===== 組合せ問題の見やすさ（2026-11-04 satou「2つ選択するタイプの問題の出題と解説が見づらい」「他のタイプの問題と同様に見やすく」） =====
 // 「アからオまでの記述のうち正しいものの組合せ」「ア〜ウに○×を付けた組合せ」の問題を、ほかの択一と同じ見た目にそろえる。
 // 画面を作る関数はそのままにして、描いたあとに手を加える（練習・模試・見直し、どの試験でも同じ）。
@@ -26373,6 +26372,7 @@ document.addEventListener("keydown", e => {
 
 showOffice();
 </script>
+
 
 
 <p style="text-align:center;margin:16px 0 24px;font:13px system-ui,sans-serif"><a href="changes.html" style="color:#cfe3d9">更新情報</a>　<a id="kofi" href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener noreferrer" style="color:#cfe3d9">☕ Ko-fi で応援</a><br><span style="display:inline-block;margin-top:6px;color:#9fbfb2;font-size:12px">天秤の書は無料・広告なしで、ひとりで作っています。応援は、問題の追加と判例の確かめに使います。</span></p>
