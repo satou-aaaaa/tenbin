@@ -422,11 +422,28 @@ if (process.argv.includes("--browser")) {
         if (document.documentElement.scrollWidth > innerWidth + 1) bad.push(`${q.id}：横にはみ出す`);
         if (bad.length > 10) break;
       }
-      showOffice(); return { n: jobs.length, bad };
+      // 間違えたときの答え合わせ（2026-11-06 satou「解答部分を見やすく」）：結果の見出しの番号に組（ア・ウ など）が添えられ、
+      // 肢ごとの正誤で、判断を間違えた記述（選んだが違う・選ぶべきだった・○×が違う）だけに赤の印（.kmng）が付き、その数が「間違えた記述」と合うこと
+      let nWrong = 0;
+      for (const [q, go] of jobs) {
+        if (bad.length > 10 || !isLab(q.c[q.a] || "")) continue;
+        go(); await tick();
+        const btns = [...$app.querySelectorAll(".choices button")], wi = q.a === 0 ? 1 : 0;
+        const lab = (i) => ((btns[i].querySelector("span:not(.key)") || {}).textContent || "").trim();
+        const A = lab(q.a), M = lab(wi);
+        btns[wi].click(); await tick(); await tick(); nWrong++;
+        const res = ($app.querySelector(".gyres") || {}).textContent || "";
+        const ks = (t) => /[○×]/.test(t) ? Object.fromEntries([...t.matchAll(/([ア-オ])([○×])/g)].map((m) => [m[1], m[2]])) : Object.fromEntries([...t.matchAll(/[ア-オ]/g)].map((m) => [m[0], 1]));
+        const a = ks(A), m = ks(M), all = new Set([...Object.keys(a), ...Object.keys(m)]);
+        const diff = [...all].filter((k) => a[k] !== m[k]).length;
+        if (!res.includes(`（${A}）`) && !res.includes(`（${A.replace(/　/g, " ")}）`)) bad.push(`${q.id}：結果の見出しに正解の組（${A}）が出ない`);
+        else if ($app.querySelectorAll(".kmw li.kmng").length !== diff) bad.push(`${q.id}：間違えた記述の赤い印の数がおかしい（${$app.querySelectorAll(".kmw li.kmng").length}/${diff}）`);
+      }
+      showOffice(); return { n: jobs.length, nWrong, bad };
     }, vp.all);
     if (r === null) ok(`${vp.name}: 組合せ問題がないので確かめない`);
     else if (r.bad.length) ng(`${vp.name}: 組合せ問題の表示がおかしい（${r.n}問中）: ${r.bad.join(" / ")}`);
-    else ok(`${vp.name}: 組合せ問題${r.n}問の記述が枠に分かれ、文を選び「答える」で答えられ、答え方の説明が記述の上にあり、解説の肢ごとの正誤に記述の文と○×が出る`);
+    else ok(`${vp.name}: 組合せ問題${r.n}問の記述が枠に分かれ、文を選び「答える」で答えられ、答え方の説明が記述の上にあり、解説の肢ごとの正誤に記述の文と○×が出る。間違えた${r.nWrong}問で結果に組が出て、間違えた記述に赤の印`);
     await page.close();
   }
   // 語群から選ぶ問題（行政書士の多肢選択式・社労士の選択式）で、語群の並びから答えが分からないこと（2026-11-05 satou「選択肢が順番に並んでいて答えを推測できてしまう」）。
