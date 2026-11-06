@@ -1,6 +1,6 @@
-// 天秤の書 Service Worker（オフライン用）。版: 202611061618
+// 天秤の書 Service Worker（オフライン用）。版: 202611061628
 // tools/build_pwa.mjs が作る生成物。直接直さない。
-const VER = "202611061618";
+const VER = "202611061628";
 const CACHE = "tenbin-" + VER;
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"];
 // HTTP キャッシュの古いファイルを新しい版のキャッシュに入れないよう、cache: "reload" で取り直す
