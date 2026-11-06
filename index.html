@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611060139";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611061518";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -519,6 +519,9 @@ html body :is(#goRec, .fsw button, .sechip, .kjall) { min-height: 44px; }
 html body .kjb { position: relative; }
 html body .kjb::after { content: ""; position: absolute; inset: -8px -2px; }
 html body .cites a { padding-block: 12px; margin-block: -12px; }
+/* 第3回：論文の答案の経過時間は幅を固定する（明朝体の数字は字ごとに幅がちがい、1秒ごとに隣の「目安」が左右に動いていた） */
+html body #clock { display: inline-block; min-width: 6.4em; }
+html body .timerbar .hints button { min-height: 44px; }
 </style>
 <script id="uxw-js">if (!document.documentElement.lang) document.documentElement.lang = "ja";</script>
 <script id="thm-js">
