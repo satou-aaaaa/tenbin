@@ -381,10 +381,18 @@ if (process.argv.includes("--browser")) {
       const tick = () => new Promise((res) => setTimeout(res, 0));
       const nSt = (q) => { const L = (q.q || "").split("\n").map((s) => s.trim()).filter(Boolean); let n = 0; for (let i = L.length - 1; i >= 0 && /^[ア-オ][　 ]/.test(L[i]); i--) n++; return n >= 3 ? n : 0; };
       const isLab = (t) => /^[ア-オ](?:[ 　・と]?[ア-オ])+$|^(?:[ア-オ][○×][ 　・]*){2,}$/.test(t.trim());
+      // 文で答える形を確かめる（自動テストでは何も選んでいなければ「番号で答える」から始まるので、ここで「文で答える」にする）
+      // その前に：自動テストで何も選んでいなければ番号の選択肢が見えていること（ほかの部品のテストが .choices button を押して止まらないように・2026-11-06）
+      const pre = [];
+      { try { localStorage.removeItem("tenbin.kmPick"); } catch (e) {}
+        const c0 = XM_LIST.find((c) => c.qs.some((q) => nSt(q) && isLab(q.c[q.a] || "")));
+        if (c0) { xmRun(c0, { deck: [c0.qs.find((q) => nSt(q) && isLab(q.c[q.a] || ""))], i: 0, right: 0, title: "検査" }); await tick();
+          const ch = $app.querySelector(".choices"); if (!ch || ch.classList.contains("kmhide") || !ch.offsetHeight) pre.push("自動テストで組合せの番号の選択肢が隠れる（ほかのテストが押せずに止まる）"); } }
+      try { localStorage.setItem("tenbin.kmPick", "st"); } catch (e) {}
       let jobs = [...XM_LIST.flatMap((c) => c.qs.filter(nSt).map((q) => [q, () => xmRun(c, { deck: [q], i: 0, right: 0, title: "検査" })])),
         ...GY_ALL.filter((q) => gyKind(q) === "go" && nSt(q)).map((q) => [q, () => gyRun({ deck: [q], i: 0, right: 0, title: "検査" })])];
       if (!all) jobs = jobs.filter((_, i) => i % 25 === 0);
-      const bad = [];
+      const bad = [...pre];
       for (const [q, go] of jobs) {
         go(); await tick();
         const st = $app.querySelectorAll(".kmst li").length, lab = isLab(q.c[q.a] || "");
