@@ -190,7 +190,8 @@ if (process.argv.includes("--browser")) {
     // 文の中のリンク（display: inline の a）と条文リンク（.jl）は除く。文の中の小さなボタン .kjb は ::after で上下に広げていればよい
     const tap = await page.evaluate(() => {
       const out = [], screens = [["目次", () => { showOffice(); document.querySelectorAll("details").forEach((d) => d.open = true); }],
-        ["さがす", () => typeof showSearch === "function" && showSearch()], ["学習の記録", () => typeof showRecord === "function" && showRecord()]];
+        ["さがす", () => typeof showSearch === "function" && showSearch()], ["学習の記録", () => typeof showRecord === "function" && showRecord()],
+        ["論文の答案", () => { if (typeof showRonbun !== "function" || typeof startWrite !== "function") return; showRonbun(); const w = document.querySelector("[data-write]"); if (w) startWrite(w.dataset.write); }]];
       for (const [name, go] of screens) { try { go(); } catch (e) { out.push(`${name}: ${e.message}`); continue; }
         for (const e of document.querySelectorAll("#app button, #app summary, #app select, #app a")) {
           if (e.closest(".jlbox, .kjbox") || e.classList.contains("jl")) continue;
@@ -203,7 +204,20 @@ if (process.argv.includes("--browser")) {
       showOffice(); return [...new Set(out)];
     });
     if (tap.length) ng(`${vp.name}: 押す所が 44px より低い: ${tap.slice(0, 12).join(" / ")}${tap.length > 12 ? ` ほか${tap.length - 12}か所` : ""}`);
-    else ok(`${vp.name}: 目次・さがす・学習の記録の押す所は高さ 44px 以上`);
+    else ok(`${vp.name}: 目次・さがす・学習の記録・論文の答案の押す所は高さ 44px 以上`);
+    // 論文の答案の経過時間（#clock）は、数字が変わっても幅が変わらないこと（明朝体の数字は字ごとに幅がちがい、隣の「目安」が1秒ごとに動いていた。2026-11-06）。
+    // CI は明朝体を読まず数字の幅がそろってしまうので、幅を決める指定（min-width）があり、最も長い時間でも収まることも見る
+    const clk = await page.evaluate(() => {
+      if (typeof showRonbun !== "function" || typeof startWrite !== "function") return null;
+      showRonbun(); const w = document.querySelector("[data-write]"); if (!w) return null; startWrite(w.dataset.write);
+      const c = document.getElementById("clock"); if (!c) return null; const keep = c.textContent, seen = new Set();
+      for (const t of ["0:00", "1:11", "4:44", "8:08", "11:11", "19:59", "38:38", "120:00"]) { c.textContent = "経過 " + t; seen.add(Math.round(c.getBoundingClientRect().width * 10) / 10); }
+      const mw = parseFloat(getComputedStyle(c).minWidth) || 0; c.textContent = keep; if (typeof stopTimer === "function") stopTimer(); showOffice();
+      return { n: seen.size, mw, ws: [...seen] };
+    });
+    if (clk === null) ok(`${vp.name}: 論文の答案の画面がないので経過時間の幅は確かめない`);
+    else if (clk.n !== 1 || !clk.mw) ng(`${vp.name}: 論文の答案の経過時間の幅が数字で変わる（${clk.ws.join(",")}px・min-width ${clk.mw}px）。#clock の幅を固定する`);
+    else ok(`${vp.name}: 論文の答案の経過時間の幅が変わらない`);
     await page.close();
   }
   // 応援のお願い: 何も解いていないうちは出ない。10問を越えて目次を開くと1回だけ出る。「もう出さない」のあとは出ない
