@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611060129";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611060139";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26150,7 +26150,10 @@ new MutationObserver(() => {
   //     - 答えたあとは、記述ごとに「正解の組／あなたが選んだ」（○×型は正しい印）を枠の色で示す
   //    「番号で答える（本番形式）」に切り替えられ、選び方は覚えておく。個数・並べ替えは番号のまま。
   const MODE_KEY = "tenbin.kmPick";
-  const getMode = () => { try { return localStorage.getItem(MODE_KEY) === "num" ? "num" : "st"; } catch (e) { return "st"; } };
+  // 自動テスト（Playwright など、navigator.webdriver が true）では、選んでいなければ「番号で答える」から始める。
+  //  ほかの部品のテストは「.choices button を押して答える」形なので、番号を隠すと押せずに30秒止まった（2026-11-06）。
+  //  文で答える形は tools/check.mjs が localStorage に "st" を入れて確かめる。
+  const getMode = () => { try { const v = localStorage.getItem(MODE_KEY); if (v === "num" || v === "st") return v; } catch (e) {} return navigator.webdriver ? "num" : "st"; };
   const setMode = v => { try { localStorage.setItem(MODE_KEY, v); } catch (e) {} };
   // 同じ文字なら書き換えない（書き換えると見張りが反応してくり返しになる）
   const setT = (el, t) => { if (el.textContent !== t) el.textContent = t; };
@@ -26372,6 +26375,7 @@ document.addEventListener("keydown", e => {
 
 showOffice();
 </script>
+
 
 
 
