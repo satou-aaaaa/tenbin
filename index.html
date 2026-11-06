@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611052319";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611060017";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25934,7 +25934,6 @@ new MutationObserver(() => {
   queueMicrotask(() => { agQueued = false; [agGyKiji, agGyExam, agShoshi].forEach(f => { try { f(); } catch (e) { console.warn("aigrade", e); } }); });
 }).observe($app, { childList: true, subtree: true });
 // ===== AIの添削・採点 ここまで =====
-
 // ===== 組合せ問題の見やすさ（2026-11-04 satou「2つ選択するタイプの問題の出題と解説が見づらい」「他のタイプの問題と同様に見やすく」） =====
 // 「アからオまでの記述のうち正しいものの組合せ」「ア〜ウに○×を付けた組合せ」の問題を、ほかの択一と同じ見た目にそろえる。
 // 画面を作る関数はそのままにして、描いたあとに手を加える（練習・模試・見直し、どの試験でも同じ）。
@@ -26020,18 +26019,32 @@ new MutationObserver(() => {
     const texts = [...lis.map(liText),
       ...(det ? [...det.querySelectorAll("li")].map(li => li.textContent.replace(/^([ア-オ])（(?:正しい|誤り)）/, "$1：")) : [])];
     const why = { ...reasons(texts, ks), ...why0 };
+    // 記述ごとの「あなたの判断」（2026-11-06 satou「解答部分を見やすく」）：選んだ・選ばなかったが合っていたかを ✓✗ で。
+    //  正解の組なのに選ばなかった記述も「間違えた記述」として赤で示す（前は緑の「正解の組」だけで、見落としに気づけなかった）
+    const ox0 = ans && ans.ox ? Object.fromEntries(ans.ox) : null, myOx = mine && mine.ox ? Object.fromEntries(mine.ox) : null;
+    const judged = mi >= 0 && !count && !!mine;
+    const pick = k => mine && mine.set ? mine.set.includes(k) : false;
+    const ok = k => !judged ? true : ox0 ? myOx[k] === ox0[k] : pick(k) === inAns(k);
     const tag = k => inAns(k) ? `<span class="gytag">正解の組</span>` : "";
-    const mtag = k => !inMine(k) || inAns(k) ? "" : ans && ans.ox ? `<span class="gytag mine">あなたは${truth(k) ? "×" : "○"}</span>` : `<span class="gytag mine">あなたが選んだ</span>`;
+    const mtag = k => !judged ? "" : ox0 ? `<span class="gytag kmy ${ok(k) ? "ok" : "ng"}">あなた ${myOx[k] ? "○" : "×"} ${ok(k) ? "✓" : "✗"}</span>`
+      : pick(k) ? `<span class="gytag kmy ${ok(k) ? "ok" : "ng"}">${ok(k) ? "✓ 選んだ" : "✗ 選んだが違う"}</span>` : inAns(k) ? `<span class="gytag kmy ng">✗ 選ばなかった</span>` : "";
     const yes = ks.filter(k => truth(k)), no = ks.filter(k => !truth(k));
     // 答えのまとめ（ほかの問題の「正解は 2」と同じ位置づけ）：どの記述が○×か、正解の組と、選んだ組のどこがちがうか
     const labTxt = l => l ? (l.ox ? l.ox.map(([k, v]) => k + (v ? "○" : "×")).join(" ") : l.set.join("・")) : "";
-    const off = mine && mi !== ai ? (mine.set ? mine.set.filter(k => !inAns(k)) : mine.ox ? mine.ox.filter(([k, v]) => v !== truth(k)).map(([k]) => k) : []) : [];
+    const off = judged && mi !== ai ? ks.filter(k => !ok(k)) : [];
+    const offTxt = off.map(k => ox0 ? `${k}（${ox0[k] ? "○" : "×"}が正しい）` : pick(k) ? `${k}（選んだが違う）` : `${k}（選ぶべきだった）`).join("・");
     const sum = `<p class="kmsum"><span class="t">○ ${word[0]}：<b>${yes.join("・") || "なし"}</b></span><span class="f">× ${word[1]}：<b>${no.join("・") || "なし"}</b></span>`
       + `<span class="a">正解：<b>${ai + 1}</b>${count ? `（${word[0]}ものは${yes.length}つ）` : `（${esc(labTxt(ans))}）`}</span>`
-      + (mi >= 0 && mi !== ai ? `<span class="m">あなたの解答：<b>${mi + 1}</b>${count ? "" : `（${esc(labTxt(mine))}）`}${off.length ? `…${off.join("・")}が${ans && ans.ox ? "ちがう" : neg ? "正しい記述" : word[1]}` : ""}</span>` : "") + `</p>`;
+      + (mi >= 0 && mi !== ai ? `<span class="m">あなたの解答：<b>${mi + 1}</b>${count ? "" : `（${esc(labTxt(mine))}）`}</span>` : "") + (off.length ? `<span class="m">間違えた記述：<b>${esc(offTxt)}</b></span>` : "") + `</p>`;
     w.insertAdjacentHTML("beforebegin", `<div class="gyexw kmw"><h4>肢ごとの正誤</h4>${sum}<ol class="gyex">${statements.map(({ k, html }) => { const t = truth(k);
-      return `<li class="${inAns(k) ? "ans" : ""}${inMine(k) && !inAns(k) ? " mine" : ""}" data-k="${k}"><span class="gyn">${k}</span><span class="gytf ${t ? "t" : "f"}">${t ? "○ " + word[0] : "× " + word[1]}</span>${tag(k)}${mtag(k)}<p class="gyct">${html}</p>${why[k] ? `<p class="gycx">${esc(why[k])}</p>` : ""}</li>`; }).join("")}</ol></div>`);
+      return `<li class="${inAns(k) ? "ans" : ""}${judged && !ok(k) ? " kmng" : ""}" data-k="${k}"><span class="gyn">${k}</span><span class="gytf ${t ? "t" : "f"}">${t ? "○ " + word[0] : "× " + word[1]}</span>${tag(k)}${mtag(k)}<p class="gyct">${html}</p>${why[k] ? `<p class="gycx">${esc(why[k])}</p>` : ""}</li>`; }).join("")}</ol></div>`);
     const h = w.querySelector("h4"); if (h) h.textContent = "選択肢（組合せ）ごとの正誤";
+    // 結果の見出し「正解は 1　あなたの解答は 2」に、組（ア・ウ）を添える（番号だけでは文で答えた人に分からない）
+    if (!count) { const box = (w.closest("#msg") || w.parentElement).querySelector(".gyres");
+      const sp = box && [...box.querySelectorAll("span")].find(s => /正解は/.test(s.textContent));
+      if (sp && !sp.dataset.km) { sp.dataset.km = "1";
+        sp.innerHTML = sp.innerHTML.replace(/(正解は\s*(?:<(?:b|span)[^>]*>)?)(\d)((?:<\/(?:b|span)>)?)/, (m, a, d, c) => labs[d - 1] ? `${a}${d}${c}<span class="kmrl">（${esc(labTxt(labs[d - 1]))}）</span>` : m)
+          .replace(/(あなたの解答は\s*(?:<(?:b|span)[^>]*>)?)(\d)((?:<\/(?:b|span)>)?)/, (m, a, d, c) => labs[d - 1] ? `${a}${d}${c}<span class="kmrl">（${esc(labTxt(labs[d - 1]))}）</span>` : m); } }
     // 組の記号を、記述の正誤の色で塗る（どの記述がまちがいで外れるのかが一目で分かる）
     if (!count) lis.forEach((li, j) => { const l = labs[j], g = li.querySelector(".gyct"); if (!g || !l) return;
       g.innerHTML = (l.ox ? l.ox.map(([k, v]) => `<span class="km${v === truth(k) ? "t" : "f"}">${k}${v ? "○" : "×"}</span>`) : l.set.map(k => `<span class="km${truth(k) !== neg ? "t" : "f"}">${k}</span>`)).join(l.ox ? "　" : "・"); });
@@ -26156,7 +26169,7 @@ new MutationObserver(() => {
     bar.hidden = !on; top.classList.toggle("kmlk", lock);
     const n = isSet ? st.sel.size : Object.keys(st.ox).filter(k => st.need.includes(k)).length, all = isSet ? st.need : st.need.length;
     setH(top.querySelector(".kmhint"), !on ? "組合せの番号で答えます（本番と同じ形）。"
-      : lock ? (isSet ? "答え合わせ：<b class=\"t\">緑の枠＝正解の組</b>・<b class=\"f\">赤の枠＝選んだが違う</b>" : "答え合わせ：<b class=\"t\">緑の枠＝○×が合っている</b>・<b class=\"f\">赤の枠＝違う</b>")
+      : lock ? (isSet ? "答え合わせ：<b class=\"t\">緑＝正しく選んだ</b>・<b class=\"f\">赤＝間違えた記述</b>" : "答え合わせ：<b class=\"t\">緑の枠＝○×が合っている</b>・<b class=\"f\">赤の枠＝違う</b>")
       : (isSet ? `<b>答え方</b>　問いに当てはまる記述を<b>${all}つ</b>押す` : `<b>答え方</b>　記述ごとに <b>○</b> か <b>×</b> を押す`) + `<span class="kmcnt">選んだ <b>${n}</b>/${all}</span>`);
     setT(top.querySelector(".kmmode"), on ? "番号で答える" : "文を選んで答える");
     // 札：今の選び方で残る組合せだけ明るく。答えたあとは正解・あなたの答えに色
@@ -26177,8 +26190,8 @@ new MutationObserver(() => {
     [...ol.children].forEach(li => { const k = li.dataset.k;
       if (isSet) { const sel = st.sel.has(k), inR = !!(R && R.set.includes(k));
         li.classList.toggle("kmon", sel && on && !lock);
-        li.classList.toggle("kmr", on && lock && inR); li.classList.toggle("kmx", on && lock && sel && !inR);
-        li.dataset.tag = on && lock ? (inR && sel ? "正解の組・選んだ" : inR ? "正解の組" : sel ? "あなたが選んだ" : "") : "";
+        li.classList.toggle("kmr", on && lock && inR && sel); li.classList.toggle("kmx", on && lock && inR !== sel);
+        li.dataset.tag = on && lock ? (inR && sel ? "✓ 選んだ・正解の組" : inR ? "✗ 正解の組（選ばなかった）" : sel ? "✗ 選んだが違う" : "") : "";
         if (on && !lock) { li.tabIndex = 0; li.setAttribute("role", "button"); li.setAttribute("aria-pressed", String(sel)); }
         else { li.removeAttribute("tabindex"); li.removeAttribute("role"); li.removeAttribute("aria-pressed"); } }
       else { const rv = R ? (R.ox.find(x => x[0] === k) || [])[1] : undefined, mv = st.ox[k];
@@ -26219,6 +26232,11 @@ new MutationObserver(() => {
 .gyex li > p.gyct{font-weight:700}
 .gyex li > p.gycx{font-weight:400}
 .kmsum{display:flex;flex-wrap:wrap;gap:2px 14px;margin:0 0 8px;padding:8px 10px;border-radius:4px;background:var(--deep);font-size:14.5px}
+.kmw .gyex li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.kmw .gyex li > p{flex-basis:100%}
+.kmw .gyex li.kmng{border-color:var(--miss);box-shadow:inset 4px 0 0 var(--miss)}
+.gytag.kmy.ok{background:var(--hit)}.gytag.kmy.ng{background:var(--miss)}
+.gyres .kmrl{font-size:14px;color:inherit;font-weight:700}
 .kmsum .t{color:var(--hit)}.kmsum .f{color:var(--miss)}.kmsum .a,.kmsum .m{flex-basis:100%;color:var(--chalk)}.kmsum .a b{color:var(--hit)}.kmsum .m b{color:var(--miss)}.kmsum b{font-size:16px;letter-spacing:.05em}
 .kmc .gyct .kmt{color:var(--hit)}.kmc .gyct .kmf{color:var(--miss);text-decoration:line-through 1.5px}
 .kmc.kmshort .gyex{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
@@ -26288,6 +26306,7 @@ document.addEventListener("keydown", e => {
 
 showOffice();
 </script>
+
 
 
 <p style="text-align:center;margin:16px 0 24px;font:13px system-ui,sans-serif"><a href="changes.html" style="color:#cfe3d9">更新情報</a>　<a id="kofi" href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener noreferrer" style="color:#cfe3d9">☕ Ko-fi で応援</a><br><span style="display:inline-block;margin-top:6px;color:#9fbfb2;font-size:12px">天秤の書は無料・広告なしで、ひとりで作っています。応援は、問題の追加と判例の確かめに使います。</span></p>
