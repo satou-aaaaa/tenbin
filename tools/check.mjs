@@ -242,6 +242,40 @@ if (process.argv.includes("--browser")) {
     else ng(`応援のお願いの出かたがおかしい（記録なし:${v0}・10問越え:${v1}・2回目:${v2}・もう出さない:${v3}）`);
     await page.close();
   }
+  // 論文の問題と解説（2026-11-06）：どの論文も目次の分野に入り、模範答案・解説に書いた判例の日付はすべて参考判例（CITES）にある。
+  // 解説（KAISETSU）は実在の問題にだけ付き、3項目そろい、模範答案の下・参考判例の上に出る
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`論文の解説: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
+    const r = await page.evaluate(() => {
+      if (typeof KAISETSU === "undefined") return null;
+      const bad = [], dates = new Set(CITES.map((c) => c.date)), inBunya = new Set(Object.values(BUNYA).flat().flatMap((b) => b[1]));
+      const DT = /(?:最[高大]?[判決裁]|大審院)\D{0,6}((?:明治|大正|昭和|平成|令和)\d+年\d+月\d+日)/g;
+      for (const p of probs()) {
+        if (!p.big && !/^yb-/.test(p.id) && RONBUN.includes(p) && !inBunya.has(p.id)) bad.push(`${p.id}：目次の分野にない`);
+        const t = JSON.stringify([p.m, p.secs, KAISETSU[p.id]]).replace(/\s/g, "");
+        for (const m of t.matchAll(DT)) if (!dates.has(m[1])) bad.push(`${p.id}：判例 ${m[1]} が参考判例にない`);
+      }
+      let shown = 0;
+      for (const [id, x] of Object.entries(KAISETSU)) {
+        if (!probs().some((p) => p.id === id)) { bad.push(`解説 ${id}：問題がない`); continue; }
+        if (x.length !== KAISETSU_HEAD.length || x.some((s) => typeof s !== "string" || s.length < 40)) bad.push(`解説 ${id}：3項目そろっていない`);
+        writeCompare(id);
+        const k = $app.querySelector(".kaisetsu"), last = [...$app.querySelectorAll(".cmp")].pop(), c = $app.querySelector(".cites");
+        if (!k || k.querySelectorAll("dd").length !== KAISETSU_HEAD.length) { bad.push(`解説 ${id}：画面に出ない`); continue; }
+        if (!(last.compareDocumentPosition(k) & 4) || (c && !(k.compareDocumentPosition(c) & 4))) bad.push(`解説 ${id}：模範答案の下・参考判例の上にない`);
+        if (document.documentElement.scrollWidth > innerWidth + 1) bad.push(`解説 ${id}：横にはみ出す`);
+        shown++;
+      }
+      showOffice(); return { bad, shown, n: probs().length };
+    });
+    if (r === null) ok("論文の解説のデータがないので、解説の検査はしない");
+    else if (r.bad.length) ng(`論文の問題・解説: ${r.bad.slice(0, 12).join(" / ")}`);
+    else ok(`論文${r.n}問が分野に入り、判例はすべて参考判例にあり、解説${r.shown}問が模範答案の下に出る`);
+    await page.close();
+  }
   // 択一の答えと解説が食い違わないこと（2026-11-05）。毎日問題を足すので、手で見落としても CI で止める。
   // 1) 形：選択肢2つ以上・空や重複なし・正解の番号が範囲内・肢ごとの解説の数＝選択肢の数・id の重複なし
   // 2) 「正解です」で始まる解説は正解の肢だけ。「正しいものはどれか」で正解でない肢の解説が「正しい」で始まる（逆も）ものはだめ
