@@ -21,7 +21,7 @@ jobs:
   check:
     name: 文法とブラウザで開く検査
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20  # Playwright を入れる段階（apt）だけで8〜9分かかる日がある（shared-workflows incidents/2026-11-07-tenbin-check-timeout.md）
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
