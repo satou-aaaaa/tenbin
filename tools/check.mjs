@@ -315,6 +315,28 @@ if (process.argv.includes("--browser")) {
     if (bad.length) ng(`設定ボタン: ${bad.join(" / ")}`); else ok("どの画面でも右上の設定から文字の大きさ・画面の色を変えられる");
     await page.close();
   }
+  // 試験の対策の画面では、長い説明は最初の1文と今の様子（まだ模試に出ていない問題の数など）だけ見せ、残りは「くわしい説明」にしまう（2026-11-07）。
+  // 見えている説明は1つ120字まで。今の様子は閉じた中に入れない
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`長い説明: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    page.on("dialog", (d) => d.dismiss());
+    const bad = [];
+    for (const k of ["shoshi", "yobi", "takken"]) {
+      await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1000);
+      const b = await page.$(`#app .xmentry[data-k="${k}"]`); if (!b) { bad.push(`${k}: 入口がない`); continue; }
+      await b.click(); await page.waitForTimeout(500);
+      const r = await page.evaluate(() => ({ n: document.querySelectorAll("#app details.uxwMore").length,
+        long: [...document.querySelectorAll("#app > section.win > p.note")].filter((p) => p.textContent.length > 120 && !p.querySelector("button, a, input, select")).map((p) => p.textContent.slice(0, 20)),
+        hidNow: [...document.querySelectorAll("#app details.uxwMore")].some((d) => /まだ模試に出ていない/.test(d.textContent)) }));
+      if (!r.n) bad.push(`${k}: 「くわしい説明」がない`);
+      if (r.long.length) bad.push(`${k}: 長い説明が出たまま（${r.long.join("・")}）`);
+      if (r.hidNow) bad.push(`${k}: まだ模試に出ていない問題の数が閉じた中にある`);
+    }
+    if (bad.length) ng(`試験の対策の長い説明: ${bad.join(" / ")}`); else ok("試験の対策の画面で長い説明は「くわしい説明」にしまわれ、今の様子は見えている");
+    await page.close();
+  }
   // 応援のお願い: 何も解いていないうちは出ない。10問を越えて目次を開くと1回だけ出る。「もう出さない」のあとは出ない
   {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
