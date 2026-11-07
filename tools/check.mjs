@@ -409,6 +409,27 @@ if (process.argv.includes("--browser")) {
     if (bad.length) ng(`戻る: ${bad.join(" / ")}`); else ok("試験の対策の画面の戻るは「目次にもどる」1つ、教科書の単元は上からも分野へ戻れる");
     await page.close();
   }
+  // 試験の対策の画面を短くする（2026-11-07）：「分野から選ぶ」はスマホでも2列。司法書士の合否の判定は、模試を受ける前は表を「基準点と合格点」にしまう
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`分野の2列: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    page.on("dialog", (d) => d.dismiss());
+    const bad = [];
+    for (const sel of ['.xmentry[data-k="shoshi"]', '.xmentry[data-k="takken"]', "#goGyosei"]) {
+      await page.goto(url, { waitUntil: "load" }); await page.evaluate(() => { localStorage.clear(); localStorage.setItem("tenbin-onboard", "1"); }); await page.reload({ waitUntil: "load" }); await page.waitForTimeout(1000);
+      const b = await page.$("#app " + sel); if (!b) { bad.push(`${sel}: 入口がない`); continue; }
+      await b.click(); await page.waitForTimeout(400);
+      const r = await page.evaluate(() => { const bs = [...document.querySelectorAll("#app .wlist > button.gyb")].filter((x) => !/trap/.test(x.dataset.r || x.dataset.gk || ""));
+        const tops = bs.map((x) => Math.round(x.getBoundingClientRect().top)); const rows = new Set(tops).size;
+        const j = document.querySelector("#app section.skjudge"); const open = j ? [...j.querySelectorAll("table")].some((t) => !t.closest("details:not([open])")) : null;
+        return { n: bs.length, rows, open, msg: j ? /受けると判定/.test(j.innerText) : null }; });
+      if (r.n >= 4 && r.rows > Math.ceil(r.n / 2)) bad.push(`${sel}: 分野の一覧が2列でない（${r.n}個が${r.rows}行）`);
+      if (sel.includes("shoshi")) { if (r.open) bad.push("司法書士: 模試を受ける前なのに未受験の表が出たまま"); if (!r.msg) bad.push("司法書士: 「受けると判定が出ます」が見えない"); }
+    }
+    if (bad.length) ng(`試験の対策の画面: ${bad.join(" / ")}`); else ok("試験の対策の画面で分野は2列、模試を受ける前の合否の表はしまってある");
+    await page.close();
+  }
   // 応援のお願い: 何も解いていないうちは出ない。10問を越えて目次を開くと1回だけ出る。「もう出さない」のあとは出ない
   {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
