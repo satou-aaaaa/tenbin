@@ -337,6 +337,47 @@ if (process.argv.includes("--browser")) {
     if (bad.length) ng(`試験の対策の長い説明: ${bad.join(" / ")}`); else ok("試験の対策の画面で長い説明は「くわしい説明」にしまわれ、今の様子は見えている");
     await page.close();
   }
+  // 初めて開いた人にだけ「どの試験の勉強をしますか？」を出す。選ぶとホームの①がその試験になり、二度と出ない。「あとで選ぶ」でも二度と出ない。
+  // 設定の窓からも選び直せる（2026-11-07。NN/g「Mobile-App Onboarding」）
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`初めての質問: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    page.on("dialog", (d) => d.dismiss());
+    const bad = [];
+    const fresh = async () => { await page.goto(url, { waitUntil: "load" }); await page.evaluate(() => localStorage.clear()); await page.reload({ waitUntil: "load" }); await page.waitForTimeout(1200); };
+    const card = () => page.evaluate(() => !!document.querySelector("#app .uxwOnb"));
+    const first = () => page.evaluate(() => (document.querySelector("#app .todo button") || {}).textContent || "");
+    await fresh();
+    if (!(await card())) bad.push("初めて開いても質問が出ない");
+    else {
+      const b = await page.$("#app .uxwOnb .uxwExams button:has-text('宅建')");
+      if (!b) bad.push("質問に宅建がない"); else {
+        await b.click(); await page.waitForTimeout(500);
+        if (await card()) bad.push("選んでも質問が消えない");
+        if (!/宅建/.test(await first())) bad.push(`選んでも①が宅建でない（${(await first()).trim().slice(0, 20)}）`);
+        await page.reload({ waitUntil: "load" }); await page.waitForTimeout(1000);
+        if (await card()) bad.push("選んだあと開き直すと、また質問が出る");
+      }
+    }
+    await fresh();
+    if (await card()) { await page.click("#app .uxwOnb .uxwLater"); await page.waitForTimeout(300);
+      if (await card()) bad.push("「あとで選ぶ」で消えない");
+      await page.reload({ waitUntil: "load" }); await page.waitForTimeout(1000); if (await card()) bad.push("「あとで選ぶ」のあと開き直すと、また質問が出る"); }
+    // 使ったことのある人（記録がある人）には出ない
+    await page.evaluate(() => { localStorage.clear(); localStorage.setItem("roppo-quest-v2", JSON.stringify({ stats: { q1: [1, 1] } })); }); await page.reload({ waitUntil: "load" }); await page.waitForTimeout(1000);
+    if (await card()) bad.push("記録のある人にも質問が出る");
+    // 設定の窓から選び直す（ホーム以外の画面でも選べる）
+    await page.click("#goGyosei"); await page.waitForTimeout(400);
+    const sb = await page.$("#app .uxwSetBtn");
+    if (sb) { await sb.click(); await page.waitForTimeout(200);
+      const eb = await page.$("#uxwSet .uxwExams button:has-text('司法書士')");
+      if (!eb) bad.push("設定の窓に試験の選択がない"); else { await eb.click(); await page.click("#uxwSet .uxclose");
+        await page.evaluate(() => showOffice()); await page.waitForTimeout(400);
+        if (!/司法書士/.test(await first())) bad.push(`設定で選んでも①が司法書士でない（${(await first()).trim().slice(0, 20)}）`); } }
+    if (bad.length) ng(`初めての質問: ${bad.join(" / ")}`); else ok("初めて開いた人にだけ試験を聞き、選んだ試験がホームの①になる（設定からも選び直せる）");
+    await page.close();
+  }
   // 応援のお願い: 何も解いていないうちは出ない。10問を越えて目次を開くと1回だけ出る。「もう出さない」のあとは出ない
   {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
