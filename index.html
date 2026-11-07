@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611070112";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611071016";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26899,54 +26899,94 @@ ${o.items.map((x, i) => `${i + 1}. ${x.label}${x.pts ? `（${x.pts}点）` : ""}
 # 受験生の答案
 ${o.answer.trim() ? o.answer : "（未記入）"}`;
 }
+// AIの返事を、見出し（【総評】など）ごとの枠に分けて出す。・で始まる行は箇条書きにする（文字は textContent で入れる）
+function agRender(out, text) {
+  out.textContent = "";
+  const parts = text.split(/【([^】\n]{1,20})】/);
+  const body = (el, t) => {
+    let ul = null;
+    t.split("\n").map(s => s.trim()).filter(Boolean).forEach(s => {
+      if (/^[・\-•]/.test(s)) { if (!ul) ul = el.appendChild(document.createElement("ul")); ul.appendChild(document.createElement("li")).textContent = s.replace(/^[・\-•]\s*/, ""); }
+      else { ul = null; el.appendChild(document.createElement("p")).textContent = s; }
+    });
+  };
+  if (parts[0].trim()) body(out.appendChild(document.createElement("div")), parts[0]);
+  for (let i = 1; i < parts.length; i += 2) {
+    const box = out.appendChild(document.createElement("div")); box.className = "agSec";
+    if (/直す/.test(parts[i])) box.classList.add("agFix"); else if (/良い/.test(parts[i])) box.classList.add("agGood");
+    box.appendChild(document.createElement("h4")).textContent = parts[i];
+    body(box, parts[i + 1] || "");
+  }
+}
 // AIのパネルを sec に作る。spec: { key, intro, prompt(), items:[{label, pts}], max, apply(verdict) → bool, after(verdict) }
+// 並び（2026-11-07 satou「AI添削がわかりづらい」）：①ボタン ②結果（点数→添削）③無料のAIが使えないときのほかの方法。説明は短くし、くわしい話は閉じた欄へ。
 function agMount(sec, spec) {
   sec.classList.add("win", "ai", "agbox"); sec.hidden = true;
   sec.innerHTML = `<div class="qhead"><span class="tag">AIの添削・採点</span></div>
-    <p class="note agIntro">${spec.intro}</p>
+    <p class="agIntro">${spec.intro}</p>
     <div class="row" style="justify-content:flex-start"><button class="btn-gold agGo">AIに添削・採点してもらう</button><button class="agStop" hidden>止める</button></div>
-    <p class="note agFreeNote" hidden>この添削は、無料のAI（Cloudflare の Workers AI で動く公開モデル gpt-oss）が行います。登録もお金も要りません。1日に使える回数には全体で上限があり、使い切ったら翌日（日本時間の朝9時）にまた使えます。答案と問題の文は添削のために Cloudflare へ送られます（Cloudflare は学習に使わず、添削が終われば残しません）。名前・住所・学校名などは書かないでください。</p>
+    <div class="note agFreeNote" hidden>無料・登録なしで使えます。
+      <details class="agFreeMore"><summary>だれが添削するの？（送られる先・回数）</summary>
+      <p class="note">無料のAI（Cloudflare の Workers AI で動く公開モデル gpt-oss）が添削します。1日に使える回数には全体で上限があり、使い切ったら翌日（日本時間の朝9時）にまた使えます。答案と問題の文は添削のために Cloudflare へ送られます（Cloudflare は学習に使わず、添削が終われば残しません）。名前・住所・学校名などは書かないでください。</p></details></div>
+    <div class="agRes" aria-live="polite">
+      <div class="agScore tnum" hidden></div>
+      <p class="note agNote" role="status"></p>
+      <div class="aiout agOut"></div>
+      <p class="note agWarn" hidden>採点と添削はAIによる参考意見です。まちがえることもあるので、模範解答と観点もあわせて確かめ、ちがうと思うチェックは自分で直してください。</p>
+    </div>
     <div class="agMore" hidden>
-    <details class="agChatBox"><summary>ふだんの Claude で添削する（Claude のアカウントで・料金なし）</summary>
+    <p class="agMoreHead">無料のAIが使えないときは</p>
+    <details class="agChatBox"><summary>ふだんの Claude で添削する<small>料金なし・コピーと貼り付け</small></summary>
     <div class="aikey agChat">
-      <p class="note">ふだん使っている Claude（claude.ai やスマホのアプリ）に添削してもらいます。APIキーは要りません（Claude の利用枠を使います）。無料のAIの回数を使い切った日や、Claude で添削したいときに使えます。</p>
-      <ol class="menu"><li>「頼み文をコピーして Claude を開く」をおします。</li><li>開いた Claude の入力欄に貼り付けて、送ります。</li><li>Claude の返事を<b>最後の「観点判定」の行まで</b>全部コピーして、下の欄に貼り付け、「貼った返事で採点する」をおします。</li></ol>
-      <div class="row" style="justify-content:flex-start;margin:0"><button class="btn-gold agCopy">頼み文をコピーして Claude を開く</button></div>
-      <details class="agShow"><summary>頼み文を見る（コピーがうまくいかないとき）</summary><textarea class="agPrompt" readonly rows="6" aria-label="Claudeへの頼み文"></textarea></details>
-      <label>Claude の返事<textarea class="agPaste" rows="5" placeholder="ここに Claude の返事を貼り付けます"></textarea></label>
-      <div class="row" style="justify-content:flex-start;margin:0"><button class="agUse">貼った返事で採点する</button></div>
+      <p class="note">ふだん使っている Claude（claude.ai やスマホのアプリ）に添削してもらいます。APIキーは要りません。</p>
+      <ol class="agSteps">
+        <li><span>下のボタンで、頼み文をコピーして Claude を開きます。</span><div class="row" style="justify-content:flex-start;margin:4px 0 0"><button class="btn-gold agCopy">頼み文をコピーして Claude を開く</button></div>
+          <details class="agShow"><summary>コピーがうまくいかないとき</summary><textarea class="agPrompt" readonly rows="6" aria-label="Claudeへの頼み文"></textarea></details></li>
+        <li><span>開いた Claude の入力欄に貼り付けて、送ります。</span></li>
+        <li><span>Claude の返事を<b>最後の「観点判定」の行まで</b>全部コピーして、ここに貼り付けます。</span><textarea class="agPaste" rows="5" placeholder="ここに Claude の返事を貼り付けます" aria-label="Claude の返事"></textarea>
+          <div class="row" style="justify-content:flex-start;margin:4px 0 0"><button class="agUse">貼った返事で採点する</button></div></li>
+      </ol>
       <p class="note">答案は、あなたの Claude のアカウントに送られます。名前・住所・学校名などは書かないでください。Claude は18さい以上の人が使えるサービスです。18さい未満の人は、おうちの人といっしょに使ってください。</p>
     </div>
     </details>
-    <details class="agApiBox"><summary>自分のAPIキーで Claude に添削してもらう（1回数円の料金がかかります）</summary>
+    <details class="agApiBox"><summary>自分のAPIキーで添削する<small>1回数円の料金がかかります</small></summary>
     <p class="note">キーを入れると、上の「AIに添削・採点してもらう」は無料のAIではなく、このキーで Claude が添削します。</p>
     <div class="agKey"></div>
     </details>
-    </div>
-    <p class="line agScore tnum" hidden></p>
-    <div class="aiout agOut" aria-live="polite"></div>
-    <p class="note agNote" role="status"></p>
-    <p class="note">採点と添削はAIによる参考意見です。まちがえることもあるので、模範解答と観点もあわせて確かめ、ちがうと思うチェックは自分で直してください。</p>`;
+    </div>`;
   const q = s => sec.querySelector(s);
-  const go = q(".agGo"), stop = q(".agStop"), out = q(".agOut"), note = q(".agNote"), scoreEl = q(".agScore");
+  const go = q(".agGo"), stop = q(".agStop"), out = q(".agOut"), note = q(".agNote"), scoreEl = q(".agScore"), warn = q(".agWarn");
   const showScore = v => {
     const got = spec.items.reduce((n, x, i) => n + (v[i] ? (x.pts || 1) : 0), 0), max = spec.max || spec.items.length;
-    scoreEl.hidden = false;
-    scoreEl.textContent = spec.items.some(x => x.pts)
-      ? `AIの採点：${got}点/${max}点（${v.filter(Boolean).length}/${v.length}の観点ができています）`
-      : `AIの採点：${Math.round(got / max * 100)}点/100点・評価 ${rating(got / max)}（${got}/${max}の観点ができています）`;
+    const pts = spec.items.some(x => x.pts), pct = pts ? got / max : got / max;
+    const big = pts ? `${got}点/${max}点` : `${Math.round(got / max * 100)}点/100点`;
+    scoreEl.hidden = false; scoreEl.innerHTML = "";
+    const add = (cls, t) => { const s = scoreEl.appendChild(document.createElement("span")); s.className = cls; s.textContent = t; return s; };
+    add("agScLab", "AIの採点："); add("agScNum", big);
+    if (!pts) add("agScRate", `評価 ${rating(got / max)}`);
+    const bar = scoreEl.appendChild(document.createElement("span")); bar.className = "agBar"; bar.setAttribute("aria-hidden", "true");
+    bar.appendChild(document.createElement("i")).style.width = Math.round(pct * 100) + "%";
+    add("agScSub", `できている観点：${v.filter(Boolean).length} / ${v.length}`);
   };
+  // 10秒をこえる待ちは、動いていることと目安・経過を見せ、止められるようにする（Nielsen「Response Times: The 3 Important Limits」）
+  const res = q(".agRes"); let tick = null;
+  const wait = () => {
+    out.innerHTML = '<p class="agWait">AIが答案を読んでいます…<span class="agSec2 tnum"></span><br><small>ふつう10〜30秒ほどかかります。</small></p>';
+    const t0 = Date.now(), el = out.querySelector(".agSec2"); res.setAttribute("aria-busy", "true");
+    clearInterval(tick); tick = setInterval(() => { if (!el.isConnected) return clearInterval(tick); el.textContent = `（${Math.round((Date.now() - t0) / 1000)}秒）`; }, 1000);
+  };
+  const done = () => { clearInterval(tick); res.removeAttribute("aria-busy"); };
   const hit = AG_CACHE.get(spec.key);
-  if (hit) { out.textContent = agStrip(hit.text); if (hit.v) showScore(hit.v); go.textContent = "もう一度添削・採点してもらう"; }
+  if (hit) { agRender(out, agStrip(hit.text)); warn.hidden = false; if (hit.v) showScore(hit.v); go.textContent = "もう一度添削・採点してもらう"; }
   // AIの返事（観点判定つき）を受け取って、点数とチェックに入れる。APIでも、貼り戻した返事でも同じ
   const finish = (text, truncated) => {
-    out.textContent = agStrip(text);
+    agRender(out, agStrip(text)); warn.hidden = false;
     const v = agMarks(text, spec.items.length);
     AG_CACHE.set(spec.key, { text, v });
     if (v) {
       showScore(v);
       const applied = spec.apply(v);
-      note.textContent = applied ? "AIの判定をチェックの欄に入れました。ちがうと思うところは直せます。" : "";
+      note.textContent = applied ? "AIの判定を、採点の観点のチェックに入れました。ちがうと思うところは直せます。" : "";
       spec.after && spec.after(v);
     } else note.textContent = "観点ごとの判定が読み取れませんでした。もう一度試すか、自分でチェックしてください。";
     if (truncated) note.textContent += "添削が途中で切れています。";
@@ -26966,16 +27006,17 @@ function agMount(sec, spec) {
     stop.onclick = () => ctl && ctl.abort();
     go.onclick = async () => {
       ctl = new AbortController();
-      go.disabled = true; stop.hidden = false; note.textContent = ""; scoreEl.hidden = true;
-      out.textContent = "AIが答案を読んでいます…";
+      go.disabled = true; stop.hidden = false; note.textContent = ""; scoreEl.hidden = true; warn.hidden = true;
+      wait();
       try {
-        const { text, truncated } = await sample(spec.prompt(), { signal: ctl.signal, onText: ({ text }) => { out.textContent = agStrip(text); } });
-        finish(text, truncated);
+        const { text, truncated } = await sample(spec.prompt(), { signal: ctl.signal, onText: ({ text }) => { clearInterval(tick); agRender(out, agStrip(text)); } });
+        done(); finish(text, truncated);
       } catch (e) {
+        done();
         out.textContent = e.code === "refused" ? "" : (e.text || "");
         if (claudeSample && ["not_granted", "sampling_disabled", "capability_disabled", "not_declared"].includes(e.code)) { sec.hidden = true; return; }
         if (e.code !== "cancelled") note.textContent = AG_FREE_ERR[e.code] || AI_ERR[e.code] || "通信がうまくいきませんでした。もう一度試してください。";
-        if (AG_FREE_ERR[e.code]) { const c = q(".agChatBox"); if (c) c.open = true; }
+        if (AG_FREE_ERR[e.code]) { const c = q(".agChatBox"); if (c) { c.open = true; c.scrollIntoView({ block: "nearest", behavior: "smooth" }); } }
       } finally {
         if (sec.isConnected) { go.disabled = false; stop.hidden = true; go.textContent = "もう一度添削・採点してもらう"; }
       }
@@ -26985,7 +27026,7 @@ function agMount(sec, spec) {
 // 無料のAI添削サーバー（Cloudflare Workers AI の無料枠。satou の Cloudflare アカウント。無料プランなので枠を超えると止まるだけで請求は来ない）
 const AG_FREE_URL = "https://tenbin-aigrade.sato1212aaaaa.workers.dev/";
 const AG_FREE_ERR = {
-  free_quota: "今日の無料のAIの回数を、全体で使い切りました。明日（日本時間の朝9時すぎ）にまた使えます。今日は下の「ふだんの Claude で添削する」を使えます。",
+  free_quota: "今日の無料のAIの回数を、全体で使い切りました。明日（日本時間の朝9時すぎ）にまた使えます。今日は下の「ふだんの Claude で添削する」を使えます（料金なし）。",
   free_error: "無料のAIがいま混み合っているか、止まっています。少しして試すか、下の「ふだんの Claude で添削する」を使ってください。",
 };
 async function agFree(prompt, { signal } = {}) {
@@ -27013,15 +27054,46 @@ function agChat(sec, spec, finish, note) {
     // claude.ai からコピーすると Markdown の記号（**・#）が付くことがあるので外す
     const t = paste.value.replace(/\*\*|__/g, "").replace(/^\s*#{1,6}\s*/gm, "").trim();
     if (!t) { note.textContent = "Claude の返事を、上の欄に貼り付けてください。"; paste.focus(); return; }
-    if (finish(t, false)) paste.value = "";
+    const okv = finish(t, false); if (okv) paste.value = "";
+    sec.querySelector(".agRes").scrollIntoView({ block: "start", behavior: "smooth" });
   };
 }
 if (!document.getElementById("agChatCss")) {
   const st = document.createElement("style"); st.id = "agChatCss";
-  st.textContent = `.agChat textarea { width: 100%; box-sizing: border-box; min-height: 88px; font: inherit; font-size: 14px; color: var(--chalk); background: var(--deep); border: 2px solid var(--line); border-radius: 4px; padding: 6px 10px; }
+  st.textContent = `.agChat textarea { width: 100%; box-sizing: border-box; min-height: 88px; font: inherit; font-size: 14px; color: var(--chalk); background: var(--deep); border: 2px solid var(--line); border-radius: 4px; padding: 6px 10px; margin-top: 6px; }
 .agChat textarea:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; border-color: var(--gold); }
-.agChat label { display: grid; gap: 4px; }
-.agApiBox, .agChatBox { margin: 8px 0; } .agApiBox > summary, .agChatBox > summary { cursor: pointer; color: var(--gold); min-height: 32px; }`;
+.agbox .agIntro { margin: 6px 0 2px; }
+.agFreeNote { margin: 2px 0 0; } .agFreeMore { display: inline; } .agFreeMore > summary { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--gold); text-decoration: underline; text-underline-offset: 3px; }
+.agFreeMore[open] { display: block; }
+.agRes:has(.agOut:empty):has(.agScore[hidden]) .agNote:empty { display: none; }
+.agScore { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 2px 10px; margin: 12px 0 4px; padding: 12px 14px; border: 2px solid var(--gold); border-radius: 8px; background: var(--deep); }
+.agScore[hidden] { display: none; }
+.agScLab { grid-column: 1 / -1; font-size: 13px; color: var(--muted, var(--chalk)); }
+.agScNum { font-size: 28px; font-weight: 700; color: var(--gold); line-height: 1.2; }
+.agScRate { font-size: 18px; font-weight: 700; }
+.agBar { grid-column: 1 / -1; display: block; height: 8px; margin: 6px 0 2px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.agBar > i { display: block; height: 100%; background: var(--gold); }
+.agScSub { grid-column: 1 / -1; font-size: 14px; }
+.agbox .agOut { white-space: normal; display: grid; gap: 8px; }
+.agOut p, .agOut ul { margin: 0; } .agOut ul { padding-left: 1.3em; } .agOut li + li { margin-top: 2px; }
+.agSec { padding: 8px 12px 10px; border-left: 4px solid var(--line); background: var(--deep); border-radius: 0 6px 6px 0; }
+.agSec h4 { margin: 0 0 4px; font-size: 14px; color: var(--gold); }
+.agSec.agGood { border-left-color: var(--hit, var(--gold)); } .agSec.agFix { border-left-color: var(--miss, var(--gold)); }
+.agWait small { color: var(--muted, var(--chalk)); font-size: 12px; }
+.agWait::before { content: ""; display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px; border: 2px solid var(--line); border-top-color: var(--gold); border-radius: 50%; animation: agSpin 0.9s linear infinite; }
+@keyframes agSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .agWait::before { animation: none; } }
+.agMore { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.agMoreHead { margin: 0 0 2px; font-size: 14px; font-weight: 700; }
+.agApiBox, .agChatBox { margin: 4px 0; } .agApiBox > summary, .agChatBox > summary { cursor: pointer; color: var(--gold); min-height: 44px; padding: 6px 0; }
+.agApiBox > summary, .agChatBox > summary { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; }
+.agApiBox > summary::-webkit-details-marker, .agChatBox > summary::-webkit-details-marker { display: none; } .agApiBox > summary { list-style: none; } .agChatBox > summary { list-style: none; }
+.agApiBox > summary::before, .agChatBox > summary::before { content: "▸"; } .agApiBox[open] > summary::before, .agChatBox[open] > summary::before { content: "▾"; }
+.agApiBox > summary small, .agChatBox > summary small { flex-basis: 100%; margin-left: 1.1em; font-size: 12px; color: var(--chalk); opacity: 0.85; }
+.agSteps { margin: 6px 0; padding-left: 1.4em; display: grid; gap: 10px; } .agSteps > li > span { display: block; }
+.agShow > summary { cursor: pointer; color: var(--gold); min-height: 44px; display: flex; align-items: center; font-size: 13px; }
+/* 押す所は高さ 44px 以上（WCAG 2.2 の目安・Apple HIG）。APIキーの欄の「作り方」「使い方」も */
+.agbox.ai details > summary { min-height: 44px; }  /* .aikey details > summary（32px）より強く。style の並び順に左右されない */`;
   document.head.append(st);
 }
 const agText = el => el ? el.textContent.trim() : "";
@@ -27035,7 +27107,7 @@ bindAI = function (p, mine, checks, boxes) {
   const grade = document.getElementById("grade");
   agMount(sec, {
     key: "ron:" + p.id + "\n" + mine.join("\n"),
-    intro: "書いた答案をAIが読み、良い点と直すとよい点を書いて、採点の観点ごとに○×をつけます。点数は、できている観点の割合です。",
+    intro: "ボタンをおすと、AIが答案を読んで点数をつけ、良い点と直すとよい点を教えてくれます。",
     prompt: () => aiPrompt(p, mine, checks),
     items,
     apply: v => { let n = 0; boxes.forEach((b, i) => { if (b.disabled) return; b.checked = v[i]; b.dispatchEvent(new Event("change")); n++; }); return n > 0; },
@@ -27053,7 +27125,7 @@ function agGyKiji() {
   const sec = document.createElement("section"); pts.after(sec);
   agMount(sec, {
     key: "gy:" + question + "\n" + mine,
-    intro: "書いた解答をAIが読み、良い点と直すとよい点を書いて、観点ごとに採点します（本試験と同じ1問20点）。",
+    intro: "ボタンをおすと、AIが解答を読んで点数（本試験と同じ1問20点）をつけ、良い点と直すとよい点を教えてくれます。",
     prompt: () => agPrompt(gyKijiSpec(question, model, items, mine)),
     items, max: items.reduce((n, x) => n + x.pts, 0),
     apply: v => { boxes.forEach((b, i) => { b.checked = v[i]; b.dispatchEvent(new Event("change")); }); return true; },
@@ -27076,7 +27148,7 @@ function agGyExam() {
   const sec = document.createElement("section"); kp.closest("section").after(sec);
   agMount(sec, {
     key: "gy:" + question + "\n" + mine,
-    intro: "書いた解答をAIが読み、良い点と直すとよい点を書いて、観点ごとに採点します（本試験と同じ1問20点）。",
+    intro: "ボタンをおすと、AIが解答を読んで点数（本試験と同じ1問20点）をつけ、良い点と直すとよい点を教えてくれます。",
     prompt: () => agPrompt(gyKijiSpec(question, model, items, mine)),
     items, max: items.reduce((n, x) => n + x.pts, 0),
     apply: v => { boxes.forEach((b, i) => { if (!b.isConnected) return; b.checked = v[i]; b.dispatchEvent(new Event("change")); }); return true; },
@@ -27098,7 +27170,7 @@ function agShoshi() {
   const sec = document.createElement("section"); $app.querySelector(".msg").after(sec);
   agMount(sec, {
     key: "sk:" + model + "\n" + answer,
-    intro: `答案をAIが読み、良い点と直すとよい点を書いて、採点の観点ごとに判定します（1問70点）。${done ? "採点は確定ずみなので、チェックは変えずに判定と添削だけを出します。" : "判定は下の○×に入ります。"}`,
+    intro: `ボタンをおすと、AIが答案を読んで点数（1問70点）をつけ、良い点と直すとよい点を教えてくれます。${done ? "採点は確定ずみなので、チェックは変えずに判定と添削だけを出します。" : "判定は下の○×に入ります。"}`,
     prompt: () => agPrompt({
       exam: "司法書士試験の記述式（登記の申請書の作成。1問70点で、観点ごとに部分点がある）", question, model, items, answer,
       rules: ["登記の目的・原因と日付・申請人・添付情報・登録免許税などの欄ごとに、正しく書けているかを見る。", "数字・日付・金額は、表記が違っても同じ値なら○にする。値が違えば×にする。"],
