@@ -188,11 +188,21 @@ if (process.argv.includes("--browser")) {
     else ok(`${vp.name}: 見出しや説明は文節で折り返す`);
     // 押す所は高さ 44px 以上（WCAG 2.2 の 2.5.5・Apple HIG の 44pt。2026-11-05 学習の記録・画面の色・さがすの例・なぜこの形？が 28〜40px だった）。
     // 文の中のリンク（display: inline の a）と条文リンク（.jl）は除く。文の中の小さなボタン .kjb は ::after で上下に広げていればよい
+    const small = [];
     const tap = await page.evaluate(() => {
-      const out = [], screens = [["目次", () => { showOffice(); document.querySelectorAll("details").forEach((d) => d.open = true); }],
+      const out = [], small = window.__small = [], screens = [["目次", () => { showOffice(); document.querySelectorAll("details").forEach((d) => d.open = true); }],
         ["さがす", () => typeof showSearch === "function" && showSearch()], ["学習の記録", () => typeof showRecord === "function" && showRecord()],
-        ["論文の答案", () => { if (typeof showRonbun !== "function" || typeof startWrite !== "function") return; showRonbun(); const w = document.querySelector("[data-write]"); if (w) startWrite(w.dataset.write); }]];
+        ["論文の答案", () => { if (typeof showRonbun !== "function" || typeof startWrite !== "function") return; showRonbun(); const w = document.querySelector("[data-write]"); if (w) startWrite(w.dataset.write); }],
+        ["論文式", () => typeof showRonbun === "function" && showRonbun()],
+        ["分野", () => { showOffice(); const b = document.querySelector(".bnrow"); if (b) b.click(); }],
+        ["教科書の単元", () => { showOffice(); const b = document.querySelector(".bnrow"); if (b) b.click(); const n = document.getElementById("bnNext"); if (n) n.click(); }],
+        ["科目別の問題", () => { showOffice(); const b = document.querySelector(".bnrow"); if (b) b.click(); const k = document.querySelector(".kmmode"); if (k) k.closest("details")?.setAttribute("open", ""); }]];
+      // 2026-11-07 全画面の点検で、科目別の「文を選んで答える」36px・教科書のページの印 22px・10〜11.5px の字が見つかったので、画面を足し、字の大きさも見る
+      small.length = 0;
       for (const [name, go] of screens) { try { go(); } catch (e) { out.push(`${name}: ${e.message}`); continue; }
+        const tw = document.createTreeWalker(document.getElementById("app"), NodeFilter.SHOW_TEXT); let tn;
+        while ((tn = tw.nextNode())) { if (!tn.textContent.trim()) continue; const el = tn.parentElement; if (!el.getClientRects().length || el.closest(".jlbox, .kjbox")) continue;
+          const fs = parseFloat(getComputedStyle(el).fontSize); if (fs < 11.95) small.push(`${name}「${tn.textContent.trim().slice(0, 10)}」${fs}px`); }
         for (const e of document.querySelectorAll("#app button, #app summary, #app select, #app a")) {
           if (e.closest(".jlbox, .kjbox") || e.classList.contains("jl")) continue;
           const cs = getComputedStyle(e); if (e.tagName === "A" && cs.display === "inline") continue;
@@ -203,8 +213,12 @@ if (process.argv.includes("--browser")) {
       }
       showOffice(); return [...new Set(out)];
     });
+    small.push(...await page.evaluate(() => [...new Set(window.__small)]));
+    // 字は 12px 以上（日本語は画数が多く、小さい字はつぶれる。Material Design の最小 12sp）
+    if (small.length) ng(`${vp.name}: 12px より小さい字: ${small.slice(0, 10).join(" / ")}${small.length > 10 ? ` ほか${small.length - 10}か所` : ""}`);
+    else ok(`${vp.name}: 目次・論文式・分野・教科書・さがす・学習の記録の字は 12px 以上`);
     if (tap.length) ng(`${vp.name}: 押す所が 44px より低い: ${tap.slice(0, 12).join(" / ")}${tap.length > 12 ? ` ほか${tap.length - 12}か所` : ""}`);
-    else ok(`${vp.name}: 目次・さがす・学習の記録・論文の答案の押す所は高さ 44px 以上`);
+    else ok(`${vp.name}: 目次・論文式・分野・教科書・さがす・学習の記録・論文の答案の押す所は高さ 44px 以上`);
     // 論文の答案の経過時間（#clock）は、数字が変わっても幅が変わらないこと（明朝体の数字は字ごとに幅がちがい、隣の「目安」が1秒ごとに動いていた。2026-11-06）。
     // CI は明朝体を読まず数字の幅がそろってしまうので、幅を決める指定（min-width）があり、最も長い時間でも収まることも見る
     const clk = await page.evaluate(() => {

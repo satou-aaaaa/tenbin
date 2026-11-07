@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611070112";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611071006";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -523,6 +523,12 @@ html body .cites a { padding-block: 12px; margin-block: -12px; }
 /* 第3回：論文の答案の経過時間は幅を固定する（明朝体の数字は字ごとに幅がちがい、1秒ごとに隣の「目安」が左右に動いていた） */
 html body #clock { display: inline-block; min-width: 6.4em; }
 html body .timerbar .hints button { min-height: 44px; }
+/* 第4回：全画面の点検で見つかった押しにくい所。科目別の「文を選んで答える」36px、教科書のページの印 22px */
+html body .kmmode { min-height: 44px; }
+html body .tbstep { height: 44px; margin-block: -11px; }
+html body .tbstep::after { top: 19px; }
+/* 第4回：小さすぎる字（10〜11.5px）を 12px に。日本語は画数が多く、小さい字はつぶれて読みにくい */
+html body .wrap details.kgroup > summary .kcount, html body .bnrow .bns, html body .kjkind, html body .cites .cnote, html body .rct .note, html body .wrap .tiles .note, html body .rcm, html body .rcw, html body .rcsub .gymr td .note { font-size: 12px; }
 </style>
 <script id="uxw-js">if (!document.documentElement.lang) document.documentElement.lang = "ja";</script>
 <script id="thm-js">
