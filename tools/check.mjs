@@ -287,6 +287,34 @@ if (process.argv.includes("--browser")) {
     if (bad.length) ng(`ホームの前回の続き: ${bad.join(" / ")}`); else ok("ホームの「今日の学習」は前に使った試験から始まり、その試験に「前回の続き」の印が付く");
     await page.close();
   }
+  // どの画面でも右上の「⚙ 設定」から文字の大きさ・画面の色を変えられる（2026-11-07 satou「ホーム画面からでないと設定を変更できない」）
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`設定: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    page.on("dialog", (d) => d.dismiss());
+    await page.goto(url, { waitUntil: "load" }); await page.evaluate(() => localStorage.clear()); await page.reload({ waitUntil: "load" }); await page.waitForTimeout(1200);
+    const bad = [];
+    const btnOk = () => page.evaluate(() => { const b = document.querySelector("#app .uxwSetBtn"); if (!b) return "なし"; const r = b.getBoundingClientRect(); return r.height >= 43.5 && r.width > 0 ? "" : `高さ${Math.round(r.height)}px`; });
+    let m = await btnOk(); if (m) bad.push(`ホームの設定ボタン: ${m}`);
+    await page.click("#goGyosei"); await page.waitForTimeout(500);
+    m = await btnOk(); if (m) bad.push(`行政書士の画面の設定ボタン: ${m}`);
+    if (m !== "なし") { await page.click("#app .uxwSetBtn"); await page.waitForTimeout(200); }
+    if (m === "なし") {} else if (!(await page.evaluate(() => document.getElementById("uxwSet")?.open))) bad.push("設定の窓が開かない");
+    else {
+      await page.click('#uxwSet [data-fs="l"]'); await page.click('#uxwSet [data-th="paper"]');
+      const st = await page.evaluate(() => ({ fs: document.documentElement.dataset.fs, th: document.documentElement.dataset.theme, lfs: localStorage.getItem("tenbin-fs"), lth: localStorage.getItem("tenbin-theme"),
+        pressed: [...document.querySelectorAll("#uxwSet [aria-pressed=true]")].map((b) => b.textContent).join("・") }));
+      if (st.fs !== "l" || st.lfs !== "l") bad.push(`文字の大きさが変わらない（${st.fs}/${st.lfs}）`);
+      if (st.th !== "paper" || st.lth !== "paper") bad.push(`画面の色が変わらない（${st.th}/${st.lth}）`);
+      if (st.pressed !== "大・紙（明るい）") bad.push(`押した印がずれる（${st.pressed}）`);
+      await page.click("#uxwSet .uxclose");
+      if (await page.evaluate(() => document.getElementById("uxwSet").open)) bad.push("「閉じる」で閉じない");
+      if (!/行政書士/.test(await page.evaluate(() => document.querySelector("#app .chapter-head")?.textContent || ""))) bad.push("設定を閉じたら元の画面でない");
+    }
+    if (bad.length) ng(`設定ボタン: ${bad.join(" / ")}`); else ok("どの画面でも右上の設定から文字の大きさ・画面の色を変えられる");
+    await page.close();
+  }
   // 応援のお願い: 何も解いていないうちは出ない。10問を越えて目次を開くと1回だけ出る。「もう出さない」のあとは出ない
   {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
