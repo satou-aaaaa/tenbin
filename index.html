@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611071211";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611071237";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -628,6 +628,21 @@ html body .uxwOnb .uxwLater { justify-self: end; min-height: 44px; font-size: 13
     head.after(s);
   }
   const start = () => { const a = document.getElementById("app"); if (!a) return; ask(); new MutationObserver(ask).observe(a, { childList: true }); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+})();
+// 第9回：戻るをそろえる（古い一覧へ行く「試験の一覧にもどる」を外す。教科書の単元の上に「‹ 分野」）
+(function () {
+  function fix() {
+    const a = document.getElementById("app"); if (!a) return;
+    const old = document.getElementById("xmBackL");
+    if (old) { const h = old.parentNode.querySelector("#home"); if (h) { h.classList.add("btn-gold"); old.remove(); } }
+    const head = a.querySelector(":scope > .chapter-head"), lst = document.getElementById("tbList");
+    if (head && lst && !head.querySelector(".topback")) {
+      const b = document.createElement("button"); b.type = "button"; b.className = "topback uxwTop"; b.textContent = "‹ 分野";
+      b.setAttribute("aria-label", "分野の目次にもどる"); b.onclick = () => lst.click(); head.prepend(b);
+    }
+  }
+  const start = () => { const a = document.getElementById("app"); if (!a) return; fix(); new MutationObserver(fix).observe(a, { childList: true }); };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
 })();
 // 第6回：どの画面でも右上に「⚙ 設定」。文字の大きさ・画面の色をその場で変える（ホームの「そのほか」と同じ記録 tenbin-fs・tenbin-theme）
