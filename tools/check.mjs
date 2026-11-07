@@ -263,6 +263,30 @@ if (process.argv.includes("--browser")) {
     }
     await page.close();
   }
+  // ホームの「今日の学習」は前に使った試験から始まる（2026-11-07。行政書士などを使う人にも①が論文になっていた）。
+  // 前に使った試験の行には「前回の続き」の印が1つだけ付き、「今日の学習を始める」でその試験の問題が始まる。使ったことがなければ①は論文のまま
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`ホームの前回の続き: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    page.on("dialog", (d) => d.dismiss());
+    const bad = [];
+    for (const [k, name] of [[null, ""], ["gyosei", "行政書士"], ["xm:takken", "宅建"], ["ronbun", ""]]) {
+      await page.goto(url, { waitUntil: "load" });
+      await page.evaluate((k) => { localStorage.clear(); if (k) localStorage.setItem("tenbin-last-exam", JSON.stringify([k])); }, k);
+      await page.reload({ waitUntil: "load" }); await page.waitForTimeout(1200);
+      const r = await page.evaluate(() => ({ first: (document.querySelector("#app .todo button") || {}).textContent || "",
+        tags: document.querySelectorAll("#app .uxw-last").length, inTop: !!document.querySelector("#app .exlist .exrow:first-child .uxw-last") }));
+      if (!k) { if (r.tags || r.first.includes("前回の続き")) bad.push(`使ったことがないのに前回の続きが出る`); continue; }
+      if (r.tags !== 1 || !r.inTop) bad.push(`${k}: 「前回の続き」の印が先頭の試験に1つではない（${r.tags}）`);
+      if (k === "ronbun") { if (r.first.includes("前回の続き")) bad.push("論文のときに①が試験の続きになる"); continue; }
+      if (!r.first.includes(name) || !r.first.includes("前回の続き")) bad.push(`${k}: 今日の学習の①が前に使った試験でない（${r.first.trim().slice(0, 30)}）`);
+      await page.click("#startToday"); await page.waitForTimeout(600);
+      if (!(await page.evaluate(() => /1\/10/.test(document.getElementById("app").innerText)))) bad.push(`${k}: 「今日の学習を始める」で問題が始まらない`);
+    }
+    if (bad.length) ng(`ホームの前回の続き: ${bad.join(" / ")}`); else ok("ホームの「今日の学習」は前に使った試験から始まり、その試験に「前回の続き」の印が付く");
+    await page.close();
+  }
   // 応援のお願い: 何も解いていないうちは出ない。10問を越えて目次を開くと1回だけ出る。「もう出さない」のあとは出ない
   {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });

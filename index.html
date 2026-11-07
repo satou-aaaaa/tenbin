@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611071027";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611071034";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -529,8 +529,33 @@ html body .tbstep { height: 44px; margin-block: -11px; }
 html body .tbstep::after { top: 19px; }
 /* 第4回：小さすぎる字（10〜11.5px）を 12px に。日本語は画数が多く、小さい字はつぶれて読みにくい */
 html body .wrap details.kgroup > summary .kcount, html body .bnrow .bns, html body .kjkind, html body .cites .cnote, html body .rct .note, html body .wrap .tiles .note, html body .rcm, html body .rcw, html body .rcsub .gymr td .note { font-size: 12px; }
+/* 第5回：ホームで前に使った試験の印 */
+html body .exrow .uxw-last { display: inline-block; font-size: 12px; line-height: 1.5; padding: 0 6px; margin-bottom: 2px; border: 1px solid var(--gold); border-radius: 3px; color: var(--gold); }
 </style>
-<script id="uxw-js">if (!document.documentElement.lang) document.documentElement.lang = "ja";</script>
+<script id="uxw-js">if (!document.documentElement.lang) document.documentElement.lang = "ja";
+// 第5回：ホームの「今日の学習」を、前に使った試験に合わせる（論文以外の試験を使っている人にも①が自分の試験になる）
+(function () {
+  const rowOf = k => k === "gyosei" ? document.getElementById("goGyosei") : k === "ronbun" ? document.getElementById("goRonbun")
+    : k && k.startsWith("xm:") ? document.querySelector('.exlist .xmentry[data-k="' + CSS.escape(k.slice(3)) + '"]') : null;
+  function deco() {
+    const ol = document.querySelector("#app section.today ol.todo"); if (!ol || ol.dataset.uxw) return; ol.dataset.uxw = "1";
+    let k; try { k = JSON.parse(localStorage.getItem("tenbin-last-exam") || "[]")[0]; } catch (e) {}
+    const row = rowOf(k); if (!row) return;
+    const t = row.querySelector(".ch-title"); if (!t) return;
+    t.insertAdjacentHTML("beforebegin", '<span class="uxw-last">前回の続き</span>');
+    if (k === "ronbun") return;
+    const li = document.createElement("li"), b = document.createElement("button");
+    b.className = "linkish"; b.id = "uxwLastExam";
+    b.innerHTML = '<span class="num" aria-hidden="true"></span><span></span>';
+    b.lastChild.textContent = t.textContent + "の問題を解く（前回の続き）";
+    b.onclick = () => { row.click(); const g = document.querySelector("#gyDue, #gyMix, #xmDue, #xmMix"); if (g) g.click(); };
+    li.appendChild(b); ol.prepend(li);
+    ol.querySelectorAll(".num").forEach((n, i) => { n.textContent = "①②③④⑤⑥⑦"[i] || ""; });
+  }
+  const start = () => { const a = document.getElementById("app"); if (!a) return; deco(); new MutationObserver(deco).observe(a, { childList: true }); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+})();
+</script>
 <script id="thm-js">
 // 画面の色（深緑・紙）。2026-11-05 追加。部品: tenbin/theme/（theme.js・apply_theme.py・th_test.cjs）
 // 深緑の装丁がもとの見た目。「紙」は明るい部屋や昼の長文読みのための、生成りの紙に墨の文字。
