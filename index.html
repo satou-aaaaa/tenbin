@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611071139";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611071211";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -548,6 +548,16 @@ html body header.title > .uxwSetBtn { top: 0; transform: none; }
 html body details.uxwMore { margin: 2px 0 0; }
 html body details.uxwMore > summary { min-height: 44px; font-family: var(--font-body); font-size: 13px; color: var(--gold); }
 html body details.uxwMore > p.note { margin: 0 0 4px; }
+/* 第8回：初めての人に試験を聞く */
+html body .uxwOnb { border-color: var(--gold); display: grid; gap: 8px; }
+html body .uxwOnb h2 { font-family: var(--font-pixel); color: var(--gold); font-size: 17px; }
+html body .uxwOnb .uxwExams, #uxwSet .uxwExams { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 6px; }
+html body .uxwExams button { min-height: 44px; padding: 6px 8px; text-align: left; font-size: 14px; }
+#uxwSet .uxg > div.uxwExams { display: grid; }
+#uxwSet .uxg .uxwExams button { white-space: normal; text-align: left; }
+#uxwSet .uxg > small { font-size: 12px; color: var(--muted); margin-top: -4px; }
+#uxwSet .uxwExams button[aria-pressed="true"] { background: var(--gold); color: var(--deep); border-color: var(--gold); font-weight: 700; }
+html body .uxwOnb .uxwLater { justify-self: end; min-height: 44px; font-size: 13px; border-color: var(--line); }
 </style>
 <script id="uxw-js">if (!document.documentElement.lang) document.documentElement.lang = "ja";
 // 第5回：ホームの「今日の学習」を、前に使った試験に合わせる（論文以外の試験を使っている人にも①が自分の試験になる）
@@ -594,6 +604,32 @@ html body details.uxwMore > p.note { margin: 0 0 4px; }
   const start = () => { const a = document.getElementById("app"); if (!a) return; fold(); new MutationObserver(fold).observe(a, { childList: true }); };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
 })();
+// 第8回：初めて開いた人に試験を1回だけ聞く（記録が何もないときだけ。ページを開いた時点で判定する）
+(function () {
+  let fresh = false; try { fresh = !localStorage.getItem("roppo-quest-v2") && !localStorage.getItem("tenbin-last-exam") && !localStorage.getItem("tenbin-onboard"); } catch (e) {}
+  const keyOf = r => r.id === "goRonbun" ? "ronbun" : r.id === "goGyosei" ? "gyosei" : r.dataset.k ? "xm:" + r.dataset.k : "";
+  // ホームの試験の一覧から取る（ホーム以外の画面では、最後に見たホームの一覧か、決まった一覧）
+  let last = [["ronbun", "司法試験・論文式"], ["gyosei", "行政書士試験"], ["xm:takken", "宅建士試験"], ["xm:tanto", "司法試験（短答式）"], ["xm:shoshi", "司法書士試験"], ["xm:sharoshi", "社会保険労務士試験"], ["xm:yobi", "司法試験予備試験"]];
+  window.__uxwExams = () => { const ex = [...document.querySelectorAll("#app .exlist .exrow")].map(r => [keyOf(r), ((r.querySelector(".ch-title") || {}).textContent || "").trim()]).filter(x => x[0] && x[1]);
+    if (ex.length) last = ex.slice().sort((a, b) => a[0] === "ronbun" ? -1 : b[0] === "ronbun" ? 1 : 0); return last; };
+  window.__uxwPick = k => {
+    try { const l = JSON.parse(localStorage.getItem("tenbin-last-exam") || "[]"); localStorage.setItem("tenbin-last-exam", JSON.stringify([k, ...l.filter(x => x !== k)].slice(0, 12))); localStorage.setItem("tenbin-onboard", "1"); } catch (e) {}
+  };
+  const home = () => { if (typeof showOffice === "function") showOffice(); };
+  function ask() {
+    if (!fresh) return;
+    const a = document.getElementById("app"), head = a && a.querySelector(":scope > header.title"); if (!head || a.querySelector(".uxwOnb")) return;
+    const ex = window.__uxwExams(); if (!ex.length) return;
+    const s = document.createElement("section"); s.className = "win uxwOnb"; s.setAttribute("aria-labelledby", "uxwOnbH");
+    s.innerHTML = '<h2 id="uxwOnbH">どの試験の勉強をしますか？</h2><p class="note">選んだ試験が、ホームの「今日の学習」の最初に出ます。あとで右上の「設定」から変えられます。</p><div class="uxwExams"></div><button type="button" class="uxwLater">あとで選ぶ</button>';
+    const box = s.querySelector(".uxwExams");
+    ex.forEach(([k, t]) => { const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.onclick = () => { fresh = false; window.__uxwPick(k); home(); }; box.appendChild(b); });
+    s.querySelector(".uxwLater").onclick = () => { fresh = false; try { localStorage.setItem("tenbin-onboard", "1"); } catch (e) {} s.remove(); };
+    head.after(s);
+  }
+  const start = () => { const a = document.getElementById("app"); if (!a) return; ask(); new MutationObserver(ask).observe(a, { childList: true }); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+})();
 // 第6回：どの画面でも右上に「⚙ 設定」。文字の大きさ・画面の色をその場で変える（ホームの「そのほか」と同じ記録 tenbin-fs・tenbin-theme）
 (function () {
   const OPTS = [["fs", "文字の大きさ", [["n", "標準"], ["l", "大"]]], ["th", "画面の色", [["dark", "深緑"], ["paper", "紙（明るい）"]]]];
@@ -608,13 +644,22 @@ html body details.uxwMore > p.note { margin: 0 0 4px; }
     d = document.createElement("dialog"); d.id = "uxwSet"; d.setAttribute("aria-labelledby", "uxwSetH");
     d.innerHTML = '<h2 id="uxwSetH">設定</h2>' + OPTS.map(([k, t, vs]) => '<div class="uxg" role="group" aria-label="' + t + '"><span>' + t + '</span><div>' +
       vs.map(([v, l]) => '<button type="button" data-' + k + '="' + v + '">' + l + '</button>').join("") + '</div></div>').join("") +
+      '<div class="uxg uxgEx" role="group" aria-label="いま勉強している試験"><span>いま勉強している試験</span><small>ホームの「今日の学習」の最初に出ます</small><div class="uxwExams"></div></div>' +
       '<button type="button" class="uxclose">閉じる</button>';
     d.querySelectorAll(".uxg button").forEach(b => b.onclick = () => { const k = "fs" in b.dataset ? "fs" : "th"; set(k, b.dataset[k]); });
     d.querySelector(".uxclose").onclick = () => d.close();
+    d.addEventListener("close", () => { if (d.dataset.changed && document.querySelector("#app > header.title") && typeof showOffice === "function") showOffice(); });  // ホームで試験を変えたら並びを作り直す
     d.addEventListener("click", e => { if (e.target === d) d.close(); });  // 外側（暗い所）を押しても閉じる
     document.body.appendChild(d); return d;
   }
-  function open() { const d = dlg(); d.querySelectorAll(".uxg button").forEach(b => { const k = "fs" in b.dataset ? "fs" : "th"; b.setAttribute("aria-pressed", String(b.dataset[k] === cur(k))); }); d.showModal(); }
+  function exams(d) {
+    const box = d.querySelector(".uxgEx .uxwExams"), ex = window.__uxwExams ? window.__uxwExams() : [];
+    let cur; try { cur = JSON.parse(localStorage.getItem("tenbin-last-exam") || "[]")[0]; } catch (e) {}
+    d.querySelector(".uxgEx").hidden = !ex.length; box.textContent = "";
+    ex.forEach(([k, t]) => { const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.setAttribute("aria-pressed", String(k === cur));
+      b.onclick = () => { window.__uxwPick(k); box.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); d.dataset.changed = "1"; }; box.appendChild(b); });
+  }
+  function open() { const d = dlg(); exams(d); d.dataset.changed = ""; d.querySelectorAll(".uxg button").forEach(b => { const k = "fs" in b.dataset ? "fs" : "th"; b.setAttribute("aria-pressed", String(b.dataset[k] === cur(k))); }); d.showModal(); }
   function add() {
     const a = document.getElementById("app"); if (!a) return;
     const host = a.querySelector(":scope > .chapter-head, :scope > header.title"); if (!host || host.querySelector(".uxwSetBtn")) return;
