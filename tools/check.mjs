@@ -378,6 +378,37 @@ if (process.argv.includes("--browser")) {
     if (bad.length) ng(`初めての質問: ${bad.join(" / ")}`); else ok("初めて開いた人にだけ試験を聞き、選んだ試験がホームの①になる（設定からも選び直せる）");
     await page.close();
   }
+  // 戻るをそろえる（2026-11-07）：試験の対策の画面に、古い一覧へ行く「試験の一覧にもどる」は出さない。
+  // 教科書の単元は上の「‹ 分野」で、下の「分野の目次」と同じ画面へ戻れる
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`戻る: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    page.on("dialog", (d) => d.dismiss());
+    const bad = [];
+    const go = async () => { await page.goto(url, { waitUntil: "load" }); await page.evaluate(() => { localStorage.clear(); localStorage.setItem("tenbin-onboard", "1"); }); await page.reload({ waitUntil: "load" }); await page.waitForTimeout(1000); };
+    await go();
+    for (const k of ["takken", "shoshi"]) {
+      await page.evaluate(() => showOffice()); await page.waitForTimeout(300);
+      const b = await page.$(`#app .xmentry[data-k="${k}"]`); if (!b) { bad.push(`${k}: 入口がない`); continue; }
+      await b.click(); await page.waitForTimeout(400);
+      const r = await page.evaluate(() => ({ old: !!document.getElementById("xmBackL"), home: !!document.querySelector("#app #home") }));
+      if (r.old) bad.push(`${k}: 「試験の一覧にもどる」が出る`); if (!r.home) bad.push(`${k}: 「目次にもどる」がない`);
+    }
+    await go();
+    const row = await page.$("#app .bnrow");
+    if (row) { await row.click(); await page.waitForTimeout(300); const nx = await page.$("#bnNext");
+      if (nx) { await nx.click(); await page.waitForTimeout(400);
+        const top = await page.$("#app > .chapter-head .topback");
+        if (!top) bad.push("教科書の単元の上に戻る所がない");
+        else { await top.click(); await page.waitForTimeout(400); const viaTop = await page.evaluate(() => document.querySelector("#app > .chapter-head")?.textContent || "");
+          await go(); await page.click("#app .bnrow"); await page.waitForTimeout(300); await page.click("#bnNext"); await page.waitForTimeout(400);
+          const lst = await page.$("#tbList"); if (!lst) bad.push("教科書の単元の下に「分野の目次」がない"); else { await lst.click(); await page.waitForTimeout(400);
+            const viaList = await page.evaluate(() => document.querySelector("#app > .chapter-head")?.textContent || "");
+            if (viaTop !== viaList) bad.push(`上の「‹ 分野」と下の「分野の目次」の行き先がちがう（${viaTop.slice(0, 12)}・${viaList.slice(0, 12)}）`); } } } }
+    if (bad.length) ng(`戻る: ${bad.join(" / ")}`); else ok("試験の対策の画面の戻るは「目次にもどる」1つ、教科書の単元は上からも分野へ戻れる");
+    await page.close();
+  }
   // 応援のお願い: 何も解いていないうちは出ない。10問を越えて目次を開くと1回だけ出る。「もう出さない」のあとは出ない
   {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
