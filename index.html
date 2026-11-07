@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611071237";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611071254";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -558,6 +558,11 @@ html body .uxwExams button { min-height: 44px; padding: 6px 8px; text-align: lef
 #uxwSet .uxg > small { font-size: 12px; color: var(--muted); margin-top: -4px; }
 #uxwSet .uxwExams button[aria-pressed="true"] { background: var(--gold); color: var(--deep); border-color: var(--gold); font-weight: 700; }
 html body .uxwOnb .uxwLater { justify-self: end; min-height: 44px; font-size: 13px; border-color: var(--line); }
+/* 第10回：分野から選ぶ を2列に */
+html body .wlist:has(> button.gyb) { grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); }
+html body .wlist > button.gyb { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; padding: 6px 10px; }
+html body .wlist > button.gyb .ch-title { line-height: 1.35; }
+html body .wlist > button.gyb[data-r="trap"], html body .wlist > button.gyb[data-gk="trap"] { grid-column: 1 / -1; }
 </style>
 <script id="uxw-js">if (!document.documentElement.lang) document.documentElement.lang = "ja";
 // 第5回：ホームの「今日の学習」を、前に使った試験に合わせる（論文以外の試験を使っている人にも①が自分の試験になる）
@@ -636,6 +641,15 @@ html body .uxwOnb .uxwLater { justify-self: end; min-height: 44px; font-size: 13
     const a = document.getElementById("app"); if (!a) return;
     const old = document.getElementById("xmBackL");
     if (old) { const h = old.parentNode.querySelector("#home"); if (h) { h.classList.add("btn-gold"); old.remove(); } }
+    // 第11回：模試をまだ受けていない合否の判定は、表をしまう
+    a.querySelectorAll("section.skjudge:not([data-uxw])").forEach(sec => {
+      sec.dataset.uxw = "1"; const t = sec.querySelector("table"); if (!t) return;
+      const tds = [...t.querySelectorAll("tr td:first-of-type")]; if (!tds.length || tds.slice(0, -1).some(td => !/未受験/.test(td.textContent))) return;
+      const ps = [...sec.querySelectorAll(":scope > p.note")], tail = ps.filter(p => p.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_PRECEDING && !/受けると判定/.test(p.textContent));
+      const d = document.createElement("details"); d.className = "uxwMore"; d.innerHTML = "<summary>基準点と合格点</summary>";
+      t.before(d); d.appendChild(t); tail.forEach(p => d.appendChild(p));
+      const msg = ps.find(p => /受けると判定/.test(p.textContent)); if (msg) d.before(msg);
+    });
     const head = a.querySelector(":scope > .chapter-head"), lst = document.getElementById("tbList");
     if (head && lst && !head.querySelector(".topback")) {
       const b = document.createElement("button"); b.type = "button"; b.className = "topback uxwTop"; b.textContent = "‹ 分野";
