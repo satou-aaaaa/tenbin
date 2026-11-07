@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611071125";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611071139";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -544,6 +544,10 @@ html body header.title > .uxwSetBtn { top: 0; transform: none; }
 #uxwSet .uxg button { flex: 1; min-height: 44px; white-space: nowrap; padding-inline: 8px; }
 #uxwSet .uxg button[aria-pressed="true"] { background: var(--gold); color: var(--deep); border-color: var(--gold); font-weight: 700; }
 #uxwSet .uxclose { width: 100%; min-height: 44px; }
+/* 第7回：長い説明の残りをしまう */
+html body details.uxwMore { margin: 2px 0 0; }
+html body details.uxwMore > summary { min-height: 44px; font-family: var(--font-body); font-size: 13px; color: var(--gold); }
+html body details.uxwMore > p.note { margin: 0 0 4px; }
 </style>
 <script id="uxw-js">if (!document.documentElement.lang) document.documentElement.lang = "ja";
 // 第5回：ホームの「今日の学習」を、前に使った試験に合わせる（論文以外の試験を使っている人にも①が自分の試験になる）
@@ -566,6 +570,28 @@ html body header.title > .uxwSetBtn { top: 0; transform: none; }
     ol.querySelectorAll(".num").forEach((n, i) => { n.textContent = "①②③④⑤⑥⑦"[i] || ""; });
   }
   const start = () => { const a = document.getElementById("app"); if (!a) return; deco(); new MutationObserver(deco).observe(a, { childList: true }); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+})();
+// 第7回：試験の対策の画面で、長い説明（90字より長い）は最初の1文と今の様子だけ見せ、残りを「くわしい説明」にしまう
+(function () {
+  const NOW = /まだ模試に|未出題|模試の途中|解答 \d/;
+  function fold() {
+    const a = document.getElementById("app"); if (!a) return;
+    const head = a.querySelector(":scope > .chapter-head"); if (!head || !/の対策/.test(head.textContent) || !a.querySelector(".gymock")) return;
+    a.querySelectorAll(":scope > section.win > p.note").forEach(p => {
+      if (p.dataset.uxw || p.textContent.length <= 90 || p.querySelector("button, a, input, select")) return; p.dataset.uxw = "1";
+      const parts = p.innerHTML.split(/(?<=。)|<br\s*\/?>/i).map(x => x.trim()).filter(Boolean);
+      if (parts.length < 3) return;
+      const show = parts.filter((x, i) => i === 0 || NOW.test(x.replace(/<[^>]+>/g, "")));
+      const hide = parts.filter(x => !show.includes(x));
+      if (hide.join("").replace(/<[^>]+>/g, "").length < 40) return;  // しまう分が少ないなら、そのまま
+      p.innerHTML = show.join("<br>");
+      const d = document.createElement("details"); d.className = "uxwMore";
+      d.innerHTML = '<summary>くわしい説明</summary><p class="note"></p>'; d.lastChild.innerHTML = hide.join("");
+      p.after(d);
+    });
+  }
+  const start = () => { const a = document.getElementById("app"); if (!a) return; fold(); new MutationObserver(fold).observe(a, { childList: true }); };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
 })();
 // 第6回：どの画面でも右上に「⚙ 設定」。文字の大きさ・画面の色をその場で変える（ホームの「そのほか」と同じ記録 tenbin-fs・tenbin-theme）
