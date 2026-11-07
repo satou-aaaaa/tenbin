@@ -241,10 +241,11 @@ if (process.argv.includes("--browser")) {
         const a = document.getElementById("ai"), pos = (s) => a.querySelector(s), before = (x, y) => !!(pos(x).compareDocumentPosition(pos(y)) & Node.DOCUMENT_POSITION_FOLLOWING);
         const fn = pos(".agFreeNote"), shown = [...fn.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join("").trim();
         return { order: before(".agGo", ".agRes") && before(".agRes", ".agMore"), heads: [...a.querySelectorAll(".agSec h4")].map((h) => h.textContent).join(","),
-          free: shown.length, closed: [...a.querySelectorAll(".agFreeMore, .agChatBox, .agApiBox")].every((d) => !d.open) };
+          free: shown.length, closed: [...a.querySelectorAll(".agFreeMore, .agChatBox, .agApiBox")].every((d) => !d.open),
+          small: (a.querySelectorAll("details").forEach((d) => d.open = true), [...a.querySelectorAll("button, summary")].filter((e) => e.getClientRects().length && e.getBoundingClientRect().height < 43.5).map((e) => e.textContent.trim().slice(0, 12))) };
       });
-      if (r.order && r.heads === "総評,良い点,直すとよい点,書き直し例" && r.free <= 30 && r.closed) ok("AIの添削は、ボタン→点数と見出しつきの添削→ほかの方法（閉じている）の順で出る");
-      else ng(`AIの添削の並びが崩れている（ボタン→結果→ほかの方法:${r.order}・見出し:${r.heads}・無料の説明の字数:${r.free}・閉じている:${r.closed}）`);
+      if (r.order && r.heads === "総評,良い点,直すとよい点,書き直し例" && r.free <= 30 && r.closed && !r.small.length) ok("AIの添削は、ボタン→点数と見出しつきの添削→ほかの方法（閉じている）の順で出て、押す所はすべて 44px 以上");
+      else ng(`AIの添削の並びが崩れている（ボタン→結果→ほかの方法:${r.order}・見出し:${r.heads}・無料の説明の字数:${r.free}・閉じている:${r.closed}・44px 未満:${r.small.join("／")}）`);
     }
     await page.close();
   }

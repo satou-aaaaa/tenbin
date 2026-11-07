@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611070952";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611071012";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26968,7 +26968,14 @@ function agMount(sec, spec) {
     bar.appendChild(document.createElement("i")).style.width = Math.round(pct * 100) + "%";
     add("agScSub", `できている観点：${v.filter(Boolean).length} / ${v.length}`);
   };
-  const wait = () => { out.innerHTML = '<p class="agWait">AIが答案を読んでいます…（30秒ほどかかることがあります）</p>'; };
+  // 10秒をこえる待ちは、動いていることと目安・経過を見せ、止められるようにする（Nielsen「Response Times: The 3 Important Limits」）
+  const res = q(".agRes"); let tick = null;
+  const wait = () => {
+    out.innerHTML = '<p class="agWait">AIが答案を読んでいます…<span class="agSec2 tnum"></span><br><small>ふつう10〜30秒ほどかかります。</small></p>';
+    const t0 = Date.now(), el = out.querySelector(".agSec2"); res.setAttribute("aria-busy", "true");
+    clearInterval(tick); tick = setInterval(() => { if (!el.isConnected) return clearInterval(tick); el.textContent = `（${Math.round((Date.now() - t0) / 1000)}秒）`; }, 1000);
+  };
+  const done = () => { clearInterval(tick); res.removeAttribute("aria-busy"); };
   const hit = AG_CACHE.get(spec.key);
   if (hit) { agRender(out, agStrip(hit.text)); warn.hidden = false; if (hit.v) showScore(hit.v); go.textContent = "もう一度添削・採点してもらう"; }
   // AIの返事（観点判定つき）を受け取って、点数とチェックに入れる。APIでも、貼り戻した返事でも同じ
@@ -27002,9 +27009,10 @@ function agMount(sec, spec) {
       go.disabled = true; stop.hidden = false; note.textContent = ""; scoreEl.hidden = true; warn.hidden = true;
       wait();
       try {
-        const { text, truncated } = await sample(spec.prompt(), { signal: ctl.signal, onText: ({ text }) => { agRender(out, agStrip(text)); } });
-        finish(text, truncated);
+        const { text, truncated } = await sample(spec.prompt(), { signal: ctl.signal, onText: ({ text }) => { clearInterval(tick); agRender(out, agStrip(text)); } });
+        done(); finish(text, truncated);
       } catch (e) {
+        done();
         out.textContent = e.code === "refused" ? "" : (e.text || "");
         if (claudeSample && ["not_granted", "sampling_disabled", "capability_disabled", "not_declared"].includes(e.code)) { sec.hidden = true; return; }
         if (e.code !== "cancelled") note.textContent = AG_FREE_ERR[e.code] || AI_ERR[e.code] || "通信がうまくいきませんでした。もう一度試してください。";
@@ -27071,9 +27079,11 @@ if (!document.getElementById("agChatCss")) {
 .agSec { padding: 8px 12px 10px; border-left: 4px solid var(--line); background: var(--deep); border-radius: 0 6px 6px 0; }
 .agSec h4 { margin: 0 0 4px; font-size: 14px; color: var(--gold); }
 .agSec.agGood { border-left-color: var(--hit, var(--gold)); } .agSec.agFix { border-left-color: var(--miss, var(--gold)); }
+.agWait small { color: var(--muted, var(--chalk)); font-size: 12px; }
 .agWait::before { content: ""; display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px; border: 2px solid var(--line); border-top-color: var(--gold); border-radius: 50%; animation: agSpin 0.9s linear infinite; }
 @keyframes agSpin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .agWait::before { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .agWait small { color: var(--muted, var(--chalk)); font-size: 12px; }
+.agWait::before { animation: none; } }
 .agMore { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .agMoreHead { margin: 0 0 2px; font-size: 14px; font-weight: 700; }
 .agApiBox, .agChatBox { margin: 4px 0; } .agApiBox > summary, .agChatBox > summary { cursor: pointer; color: var(--gold); min-height: 44px; padding: 6px 0; }
@@ -27082,7 +27092,9 @@ if (!document.getElementById("agChatCss")) {
 .agApiBox > summary::before, .agChatBox > summary::before { content: "▸"; } .agApiBox[open] > summary::before, .agChatBox[open] > summary::before { content: "▾"; }
 .agApiBox > summary small, .agChatBox > summary small { flex-basis: 100%; margin-left: 1.1em; font-size: 12px; color: var(--chalk); opacity: 0.85; }
 .agSteps { margin: 6px 0; padding-left: 1.4em; display: grid; gap: 10px; } .agSteps > li > span { display: block; }
-.agShow > summary { cursor: pointer; color: var(--gold); min-height: 44px; display: flex; align-items: center; font-size: 13px; }`;
+.agShow > summary { cursor: pointer; color: var(--gold); min-height: 44px; display: flex; align-items: center; font-size: 13px; }
+/* 押す所は高さ 44px 以上（WCAG 2.2 の目安・Apple HIG）。APIキーの欄の「作り方」「使い方」も */
+.agbox.ai details > summary { min-height: 44px; }  /* .aikey details > summary（32px）より強く。style の並び順に左右されない */`;
   document.head.append(st);
 }
 const agText = el => el ? el.textContent.trim() : "";
