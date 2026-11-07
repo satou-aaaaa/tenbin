@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611071034";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611071125";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -531,6 +531,19 @@ html body .tbstep::after { top: 19px; }
 html body .wrap details.kgroup > summary .kcount, html body .bnrow .bns, html body .kjkind, html body .cites .cnote, html body .rct .note, html body .wrap .tiles .note, html body .rcm, html body .rcw, html body .rcsub .gymr td .note { font-size: 12px; }
 /* 第5回：ホームで前に使った試験の印 */
 html body .exrow .uxw-last { display: inline-block; font-size: 12px; line-height: 1.5; padding: 0 6px; margin-bottom: 2px; border: 1px solid var(--gold); border-radius: 3px; color: var(--gold); }
+/* 第6回：右上の設定ボタンと、その場で開く設定の窓 */
+html body .uxwSetBtn { position: absolute; right: 0; top: 50%; transform: translateY(-50%); min-height: 44px; padding: 4px 10px; font-size: 13px; font-family: var(--font-body); letter-spacing: 0; color: var(--chalk); }
+html body header.title { position: relative; }
+html body header.title > .uxwSetBtn { top: 0; transform: none; }
+#uxwSet { width: min(420px, calc(100vw - 32px)); background: var(--window); color: var(--chalk); border: 2px solid var(--gold); border-radius: 6px; padding: 16px; }
+#uxwSet::backdrop { background: rgb(0 0 0 / .55); }
+#uxwSet h2 { font-family: var(--font-pixel); color: var(--gold); font-size: 18px; margin: 0 0 12px; }
+#uxwSet .uxg { display: grid; gap: 6px; margin: 0 0 14px; }
+#uxwSet .uxg > span { font-size: 14px; color: var(--muted); }
+#uxwSet .uxg > div { display: flex; gap: 8px; }
+#uxwSet .uxg button { flex: 1; min-height: 44px; white-space: nowrap; padding-inline: 8px; }
+#uxwSet .uxg button[aria-pressed="true"] { background: var(--gold); color: var(--deep); border-color: var(--gold); font-weight: 700; }
+#uxwSet .uxclose { width: 100%; min-height: 44px; }
 </style>
 <script id="uxw-js">if (!document.documentElement.lang) document.documentElement.lang = "ja";
 // 第5回：ホームの「今日の学習」を、前に使った試験に合わせる（論文以外の試験を使っている人にも①が自分の試験になる）
@@ -553,6 +566,36 @@ html body .exrow .uxw-last { display: inline-block; font-size: 12px; line-height
     ol.querySelectorAll(".num").forEach((n, i) => { n.textContent = "①②③④⑤⑥⑦"[i] || ""; });
   }
   const start = () => { const a = document.getElementById("app"); if (!a) return; deco(); new MutationObserver(deco).observe(a, { childList: true }); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+})();
+// 第6回：どの画面でも右上に「⚙ 設定」。文字の大きさ・画面の色をその場で変える（ホームの「そのほか」と同じ記録 tenbin-fs・tenbin-theme）
+(function () {
+  const OPTS = [["fs", "文字の大きさ", [["n", "標準"], ["l", "大"]]], ["th", "画面の色", [["dark", "深緑"], ["paper", "紙（明るい）"]]]];
+  const cur = k => k === "fs" ? (document.documentElement.dataset.fs || "n") : (document.documentElement.dataset.theme === "paper" ? "paper" : "dark");
+  const set = (k, v) => {
+    if (k === "fs") { document.documentElement.dataset.fs = v; try { localStorage.setItem("tenbin-fs", v); } catch (e) {} }
+    else if (typeof window.setTheme === "function") window.setTheme(v);
+    document.querySelectorAll(k === "fs" ? "[data-fs]" : "[data-th]").forEach(b => { if (b.tagName === "BUTTON") b.setAttribute("aria-pressed", String(b.dataset[k] === cur(k))); });
+  };
+  function dlg() {
+    let d = document.getElementById("uxwSet"); if (d) return d;
+    d = document.createElement("dialog"); d.id = "uxwSet"; d.setAttribute("aria-labelledby", "uxwSetH");
+    d.innerHTML = '<h2 id="uxwSetH">設定</h2>' + OPTS.map(([k, t, vs]) => '<div class="uxg" role="group" aria-label="' + t + '"><span>' + t + '</span><div>' +
+      vs.map(([v, l]) => '<button type="button" data-' + k + '="' + v + '">' + l + '</button>').join("") + '</div></div>').join("") +
+      '<button type="button" class="uxclose">閉じる</button>';
+    d.querySelectorAll(".uxg button").forEach(b => b.onclick = () => { const k = "fs" in b.dataset ? "fs" : "th"; set(k, b.dataset[k]); });
+    d.querySelector(".uxclose").onclick = () => d.close();
+    d.addEventListener("click", e => { if (e.target === d) d.close(); });  // 外側（暗い所）を押しても閉じる
+    document.body.appendChild(d); return d;
+  }
+  function open() { const d = dlg(); d.querySelectorAll(".uxg button").forEach(b => { const k = "fs" in b.dataset ? "fs" : "th"; b.setAttribute("aria-pressed", String(b.dataset[k] === cur(k))); }); d.showModal(); }
+  function add() {
+    const a = document.getElementById("app"); if (!a) return;
+    const host = a.querySelector(":scope > .chapter-head, :scope > header.title"); if (!host || host.querySelector(".uxwSetBtn")) return;
+    const b = document.createElement("button"); b.type = "button"; b.className = "uxwSetBtn"; b.setAttribute("aria-label", "設定（文字の大きさ・画面の色）");
+    b.innerHTML = '<span aria-hidden="true">⚙</span> 設定'; b.onclick = open; host.appendChild(b);
+  }
+  const start = () => { const a = document.getElementById("app"); if (!a) return; add(); new MutationObserver(add).observe(a, { childList: true }); };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
 })();
 </script>
