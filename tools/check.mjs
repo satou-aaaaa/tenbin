@@ -234,6 +234,35 @@ if (process.argv.includes("--browser")) {
     else ok(`${vp.name}: 論文の答案の経過時間の幅が変わらない`);
     await page.close();
   }
+  // AIの添削・採点の並び（2026-11-07 satou「AI添削の部分がわかりづらい」）：ボタン → 結果（点数・添削の見出し）→ ほかの方法、の順。
+  // 無料のAIの説明は一言だけ見せ、くわしい話とほかの方法は閉じておく。結果がほかの方法の欄の下に埋もれないようにする（無料のAIは偽の応答）。
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`AIの添削: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.route("https://tenbin-aigrade.sato1212aaaaa.workers.dev/**", async (r) => {
+      const n = JSON.parse(r.request().postData()).prompt.split("# 採点の観点")[1].split("\n# ")[0].split("\n").filter((l) => /^\d+\. /.test(l)).length;
+      await r.fulfill({ status: 200, headers: { "content-type": "application/json", "access-control-allow-origin": "*" }, body: JSON.stringify({ text: `【総評】よい。\n【良い点】\n・結論\n【直すとよい点】\n・理由\n【書き直し例】例。\n観点判定：${"○".repeat(n)}` }) });
+    });
+    await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
+    const has = await page.evaluate(() => typeof agMount === "function" && typeof writeCompare === "function");
+    if (!has) ok("AIの添削の部品がない版なので並びは確かめない");
+    else {
+      await page.evaluate(() => { const p = probs().find((x) => !x.big); S.drafts[p.id] = ["問題提起", "規範", "あてはめ", "結論"]; writeCompare(p.id); });
+      await page.waitForSelector("#ai:not([hidden]) .agMore:not([hidden])");
+      await page.click("#ai .agGo"); await page.waitForSelector("#ai .agScore:not([hidden])");
+      const r = await page.evaluate(() => {
+        const a = document.getElementById("ai"), pos = (s) => a.querySelector(s), before = (x, y) => !!(pos(x).compareDocumentPosition(pos(y)) & Node.DOCUMENT_POSITION_FOLLOWING);
+        const fn = pos(".agFreeNote"), shown = [...fn.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join("").trim();
+        return { order: before(".agGo", ".agRes") && before(".agRes", ".agMore"), heads: [...a.querySelectorAll(".agSec h4")].map((h) => h.textContent).join(","),
+          free: shown.length, closed: [...a.querySelectorAll(".agFreeMore, .agChatBox, .agApiBox")].every((d) => !d.open),
+          small: (a.querySelectorAll("details").forEach((d) => d.open = true), [...a.querySelectorAll("button, summary")].filter((e) => e.getClientRects().length && e.getBoundingClientRect().height < 43.5).map((e) => e.textContent.trim().slice(0, 12))) };
+      });
+      if (r.order && r.heads === "総評,良い点,直すとよい点,書き直し例" && r.free <= 30 && r.closed && !r.small.length) ok("AIの添削は、ボタン→点数と見出しつきの添削→ほかの方法（閉じている）の順で出て、押す所はすべて 44px 以上");
+      else ng(`AIの添削の並びが崩れている（ボタン→結果→ほかの方法:${r.order}・見出し:${r.heads}・無料の説明の字数:${r.free}・閉じている:${r.closed}・44px 未満:${r.small.join("／")}）`);
+    }
+    await page.close();
+  }
   // ホームの「今日の学習」は前に使った試験から始まる（2026-11-07。行政書士などを使う人にも①が論文になっていた）。
   // 前に使った試験の行には「前回の続き」の印が1つだけ付き、「今日の学習を始める」でその試験の問題が始まる。使ったことがなければ①は論文のまま
   {
