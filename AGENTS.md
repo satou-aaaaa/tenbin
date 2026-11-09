@@ -21,7 +21,8 @@ node tools/check.mjs --browser --rebuild          # 文法・manifest・アイ�
 
 ## 公開
 
-- index.html・sw.js・manifest・アイコンは生成物。手で直さない（Check の作り直し比べで落ちる）。
+- index.html・jobun.json（条文の本文。build_pwa.mjs が本体から分ける）・sw.js・manifest・アイコンは生成物。手で直さない（Check の作り直し比べで落ちる）。
+- index.html は 5MB まで（Check が見る。2026-11-09 7.2MB で最初の画面まで約10秒かかった）。超えたら大きなデータを build_pwa.mjs で別のファイルに分ける。
 - GitHub Pages は `main` を公開する。マージすれば反映される。
 - `changes.html`（更新情報）は Changes ワークフローがマージされた PR の題から作り直す。手で直さない。
   遊ぶ人に見せたくない PR（.github/・qa/・tools/・README・CLAUDE.md だけの変更）は載らない。

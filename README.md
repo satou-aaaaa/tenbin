@@ -35,7 +35,7 @@ bash scripts/setup.sh
 node tools/build_pwa.mjs <hourei-quest.html> .
 ```
 
-本体は変えずに PWA の外側（`tools/build_pwa.mjs` の中身）だけを直したときは、今の `index.html` を元にして作り直せます。
+本体は変えずに PWA の外側（`tools/build_pwa.mjs` の中身）だけを直したときは、今の `index.html` を元にして作り直せます（同じフォルダの `jobun.json` から条文の本文を戻して使います）。
 
 ```
 node tools/build_pwa.mjs index.html .
@@ -45,7 +45,7 @@ node tools/build_pwa.mjs index.html .
 
 ### 生成物（直接直さない）
 
-`index.html`・`sw.js`・`manifest.webmanifest`・アイコン（`icon-192.png`・`icon-512.png`・`icon-maskable-512.png`・`apple-touch-icon.png`）は `tools/build_pwa.mjs` が作ります。直すときはこのスクリプトを直して作り直してください。`changes.html` は Changes ワークフローが作ります。
+`index.html`・`jobun.json`（条文の本文。最初の画面を軽くするため分けて、あとで読む）・`sw.js`・`manifest.webmanifest`・アイコン（`icon-192.png`・`icon-512.png`・`icon-maskable-512.png`・`apple-touch-icon.png`）は `tools/build_pwa.mjs` が作ります。直すときはこのスクリプトを直して作り直してください。`changes.html` は Changes ワークフローが作ります。
 
 ### 検査
 

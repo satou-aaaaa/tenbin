@@ -1,8 +1,8 @@
-// 天秤の書 Service Worker（オフライン用）。版: 202611091121
+// 天秤の書 Service Worker（オフライン用）。版: 202611091202
 // tools/build_pwa.mjs が作る生成物。直接直さない。
-const VER = "202611091121";
+const VER = "202611091202";
 const CACHE = "tenbin-" + VER;
-const SHELL = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"];
+const SHELL = ["./", "index.html", "jobun.json", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"];
 // HTTP キャッシュの古いファイルを新しい版のキャッシュに入れないよう、cache: "reload" で取り直す
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
@@ -32,9 +32,10 @@ self.addEventListener("fetch", e => {
     }));
     return;
   }
-  // アイコン・manifest・フォント: キャッシュをすぐ返し、裏で新しい版を取りに行く（stale-while-revalidate）
+  // 条文の本文・アイコン・manifest・フォント: キャッシュをすぐ返し、裏で新しい版を取りに行く（stale-while-revalidate）。
+  // 条文の本文は画面が jobun.json?v=版 で頼むので、? のあとを見ずに引く（この版のキャッシュには、この版の中身しか入らない）
   e.respondWith(caches.open(CACHE).then(async c => {
-    const hit = await c.match(req);
+    const hit = await c.match(req, { ignoreSearch: u.pathname.endsWith("/jobun.json") });
     const net = fetch(req).then(r => { if (r && (r.ok || r.type === "opaque")) c.put(req, r.clone()); return r; }).catch(() => null);
     if (hit) { e.waitUntil(net); return hit; }
     return (await net) || offline();
