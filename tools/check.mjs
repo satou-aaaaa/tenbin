@@ -96,11 +96,16 @@ else ok("index.html の外枠は一つだけ");
 // 本体が育って上限を超えたら、ほかの大きなデータも build_pwa.mjs で分ける（上限を上げてごまかさない）
 {
   const MAX = 5_000_000, size = Buffer.byteLength(html);
-  if (/^const GY_JOBUN = \{"/m.test(html)) ng("index.html に条文の本文（GY_JOBUN）がそのまま入っている。tools/build_pwa.mjs で作り直す");
+  if (/^const GY_JOBUN = \{\s*"/m.test(html)) ng("index.html に条文の本文（GY_JOBUN）がそのまま入っている。tools/build_pwa.mjs で作り直す");
   else if (size > MAX) ng(`index.html が ${(size / 1e6).toFixed(2)}MB（上限 ${MAX / 1e6}MB）。最初の画面が遅くなるので、大きなデータを build_pwa.mjs で別のファイルに分ける`);
   else ok(`index.html は ${(size / 1e6).toFixed(2)}MB（上限 ${MAX / 1e6}MB）で、条文の本文は jobun.json に分けてある`);
-  try { const [a, b] = JSON.parse(readFileSync("jobun.json", "utf8")); const n = Object.keys({ ...a, ...b }).length;
-    if (n < 1000) ng(`jobun.json の条文が ${n} 条しかない`); else ok(`jobun.json に条文が ${n} 条ある`); }
+  try { const [a, b] = JSON.parse(readFileSync("jobun.json", "utf8")); const all = { ...a, ...b }, n = Object.keys(all).length;
+    // 条ごとに、名前（n）と、空でない文の行が1つ以上ある項（p）がそろっていること
+    const empty = Object.entries(all).filter(([, v]) => !v || typeof v.n !== "string" || !Array.isArray(v.p) || !v.p.length
+      || v.p.some((q) => !Array.isArray(q) || !q.length || q.some((l) => typeof l !== "string" || !l.trim()))).map(([k]) => k);
+    if (n < 1000) ng(`jobun.json の条文が ${n} 条しかない`);
+    else if (empty.length) ng(`jobun.json に本文が空か形のちがう条文がある: ${empty.slice(0, 10).join("、")}`);
+    else ok(`jobun.json に条文が ${n} 条あり、どれも本文がある`); }
   catch (e) { ng("jobun.json が読めない: " + e.message); }
 }
 
@@ -894,7 +899,7 @@ if (process.argv.includes("--browser")) {
     page.on("pageerror", (e) => errors.push(`条文を開く: ${e.message}`));
     await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
     await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
-    await page.evaluate(() => window.TENBIN_JOBUN);
+    await page.evaluate(() => Promise.race([window.TENBIN_JOBUN, new Promise((r) => setTimeout(r, 10000))]));
     const r = await page.evaluate(async () => {
       if (typeof GY_JOBUN === "undefined" || typeof XM_LIST === "undefined") return null;
       const tick = () => new Promise((res) => setTimeout(res, 0)), bad = [], miss = [], forms = {};
@@ -938,6 +943,24 @@ if (process.argv.includes("--browser")) {
     }
     await page.close();
   }
+  // 本文が届く前に描いた「根拠条文（本文）」は仮の枠になり、届いたら本文に描き直されること
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`条文の仮の枠: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    let release; const gate = new Promise((r) => { release = r; });
+    await page.route(/jobun\.json/, async (r) => { await gate; await r.continue(); });
+    await page.goto(url, { waitUntil: "load" });
+    const before = await page.evaluate(() => { const id = Object.keys(GY_JB).find((k) => !k.startsWith("__")); const d = document.createElement("div"); d.id = "jbwait-test";
+      d.innerHTML = gyJobun({ id }); (document.getElementById("app") || document.body).append(d); return { id, wait: !!d.querySelector("[data-jbwait]"), art: !!d.querySelector(".jbart") }; });
+    release();
+    const after = await page.evaluate(async () => { await Promise.race([window.TENBIN_JOBUN, new Promise((r) => setTimeout(r, 10000))]);
+      const d = document.getElementById("jbwait-test"); return { wait: !!d.querySelector("[data-jbwait]"), art: !!d.querySelector(".jbart") }; });
+    if (!before.wait || before.art) ng(`本文が届く前の「根拠条文（本文）」が仮の枠にならない（${before.id}）`);
+    else if (after.wait || !after.art) ng(`本文が届いたあと「根拠条文（本文）」が描き直されない（${before.id}）`);
+    else ok("本文が届く前の「根拠条文（本文）」は仮の枠で、届いたら本文に描き直される");
+    await page.close();
+  }
   // オフライン：一度開いたあと、ネットが切れても画面と条文の本文が出ること（sw.js が jobun.json も取っておく）
   {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -950,10 +973,12 @@ if (process.argv.includes("--browser")) {
     if (!ready) ng("オフライン: sw.js が jobun.json を取っておかない");
     else {
       await ctx.setOffline(true);
+      await page.evaluate(() => { window.__beforeReload = true; });
       await page.reload({ waitUntil: "load" }).catch(() => {});
       const r = await page.evaluate(async () => { const got = await Promise.race([window.TENBIN_JOBUN, new Promise((ok) => setTimeout(ok, 15000, "時間切れ"))]);
-        return { got, n: typeof GY_JOBUN === "undefined" ? 0 : Object.keys(GY_JOBUN).length, text: (document.body.innerText || "").trim().length }; }).catch((e) => ({ got: e.message, n: 0, text: 0 }));
-      if (r.got !== true || r.n < 1000 || r.text < 20) ng(`オフライン: 開き直すと画面か条文の本文が出ない（${JSON.stringify(r)}）`);
+        return { got, n: typeof GY_JOBUN === "undefined" ? 0 : Object.keys(GY_JOBUN).length, text: (document.body.innerText || "").trim().length, stale: !!window.__beforeReload }; }).catch((e) => ({ got: e.message, n: 0, text: 0 }));
+      if (r.stale) ng("オフライン: 開き直せず、前の画面のまま（sw.js が index.html を返していない）");
+      else if (r.got !== true || r.n < 1000 || r.text < 20) ng(`オフライン: 開き直すと画面か条文の本文が出ない（${JSON.stringify(r)}）`);
       else ok(`オフライン: 開き直しても画面と条文の本文（${r.n}条）が出る`);
     }
     await ctx.close();
