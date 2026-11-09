@@ -101,7 +101,7 @@ else ok("index.html の外枠は一つだけ");
   else ok(`index.html は ${(size / 1e6).toFixed(2)}MB（上限 ${MAX / 1e6}MB）で、条文の本文は jobun.json に分けてある`);
   try { const [a, b] = JSON.parse(readFileSync("jobun.json", "utf8")); const all = { ...a, ...b }, n = Object.keys(all).length;
     // 条ごとに、名前（n）と、空でない文の行が1つ以上ある項（p）がそろっていること
-    const empty = Object.entries(all).filter(([, v]) => !v || typeof v.n !== "string" || !Array.isArray(v.p) || !v.p.length
+    const empty = Object.entries(all).filter(([, v]) => !v || typeof v.n !== "string" || !v.n.trim() || !Array.isArray(v.p) || !v.p.length
       || v.p.some((q) => !Array.isArray(q) || !q.length || q.some((l) => typeof l !== "string" || !l.trim()))).map(([k]) => k);
     if (n < 1000) ng(`jobun.json の条文が ${n} 条しかない`);
     else if (empty.length) ng(`jobun.json に本文が空か形のちがう条文がある: ${empty.slice(0, 10).join("、")}`);
@@ -969,7 +969,10 @@ if (process.argv.includes("--browser")) {
     await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
     await page.goto(url, { waitUntil: "load" });
     const ready = await page.evaluate(async () => { const r = await Promise.race([navigator.serviceWorker.ready, new Promise((ok) => setTimeout(ok, 30000, null))]);
-      if (!r) return false; const c = await caches.open("tenbin-" + window.TENBIN_VER); return !!(await c.match("jobun.json")); }).catch(() => false);
+      if (!r) return false; const c = await caches.open("tenbin-" + window.TENBIN_VER);
+      // 画面が頼んだ jobun.json?v=… の写しは消し、先に取っておいた jobun.json だけで開き直せるか見る
+      for (const k of await c.keys()) if (new URL(k.url).pathname.endsWith("/jobun.json") && new URL(k.url).search) await c.delete(k);
+      return !!(await c.match("jobun.json")); }).catch(() => false);
     if (!ready) ng("オフライン: sw.js が jobun.json を取っておかない");
     else {
       await ctx.setOffline(true);

@@ -41,16 +41,21 @@ const JOBUN_A_OUT = `const GY_JOBUN = {}; // tenbin:jobun 条文の本文は job
 // 届くまでに描いた「根拠条文（本文）」は仮の枠にしておき、届いたら描き直す。読めなければ、次に画面を押したときかネットが戻ったときに読み直す
 window.TENBIN_JOBUN_WAIT = (refs) => \`<details class="jobun" open data-jbwait="\${JSON.stringify(refs).replace(/&/g, "&amp;").replace(/"/g, "&quot;")}"><summary>根拠条文（本文）</summary><p class="jbsrc">条文の本文を読み込んでいます。つながらないときは、ネットにつないでから画面を押すと読み直します。</p></details>\`;
 window.TENBIN_JOBUN = new Promise((ok) => {
-  let busy = false, done = false;
+  let busy = false, done = false, again = false;
   const get = (n) => fetch("jobun.json?v=" + window.TENBIN_VER, { priority: "low" }).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .catch((e) => n > 0 ? new Promise((w) => setTimeout(w, 3000)).then(() => get(n - 1)) : Promise.reject(e));
+  // 仮の枠を本文に描き直す。閉じていたら閉じたまま、見出しにいたら見出しに戻す
   const fill = () => document.querySelectorAll("[data-jbwait]").forEach((el) => {
-    try { GY_JB.__jbw = JSON.parse(el.dataset.jbwait); el.outerHTML = gyJobun({ id: "__jbw" }); } catch {} finally { delete GY_JB.__jbw; } });
-  const load = () => { if (busy || done) return; busy = true;
-    get(2).then(([a, b]) => { done = true; Object.assign(GY_JOBUN, a, b); window.TENBIN_JOBUN_WAIT = null; try { _seIdx = null; } catch {} fill(); ok(true); })
-      .catch(() => { busy = false; }); };
+    try { GY_JB.__jbw = JSON.parse(el.dataset.jbwait); const t = document.createElement("template"); t.innerHTML = gyJobun({ id: "__jbw" });
+      const nu = t.content.firstElementChild; if (!nu) return; const was = el.contains(document.activeElement);
+      if (!el.open) nu.open = false; el.replaceWith(nu); if (was) nu.querySelector("summary")?.focus({ preventScroll: true }); } catch {} finally { delete GY_JB.__jbw; } });
+  // 読んでいる間にネットが戻ったら、失敗したあとすぐ読み直す
+  const load = () => { if (done) return; if (busy) { again = true; return; } busy = true; again = false;
+    get(2).then(([a, b]) => { done = true; Object.assign(GY_JOBUN, a, b); window.TENBIN_JOBUN_WAIT = null; try { _seIdx = null; } catch {} fill();
+      try { if (document.getElementById("seOut")) seRender(); } catch {} ok(true); })
+      .catch(() => { busy = false; if (again) load(); }); };
   if (document.readyState === "complete") setTimeout(load, 0); else addEventListener("load", () => setTimeout(load, 0), { once: true });
-  addEventListener("pointerdown", load, true); addEventListener("online", load);
+  addEventListener("pointerdown", () => { if (!busy) load(); }, true); addEventListener("keydown", () => { if (!busy) load(); }, true); addEventListener("online", load);
 });`;
 const JOBUN_B_OUT = "// tenbin:jobun-more ほかの資格試験の条文の本文も jobun.json";
 // 根拠条文の枠（gyJobun）は、本文が届く前なら仮の枠を返す。「解答からすぐ条文を見る」は、始めに条文の法令名を集めるので、本文が届いてから始める
@@ -297,10 +302,12 @@ self.addEventListener("fetch", e => {
   // 条文の本文・アイコン・manifest・フォント: キャッシュをすぐ返し、裏で新しい版を取りに行く（stale-while-revalidate）。
   // 条文の本文は画面が jobun.json?v=版 で頼む。この SW と同じ版のときだけ ? のあとを見ずに引く（新しい画面に古い本文を渡さない）
   e.respondWith(caches.open(CACHE).then(async c => {
-    const hit = await c.match(req, { ignoreSearch: u.pathname.endsWith("/jobun.json") && u.searchParams.get("v") === VER });
+    const jb = u.pathname.endsWith("/jobun.json");
+    const hit = await c.match(req, { ignoreSearch: jb && u.searchParams.get("v") === VER });
     const net = fetch(req).then(r => { if (r && (r.ok || r.type === "opaque")) c.put(req, r.clone()); return r; }).catch(() => null);
     if (hit) { e.waitUntil(net); return hit; }
-    return (await net) || offline();
+    // 版のちがう条文の本文は、つながらないときだけ手元の本文で代える（新しい画面を開いた直後に切れても、条文が出ないままにしない）
+    return (await net) || (jb && await c.match(req, { ignoreSearch: true })) || offline();
   }));
 });
 `);
