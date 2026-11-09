@@ -104,6 +104,16 @@ for (const [f, want] of wantSizes) {
   catch (e) { ng(`${f} の大きさを読めない: ${e.message}`); }
 }
 
+// 4b. 送る量の上限（性能の予算。web.dev/articles/performance-budgets-101）。アプリ本体は1つの HTML で、全部届くまで最初の画面が出ない。
+// 11/2 の 2.8MB（圧縮 0.65MB）が 11/9 に 7.2MB（圧縮 1.67MB）になり、週1の Lighthouse で最初の画面まで 10 秒になった（2026-11-09）。
+// 上限を超える PR は、条文の本文など最初に要らないものを後から読む形にしてから入れる。
+{
+  const { gzipSync } = await import("zlib");
+  const gz = gzipSync(readFileSync("index.html")).length, LIMIT = 2_000_000;
+  if (gz > LIMIT) ng(`index.html が大きすぎる（圧縮して ${(gz / 1e6).toFixed(2)}MB、上限 ${LIMIT / 1e6}MB）。最初に要らないデータを別のファイルにして後から読む`);
+  else ok(`index.html の送る量 圧縮して ${(gz / 1e6).toFixed(2)}MB（上限 ${LIMIT / 1e6}MB）`);
+}
+
 // 5. ブラウザで開く
 if (process.argv.includes("--browser")) {
   const { chromium } = await import("playwright");
@@ -376,6 +386,19 @@ if (process.argv.includes("--browser")) {
         await page.evaluate(() => showOffice()); await page.waitForTimeout(400);
         if (!/司法書士/.test(await first())) bad.push(`設定で選んでも①が司法書士でない（${(await first()).trim().slice(0, 20)}）`); } }
     if (bad.length) ng(`初めての質問: ${bad.join(" / ")}`); else ok("初めて開いた人にだけ試験を聞き、選んだ試験がホームの①になる（設定からも選び直せる）");
+    await page.close();
+  }
+  // 初めて開いた人の画面が、描いたあとにずれないこと（CLS。Lighthouse の速さの点の 25% を占め、0.1 以下が「良い」。web.dev/articles/cls）。
+  // ホームを描いたあとに上へ枠を足すと、下のものが押し下げられてずれる（2026-11-09 週1の Lighthouse で速さ 36 点。shared-workflows incidents/2026-11-09-tenbin-lighthouse-cls.md）
+  for (const vp of [{ name: "スマホ", width: 390, height: 844 }, { name: "PC", width: 1280, height: 800 }]) {
+    const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
+    page.on("pageerror", (e) => errors.push(`画面のずれ ${vp.name}: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.addInitScript(() => { window.__cls = []; new PerformanceObserver((l) => { for (const e of l.getEntries()) if (!e.hadRecentInput) window.__cls.push([e.value, e.sources.map((s) => (s.node && (s.node.className || s.node.nodeName)) || "?").join(",")]); }).observe({ type: "layout-shift", buffered: true }); });
+    await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
+    const ls = await page.evaluate(() => window.__cls), sum = ls.reduce((a, x) => a + x[0], 0);
+    if (sum > 0.1) ng(`${vp.name}: 初めて開いた画面が描いたあとにずれる（CLS ${sum.toFixed(3)}、0.1 まで）: ${ls.filter((x) => x[0] > 0.01).map((x) => `${x[1]} ${x[0].toFixed(3)}`).join(" / ")}`);
+    else ok(`${vp.name}: 初めて開いた画面が描いたあとにずれない（CLS ${sum.toFixed(3)}）`);
     await page.close();
   }
   // 戻るをそろえる（2026-11-07）：試験の対策の画面に、古い一覧へ行く「試験の一覧にもどる」は出さない。

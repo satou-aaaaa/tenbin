@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611071254";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611091121";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -585,7 +585,7 @@ html body .wlist > button.gyb[data-r="trap"], html body .wlist > button.gyb[data
     ol.querySelectorAll(".num").forEach((n, i) => { n.textContent = "①②③④⑤⑥⑦"[i] || ""; });
   }
   const start = () => { const a = document.getElementById("app"); if (!a) return; deco(); new MutationObserver(deco).observe(a, { childList: true }); };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+  if (document.getElementById("app")) start(); else new MutationObserver((l, o) => { if (document.getElementById("app")) { o.disconnect(); start(); } }).observe(document.documentElement, { childList: true, subtree: true });  // #app ができたらすぐ（DOMContentLoaded を待つと、ホームを描いたあとに枠が足されて画面がずれる。2026-11-09 Lighthouse の CLS）
 })();
 // 第7回：試験の対策の画面で、長い説明（90字より長い）は最初の1文と今の様子だけ見せ、残りを「くわしい説明」にしまう
 (function () {
@@ -607,7 +607,7 @@ html body .wlist > button.gyb[data-r="trap"], html body .wlist > button.gyb[data
     });
   }
   const start = () => { const a = document.getElementById("app"); if (!a) return; fold(); new MutationObserver(fold).observe(a, { childList: true }); };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+  if (document.getElementById("app")) start(); else new MutationObserver((l, o) => { if (document.getElementById("app")) { o.disconnect(); start(); } }).observe(document.documentElement, { childList: true, subtree: true });  // #app ができたらすぐ（DOMContentLoaded を待つと、ホームを描いたあとに枠が足されて画面がずれる。2026-11-09 Lighthouse の CLS）
 })();
 // 第8回：初めて開いた人に試験を1回だけ聞く（記録が何もないときだけ。ページを開いた時点で判定する）
 (function () {
@@ -633,7 +633,7 @@ html body .wlist > button.gyb[data-r="trap"], html body .wlist > button.gyb[data
     head.after(s);
   }
   const start = () => { const a = document.getElementById("app"); if (!a) return; ask(); new MutationObserver(ask).observe(a, { childList: true }); };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+  if (document.getElementById("app")) start(); else new MutationObserver((l, o) => { if (document.getElementById("app")) { o.disconnect(); start(); } }).observe(document.documentElement, { childList: true, subtree: true });  // #app ができたらすぐ（DOMContentLoaded を待つと、ホームを描いたあとに枠が足されて画面がずれる。2026-11-09 Lighthouse の CLS）
 })();
 // 第9回：戻るをそろえる（古い一覧へ行く「試験の一覧にもどる」を外す。教科書の単元の上に「‹ 分野」）
 (function () {
@@ -657,7 +657,7 @@ html body .wlist > button.gyb[data-r="trap"], html body .wlist > button.gyb[data
     }
   }
   const start = () => { const a = document.getElementById("app"); if (!a) return; fix(); new MutationObserver(fix).observe(a, { childList: true }); };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+  if (document.getElementById("app")) start(); else new MutationObserver((l, o) => { if (document.getElementById("app")) { o.disconnect(); start(); } }).observe(document.documentElement, { childList: true, subtree: true });  // #app ができたらすぐ（DOMContentLoaded を待つと、ホームを描いたあとに枠が足されて画面がずれる。2026-11-09 Lighthouse の CLS）
 })();
 // 第6回：どの画面でも右上に「⚙ 設定」。文字の大きさ・画面の色をその場で変える（ホームの「そのほか」と同じ記録 tenbin-fs・tenbin-theme）
 (function () {
@@ -696,7 +696,7 @@ html body .wlist > button.gyb[data-r="trap"], html body .wlist > button.gyb[data
     b.innerHTML = '<span aria-hidden="true">⚙</span> 設定'; b.onclick = open; host.appendChild(b);
   }
   const start = () => { const a = document.getElementById("app"); if (!a) return; add(); new MutationObserver(add).observe(a, { childList: true }); };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+  if (document.getElementById("app")) start(); else new MutationObserver((l, o) => { if (document.getElementById("app")) { o.disconnect(); start(); } }).observe(document.documentElement, { childList: true, subtree: true });  // #app ができたらすぐ（DOMContentLoaded を待つと、ホームを描いたあとに枠が足されて画面がずれる。2026-11-09 Lighthouse の CLS）
 })();
 </script>
 <script id="thm-js">
@@ -759,7 +759,7 @@ html[data-theme="paper"] .hurt { animation-name: hurtPaper; }
     if (sum && !/画面の色/.test(sum.textContent)) sum.textContent = sum.textContent.replace("文字の大きさ", "文字の大きさ・画面の色");
   };
   const start = () => { const app = document.getElementById("app"); if (app) new MutationObserver(addUI).observe(app, { childList: true, subtree: true }); addUI(); };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+  if (document.getElementById("app")) start(); else new MutationObserver((l, o) => { if (document.getElementById("app")) { o.disconnect(); start(); } }).observe(document.documentElement, { childList: true, subtree: true });  // #app ができたらすぐ（DOMContentLoaded を待つと、ホームを描いたあとに枠が足されて画面がずれる。2026-11-09 Lighthouse の CLS）
 })();
 </script>
 
