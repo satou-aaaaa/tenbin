@@ -3,7 +3,7 @@
 //             index.html を渡すと、本体の部分だけを取り出して包み直す（元のHTMLが手元に無くても作り直せる）。
 //   版（VER）: ふだんは今の時刻。SOURCE_DATE_EPOCH（秒）があればその時刻にする（同じ入力から同じ出力を作るため）。
 //   ブラウザ: アイコンの PNG を描くのに Playwright の Chromium を使う。CHROMIUM_PATH があればそれを使う。
-// 作るもの: index.html・manifest.webmanifest・sw.js・アイコン4つ（どれも生成物。直接直さない）
+// 作るもの: index.html・jobun.json（条文の本文）・manifest.webmanifest・sw.js・アイコン4つ（どれも生成物。直接直さない）
 import fs from "fs"; import path from "path";
 import { chromium } from "playwright";
 const [src, out] = process.argv.slice(2);
@@ -33,7 +33,65 @@ const stripArtifactFrame = (h) => {
   if (!m) return h;
   return h.slice(m[0].length).replace(/\n*<\/body><\/html>\s*$/i, "\n");
 };
-const body = stripArtifactFrame(unwrap(fs.readFileSync(src, "utf8")));
+// 条文の本文（GY_JOBUN。約2.8MB）は jobun.json に分け、最初の画面が出たあとで読む（2026-11-09。index.html が 7.2MB に
+// なり、Lighthouse の速さが下限の近くまで落ちた）。本体（claude.ai 版）は1つのファイルのまま変えず、ここで分ける。
+// 分けたあとの index.html からも元の本体に戻せるよう、置き換えは決まった文字どうしにして、戻すとき（join）は逆にたどる。
+const JOBUN_A = /^const GY_JOBUN = (\{.*\});$/m, JOBUN_B = /^Object\.assign\(GY_JOBUN, (\{.*\})\);$/m;
+const JOBUN_A_OUT = `const GY_JOBUN = {}; // tenbin:jobun 条文の本文は jobun.json（tools/build_pwa.mjs が分ける）。最初の画面のあとで読む
+// 届くまでに描いた「根拠条文（本文）」は仮の枠にしておき、届いたら描き直す。読めなければ、次に画面を押したときかネットが戻ったときに読み直す
+window.TENBIN_JOBUN_WAIT = (refs) => \`<details class="jobun" open data-jbwait="\${JSON.stringify(refs).replace(/&/g, "&amp;").replace(/"/g, "&quot;")}"><summary>根拠条文（本文）</summary><p class="jbsrc">条文の本文を読み込んでいます。つながらないときは、ネットにつないでから画面を押すと読み直します。</p></details>\`;
+window.TENBIN_JOBUN = new Promise((ok) => {
+  let busy = false, done = false, again = false;
+  const get = (n) => fetch("jobun.json?v=" + window.TENBIN_VER, { priority: "low" }).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .catch((e) => n > 0 ? new Promise((w) => setTimeout(w, 3000)).then(() => get(n - 1)) : Promise.reject(e));
+  // 仮の枠を本文に描き直す。閉じていたら閉じたまま、見出しにいたら見出しに戻す
+  const fill = () => document.querySelectorAll("[data-jbwait]").forEach((el) => {
+    try { GY_JB.__jbw = JSON.parse(el.dataset.jbwait); const t = document.createElement("template"); t.innerHTML = gyJobun({ id: "__jbw" });
+      const nu = t.content.firstElementChild; if (!nu) return; const was = el.contains(document.activeElement);
+      if (!el.open) nu.open = false; el.replaceWith(nu); if (was) nu.querySelector("summary")?.focus({ preventScroll: true }); } catch {} finally { delete GY_JB.__jbw; } });
+  // 読んでいる間にネットが戻ったら、失敗したあとすぐ読み直す
+  const load = () => { if (done) return; if (busy) { again = true; return; } busy = true; again = false;
+    get(2).then(([a, b]) => { done = true; Object.assign(GY_JOBUN, a, b); window.TENBIN_JOBUN_WAIT = null; try { _seIdx = null; } catch {} fill();
+      try { if (document.getElementById("seOut")) seRender(); } catch {} ok(true); })
+      .catch(() => { busy = false; if (again) load(); }); };
+  if (document.readyState === "complete") setTimeout(load, 0); else addEventListener("load", () => setTimeout(load, 0), { once: true });
+  addEventListener("pointerdown", () => { if (!busy) load(); }, true); addEventListener("keydown", () => { if (!busy) load(); }, true); addEventListener("online", load);
+});`;
+const JOBUN_B_OUT = "// tenbin:jobun-more ほかの資格試験の条文の本文も jobun.json";
+// 根拠条文の枠（gyJobun）は、本文が届く前なら仮の枠を返す。「解答からすぐ条文を見る」は、始めに条文の法令名を集めるので、本文が届いてから始める
+const JOBUN_PATCH = [
+  ["const refs = (typeof GY_JB !== \"undefined\" && GY_JB[q.id]) || []; if (!refs.length) return \"\";\n",
+    "const refs = (typeof GY_JB !== \"undefined\" && GY_JB[q.id]) || []; if (!refs.length) return \"\";\n  if (window.TENBIN_JOBUN_WAIT && !refs.some(([k]) => GY_JOBUN[k])) return window.TENBIN_JOBUN_WAIT(refs);\n"],
+  ["(() => {\n  if (typeof GY_JOBUN === \"undefined\") return;\n  // 略称 → GY_JOBUN の法令名",
+    "window.TENBIN_JOBUN.then(() => {\n  if (typeof GY_JOBUN === \"undefined\") return;\n  // 略称 → GY_JOBUN の法令名"],
+  ["})();\n// ===== 解答からすぐ条文を見る ここまで =====", "});\n// ===== 解答からすぐ条文を見る ここまで ====="],
+];
+const count = (s, t) => s.split(t).length - 1;
+const fail = (m) => { console.error(m); process.exit(1); };
+// 分けたあとの形（index.html から取り出した本体）なら、jobun.json を戻して元の本体にする
+const joinJobun = (h) => {
+  if (!h.includes(JOBUN_A_OUT)) return h;
+  const f = path.join(path.dirname(src), "jobun.json");
+  if (!fs.existsSync(f)) fail(`${f} が無い（index.html から作り直すときは、同じフォルダの jobun.json が要る）`);
+  const [a, b] = JSON.parse(fs.readFileSync(f, "utf8"));
+  if (count(h, JOBUN_A_OUT) !== 1 || count(h, JOBUN_B_OUT) !== 1) fail("index.html の条文の置き場所の印が1つずつでない");
+  h = h.replace(JOBUN_A_OUT, () => `const GY_JOBUN = ${JSON.stringify(a)};`).replace(JOBUN_B_OUT, () => `Object.assign(GY_JOBUN, ${JSON.stringify(b)});`);
+  for (const [orig, patched] of JOBUN_PATCH) { if (count(h, patched) !== 1) fail("条文の待ち合わせの印（JOBUN_PATCH）が見つからない"); h = h.replace(patched, () => orig); }
+  return h;
+};
+// 元の本体から条文の本文を抜き出す。本体の形が変わって見つからないときは止める（黙って分けずに重いまま出さない）
+const splitJobun = (h) => {
+  const a = h.match(JOBUN_A), b = h.match(JOBUN_B);
+  if ((!a || !b) && h.includes("const GY_JOBUN = {}; // tenbin:jobun")) fail("index.html の条文の置き場所が前の形（JOBUN_A_OUT を変えた）。前の形からは戻せないので、分ける前の本体（claude.ai 版か、分ける前の main の index.html）から作り直す。JOBUN_A_OUT を変えるときは、前の形も戻せるようにする");
+  if (!a || !b) fail("本体に「const GY_JOBUN = {…};」か「Object.assign(GY_JOBUN, {…});」の1行が見つからない。本体の形が変わったら tools/build_pwa.mjs の JOBUN_A・JOBUN_B を合わせる");
+  for (const [orig] of JOBUN_PATCH) if (count(h, orig) !== 1) fail("本体の gyJobun か「解答からすぐ条文を見る」の形が変わった。tools/build_pwa.mjs の JOBUN_PATCH を合わせる");
+  const A = JSON.parse(a[1]), B = JSON.parse(b[1]);
+  if (JSON.stringify(A) !== a[1] || JSON.stringify(B) !== b[1]) fail("条文の本文が JSON.stringify の形でない（分けて戻すと同じにならない）");
+  let rest = h.replace(a[0], () => JOBUN_A_OUT).replace(b[0], () => JOBUN_B_OUT);
+  for (const [orig, patched] of JOBUN_PATCH) rest = rest.replace(orig, () => patched);
+  return { rest, json: `[${a[1]},\n${b[1]}]\n` };
+};
+const { rest: body, json: jobunJson } = splitJobun(joinJobun(stripArtifactFrame(unwrap(fs.readFileSync(src, "utf8")))));
 fs.mkdirSync(out, { recursive: true });
 const head = `<!doctype html>
 <html lang="ja"><head>
@@ -195,6 +253,7 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
 </body></html>
 `;
 fs.writeFileSync(path.join(out, "index.html"), head + body + tail);
+fs.writeFileSync(path.join(out, "jobun.json"), jobunJson);
 fs.writeFileSync(path.join(out, "manifest.webmanifest"), JSON.stringify({
   name: "天秤の書　論文答案クエスト", short_name: "天秤の書", lang: "ja",
   description: "司法試験の論文式を、事例問題で練習する学習ゲーム",
@@ -210,7 +269,7 @@ fs.writeFileSync(path.join(out, "sw.js"), `// 天秤の書 Service Worker（オ�
 // tools/build_pwa.mjs が作る生成物。直接直さない。
 const VER = "${VER}";
 const CACHE = "tenbin-" + VER;
-const SHELL = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"];
+const SHELL = ["./", "index.html", "jobun.json", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"];
 // HTTP キャッシュの古いファイルを新しい版のキャッシュに入れないよう、cache: "reload" で取り直す
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
@@ -240,12 +299,15 @@ self.addEventListener("fetch", e => {
     }));
     return;
   }
-  // アイコン・manifest・フォント: キャッシュをすぐ返し、裏で新しい版を取りに行く（stale-while-revalidate）
+  // 条文の本文・アイコン・manifest・フォント: キャッシュをすぐ返し、裏で新しい版を取りに行く（stale-while-revalidate）。
+  // 条文の本文は画面が jobun.json?v=版 で頼む。この SW と同じ版のときだけ ? のあとを見ずに引く（新しい画面に古い本文を渡さない）
   e.respondWith(caches.open(CACHE).then(async c => {
-    const hit = await c.match(req);
+    const jb = u.pathname.endsWith("/jobun.json");
+    const hit = await c.match(req, { ignoreSearch: jb && u.searchParams.get("v") === VER });
     const net = fetch(req).then(r => { if (r && (r.ok || r.type === "opaque")) c.put(req, r.clone()); return r; }).catch(() => null);
     if (hit) { e.waitUntil(net); return hit; }
-    return (await net) || offline();
+    // 版のちがう条文の本文は、つながらないときだけ手元の本文で代える（新しい画面を開いた直後に切れても、条文が出ないままにしない）
+    return (await net) || (jb && await c.match(req, { ignoreSearch: true })) || offline();
   }));
 });
 `);

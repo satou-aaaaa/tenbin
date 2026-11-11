@@ -3,7 +3,7 @@
 // 3. sw.js の SHELL（オフライン用に先に取るファイル）が全部あるか・版が index.html と sw.js でそろっているか
 // 4. アイコンの PNG の大きさが manifest の sizes どおりか
 // 5. ブラウザで開いて、JS のエラーが出ないか・画面に何か描かれるか・hidden の枠が隠れるか・残り時間の幅が動かないか（--browser のときだけ）
-// 6. index.html から作り直して、index.html・sw.js・manifest が今のものと同じか（--rebuild のときだけ）。
+// 6. index.html（と jobun.json）から作り直して、index.html・jobun.json・sw.js・manifest が今のものと同じか（--rebuild のときだけ）。
 //    違えば、生成物を手で直したか、tools/build_pwa.mjs を直したのに作り直していない。
 // 使い方: node tools/check.mjs [--browser] [--rebuild]
 import { readFileSync, writeFileSync, mkdtempSync, existsSync } from "node:fs";
@@ -92,6 +92,23 @@ const docs = (html.match(/<!doctype/gi) || []).length, ends = (html.match(/<\/bo
 if (docs !== 1 || ends > 1) ng(`index.html に <!doctype> が ${docs} 個、</body> が ${ends} 個ある（Artifact の写しの外枠が中に入っている）`);
 else ok("index.html の外枠は一つだけ");
 
+// 3f. 条文の本文は jobun.json に分け、index.html を軽くしておく（2026-11-09：7.2MB になり、最初の画面まで約10秒・Lighthouse の速さが下限の近くまで落ちた）。
+// 本体が育って上限を超えたら、ほかの大きなデータも build_pwa.mjs で分ける（上限を上げてごまかさない）
+{
+  const MAX = 5_000_000, size = Buffer.byteLength(html);
+  if (/^const GY_JOBUN = \{\s*"/m.test(html)) ng("index.html に条文の本文（GY_JOBUN）がそのまま入っている。tools/build_pwa.mjs で作り直す");
+  else if (size > MAX) ng(`index.html が ${(size / 1e6).toFixed(2)}MB（上限 ${MAX / 1e6}MB）。最初の画面が遅くなるので、大きなデータを build_pwa.mjs で別のファイルに分ける`);
+  else ok(`index.html は ${(size / 1e6).toFixed(2)}MB（上限 ${MAX / 1e6}MB）で、条文の本文は jobun.json に分けてある`);
+  try { const [a, b] = JSON.parse(readFileSync("jobun.json", "utf8")); const all = { ...a, ...b }, n = Object.keys(all).length;
+    // 条ごとに、名前（n）と、空でない文の行が1つ以上ある項（p）がそろっていること
+    const empty = Object.entries(all).filter(([, v]) => !v || typeof v.n !== "string" || !v.n.trim() || !Array.isArray(v.p) || !v.p.length
+      || v.p.some((q) => !Array.isArray(q) || !q.length || q.some((l) => typeof l !== "string" || !l.trim()))).map(([k]) => k);
+    if (n < 1000) ng(`jobun.json の条文が ${n} 条しかない`);
+    else if (empty.length) ng(`jobun.json に本文が空か形のちがう条文がある: ${empty.slice(0, 10).join("、")}`);
+    else ok(`jobun.json に条文が ${n} 条あり、どれも本文がある`); }
+  catch (e) { ng("jobun.json が読めない: " + e.message); }
+}
+
 // 4. アイコンの大きさ（PNG の先頭 IHDR から幅と高さを読む）
 const pngSize = (f) => {
   const b = readFileSync(f);
@@ -117,7 +134,7 @@ for (const [f, want] of wantSizes) {
 // 5. ブラウザで開く
 if (process.argv.includes("--browser")) {
   const { chromium } = await import("playwright");
-  const types = { ".html": "text/html", ".js": "text/javascript", ".png": "image/png", ".webmanifest": "application/manifest+json" };
+  const types = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".png": "image/png", ".webmanifest": "application/manifest+json" };
   const server = createServer((req, res) => {
     let p = normalize(decodeURIComponent(new URL(req.url, "http://x").pathname)).replace(/^[/\\]+/, "") || "index.html";
     if (p.includes("..")) { res.writeHead(403).end(); return; }
@@ -135,6 +152,11 @@ if (process.argv.includes("--browser")) {
     await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
     await page.goto(url, { waitUntil: "load" });
     await page.waitForTimeout(1500);
+    // 条文の本文は最初の画面のあとで jobun.json から読む。届いて、検索と「解答からすぐ条文を見る」に使えること
+    const jb = await page.evaluate(async () => { if (!window.TENBIN_JOBUN) return "TENBIN_JOBUN が無い";
+      const got = await Promise.race([window.TENBIN_JOBUN, new Promise((r) => setTimeout(r, 10000, "時間切れ"))]);
+      return got === true && Object.keys(GY_JOBUN).length > 1000 && typeof window.jlScan === "function" ? "" : `届かない（${got}・${Object.keys(GY_JOBUN).length}条・jlScan ${typeof window.jlScan}）`; });
+    if (jb) ng(`${vp.name}: 条文の本文（jobun.json）が${jb}`); else ok(`${vp.name}: 条文の本文が jobun.json から届き、条文を開く仕組みが動く`);
     const text = (await page.evaluate(() => document.body.innerText || "")).trim();
     if (text.length < 20) ng(`${vp.name}の画面がほとんど空（${text.length}文字）`);
     else ok(`${vp.name}の画面で開けた（${text.length}文字）`);
@@ -877,6 +899,7 @@ if (process.argv.includes("--browser")) {
     page.on("pageerror", (e) => errors.push(`条文を開く: ${e.message}`));
     await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
     await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
+    await page.evaluate(() => Promise.race([window.TENBIN_JOBUN, new Promise((r) => setTimeout(r, 10000))]));
     const r = await page.evaluate(async () => {
       if (typeof GY_JOBUN === "undefined" || typeof XM_LIST === "undefined") return null;
       const tick = () => new Promise((res) => setTimeout(res, 0)), bad = [], miss = [], forms = {};
@@ -920,6 +943,49 @@ if (process.argv.includes("--browser")) {
     }
     await page.close();
   }
+  // 本文が届く前に描いた「根拠条文（本文）」は仮の枠になり、届いたら本文に描き直されること
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`条文の仮の枠: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    let release; const gate = new Promise((r) => { release = r; });
+    await page.route(/jobun\.json/, async (r) => { await gate; await r.continue(); });
+    await page.goto(url, { waitUntil: "load" });
+    const before = await page.evaluate(() => { const id = Object.keys(GY_JB).find((k) => !k.startsWith("__")); const d = document.createElement("div"); d.id = "jbwait-test";
+      d.innerHTML = gyJobun({ id }); (document.getElementById("app") || document.body).append(d); return { id, wait: !!d.querySelector("[data-jbwait]"), art: !!d.querySelector(".jbart") }; });
+    release();
+    const after = await page.evaluate(async () => { await Promise.race([window.TENBIN_JOBUN, new Promise((r) => setTimeout(r, 10000))]);
+      const d = document.getElementById("jbwait-test"); return { wait: !!d.querySelector("[data-jbwait]"), art: !!d.querySelector(".jbart") }; });
+    if (!before.wait || before.art) ng(`本文が届く前の「根拠条文（本文）」が仮の枠にならない（${before.id}）`);
+    else if (after.wait || !after.art) ng(`本文が届いたあと「根拠条文（本文）」が描き直されない（${before.id}）`);
+    else ok("本文が届く前の「根拠条文（本文）」は仮の枠で、届いたら本文に描き直される");
+    await page.close();
+  }
+  // オフライン：一度開いたあと、ネットが切れても画面と条文の本文が出ること（sw.js が jobun.json も取っておく）
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await ctx.newPage();
+    page.on("pageerror", (e) => errors.push(`オフライン: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(url, { waitUntil: "load" });
+    const ready = await page.evaluate(async () => { const r = await Promise.race([navigator.serviceWorker.ready, new Promise((ok) => setTimeout(ok, 30000, null))]);
+      if (!r) return false; const c = await caches.open("tenbin-" + window.TENBIN_VER);
+      // 画面が頼んだ jobun.json?v=… の写しは消し、先に取っておいた jobun.json だけで開き直せるか見る
+      for (const k of await c.keys()) if (new URL(k.url).pathname.endsWith("/jobun.json") && new URL(k.url).search) await c.delete(k);
+      return !!(await c.match("jobun.json")); }).catch(() => false);
+    if (!ready) ng("オフライン: sw.js が jobun.json を取っておかない");
+    else {
+      await ctx.setOffline(true);
+      await page.evaluate(() => { window.__beforeReload = true; });
+      await page.reload({ waitUntil: "load" }).catch(() => {});
+      const r = await page.evaluate(async () => { const got = await Promise.race([window.TENBIN_JOBUN, new Promise((ok) => setTimeout(ok, 15000, "時間切れ"))]);
+        return { got, n: typeof GY_JOBUN === "undefined" ? 0 : Object.keys(GY_JOBUN).length, text: (document.body.innerText || "").trim().length, stale: !!window.__beforeReload }; }).catch((e) => ({ got: e.message, n: 0, text: 0 }));
+      if (r.stale) ng("オフライン: 開き直せず、前の画面のまま（sw.js が index.html を返していない）");
+      else if (r.got !== true || r.n < 1000 || r.text < 20) ng(`オフライン: 開き直すと画面か条文の本文が出ない（${JSON.stringify(r)}）`);
+      else ok(`オフライン: 開き直しても画面と条文の本文（${r.n}条）が出る`);
+    }
+    await ctx.close();
+  }
   await browser.close(); server.close();
   if (errors.length) errors.forEach((e) => ng("JS のエラー: " + e)); else ok("JS のエラーなし");
 }
@@ -929,7 +995,7 @@ if (process.argv.includes("--rebuild") && swVer) {
   const out = mkdtempSync(join(tmpdir(), "tenbin-build-"));
   try {
     execFileSync(process.execPath, ["tools/build_pwa.mjs", "index.html", out], { stdio: "pipe", env: { ...process.env, SOURCE_DATE_EPOCH: String(epoch) } });
-    for (const f of ["index.html", "sw.js", "manifest.webmanifest"]) {
+    for (const f of ["index.html", "jobun.json", "sw.js", "manifest.webmanifest"]) {
       if (readFileSync(join(out, f), "utf8") === readFileSync(f, "utf8")) ok(`作り直した ${f} が今のものと同じ`);
       else ng(`作り直した ${f} が今のものと違う。生成物を手で直さず、node tools/build_pwa.mjs <元のHTML> . で作り直す`);
     }
