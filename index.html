@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611110409";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611110428";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -563,6 +563,8 @@ html body .wlist:has(> button.gyb) { grid-template-columns: repeat(auto-fill, mi
 html body .wlist > button.gyb { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; padding: 6px 10px; }
 html body .wlist > button.gyb .ch-title { line-height: 1.35; }
 html body .wlist > button.gyb[data-r="trap"], html body .wlist > button.gyb[data-gk="trap"] { grid-column: 1 / -1; }
+/* 第13回：分野の論文の一覧が長いときは、最初の6問と続きの問題だけ見せ、残りは「残り〇問も見る」で出す */
+html body .wlist > button.uxwAll { grid-column: 1 / -1; justify-content: center; border-style: dashed; color: var(--gold); background: transparent; }
 </style>
 <script id="uxw-js">if (!document.documentElement.lang) document.documentElement.lang = "ja";
 // 第5回：ホームの「今日の学習」を、前に使った試験に合わせる（論文以外の試験を使っている人にも①が自分の試験になる）
@@ -658,6 +660,27 @@ html body .wlist > button.gyb[data-r="trap"], html body .wlist > button.gyb[data
   }
   const start = () => { const a = document.getElementById("app"); if (!a) return; fix(); new MutationObserver(fix).observe(a, { childList: true }); };
   if (document.getElementById("app")) start(); else new MutationObserver((l, o) => { if (document.getElementById("app")) { o.disconnect(); start(); } }).observe(document.documentElement, { childList: true, subtree: true });  // #app ができたらすぐ（DOMContentLoaded を待つと、ホームを描いたあとに枠が足されて画面がずれる。2026-11-09 Lighthouse の CLS）
+})();
+// 第13回：分野の画面の論文の一覧（17問など）が長く、ページの半分近くを占めていた。最初の6問と、復習・書きかけの問題だけ見せる
+(function () {
+  const SHOW = 6;
+  function fold() {
+    const a = document.getElementById("app"); if (!a) return;
+    const head = a.querySelector(":scope > .chapter-head"); if (!head || !/分野：/.test(head.textContent)) return;
+    a.querySelectorAll(":scope > section.wlist:not([data-uxw])").forEach(w => {
+      const h = w.previousElementSibling; if (!h || !/論文/.test(h.textContent)) return; w.dataset.uxw = "1";
+      const bs = [...w.querySelectorAll(":scope > button[data-write]")]; if (bs.length <= SHOW + 2) return;
+      const hide = bs.filter((b, i) => i >= SHOW && !b.querySelector(".due") && !/書きかけ/.test(b.textContent));
+      if (hide.length < 3) return;
+      hide.forEach(b => { b.hidden = true; });
+      const m = document.createElement("button"); m.type = "button"; m.className = "uxwAll";
+      m.textContent = "残り" + hide.length + "問も見る（全" + bs.length + "問）";
+      m.onclick = () => { hide.forEach(b => { b.hidden = false; }); m.remove(); if (hide[0]) hide[0].focus(); };
+      w.appendChild(m);
+    });
+  }
+  const start = () => { const a = document.getElementById("app"); if (!a) return; fold(); new MutationObserver(fold).observe(a, { childList: true }); };
+  if (document.getElementById("app")) start(); else new MutationObserver((l, o) => { if (document.getElementById("app")) { o.disconnect(); start(); } }).observe(document.documentElement, { childList: true, subtree: true });
 })();
 // 第6回：どの画面でも右上に「⚙ 設定」。文字の大きさ・画面の色をその場で変える（ホームの「そのほか」と同じ記録 tenbin-fs・tenbin-theme）
 (function () {

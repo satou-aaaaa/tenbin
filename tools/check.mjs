@@ -489,6 +489,32 @@ if (process.argv.includes("--browser")) {
     if (bad.length) ng(`試験の対策の画面: ${bad.join(" / ")}`); else ok("試験の対策の画面で分野は2列、模試を受ける前の合否の表はしまってある");
     await page.close();
   }
+  // 分野の画面の論文の一覧を短くする（2026-11-11）：8問を越えたら最初の6問と復習・書きかけだけ見せ、「残り〇問も見る」で全部出す。
+  // 17問が並んでページの半分近くを占めていた（NN/g の Progressive Disclosure：よく使う物を先に、残りは求められたら出す）
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`分野の論文の一覧: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    page.on("dialog", (d) => d.dismiss());
+    const bad = []; let seen = 0;
+    await page.goto(url, { waitUntil: "load" }); await page.evaluate(() => { localStorage.clear(); localStorage.setItem("tenbin-onboard", "1"); }); await page.reload({ waitUntil: "load" });
+    for (let i = 0; i < 12; i++) {
+      const has = await page.evaluate((i) => { showOffice(); const b = document.querySelectorAll(".bnrow")[i]; if (!b) return false; b.click(); return true; }, i); if (!has) break;
+      await page.waitForTimeout(150);
+      const r = await page.evaluate(() => { const name = (document.querySelector("#app > .chapter-head")?.textContent || "").replace(/‹ 目次|⚙ 設定/g, "");
+        const w = [...document.querySelectorAll("#app > section.wlist")].find((x) => /論文/.test(x.previousElementSibling?.textContent || "")); if (!w) return { name, n: 0 };
+        const bs = [...w.querySelectorAll(":scope > button[data-write]")], vis = bs.filter((b) => b.getClientRects().length).length, more = w.querySelector("button.uxwAll");
+        const r = { name, n: bs.length, vis, label: more ? more.textContent : "" }; if (more) { more.click(); r.after = bs.filter((b) => b.getClientRects().length).length; r.left = !!w.querySelector("button.uxwAll"); }
+        return r; });
+      if (r.n > 8) { seen++;
+        if (r.vis > 8 || !r.label) bad.push(`${r.name}: 論文${r.n}問が全部並んでいる（${r.vis}問見えている）`);
+        else { if (!r.label.includes(`残り${r.n - r.vis}問`) || !r.label.includes(`全${r.n}問`)) bad.push(`${r.name}: 「${r.label}」の数が合わない（${r.n}問中${r.vis}問見えている）`);
+          if (r.after !== r.n || r.left) bad.push(`${r.name}: 「残り〇問も見る」を押しても全部出ない（${r.after}/${r.n}問）`); } }
+    }
+    if (!seen) bad.push("論文が9問以上ある分野が見つからない（分野の画面の作りが変わった？）");
+    if (bad.length) ng(`分野の論文の一覧: ${bad.join(" / ")}`); else ok(`分野の論文の一覧は、長いとき最初の数問だけ見せ「残り〇問も見る」で全部出る（${seen}分野）`);
+    await page.close();
+  }
   // 応援のお願い: 何も解いていないうちは出ない。10問を越えて目次を開くと1回だけ出る。「もう出さない」のあとは出ない
   {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
