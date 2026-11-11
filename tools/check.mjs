@@ -251,6 +251,20 @@ if (process.argv.includes("--browser")) {
     else ok(`${vp.name}: 目次・論文式・分野・教科書・さがす・学習の記録の字は 12px 以上`);
     if (tap.length) ng(`${vp.name}: 押す所が 44px より低い: ${tap.slice(0, 12).join(" / ")}${tap.length > 12 ? ` ほか${tap.length - 12}か所` : ""}`);
     else ok(`${vp.name}: 目次・論文式・分野・教科書・さがす・学習の記録・論文の答案の押す所は高さ 44px 以上`);
+    // 組合せ問題の「文を選んで答える」も 44px（2026-11-11 .kmtop .kmmode が2クラスで強く、uxw-css の 44px が負けて 36px のままだった。
+    // 上の押す所の点検は組合せ問題の画面を開けていなかった。問題は混ぜて出るので、出るまで分野と問題の束を順に開く）
+    const km = await page.evaluate(async () => {
+      for (let s = 0; s < 8; s++) { showOffice(); const bs = document.querySelectorAll(".bnrow"); if (!bs[s]) break; bs[s].click();
+        const n = document.querySelectorAll("#app button.gyb:not(.bnu)").length;
+        for (let t = 0; t < n; t++) { showOffice(); document.querySelectorAll(".bnrow")[s].click();
+          const r = document.querySelectorAll("#app button.gyb:not(.bnu)")[t]; if (!r) break; r.click();
+          await new Promise((ok) => setTimeout(ok, 60));
+          const k = document.querySelector(".kmtop .kmmode"); if (k) { const h = k.getBoundingClientRect().height; showOffice(); return Math.round(h); } } }
+      showOffice(); return null;
+    });
+    if (km === null) ok(`${vp.name}: 組合せ問題が出なかったので「文を選んで答える」の高さは確かめない`);
+    else if (km < 43.5) ng(`${vp.name}: 組合せ問題の「文を選んで答える」が ${km}px（44px 以上にする。.kmtop .kmmode より強い指定で上書き）`);
+    else ok(`${vp.name}: 組合せ問題の「文を選んで答える」は ${km}px`);
     // 論文の答案の経過時間（#clock）は、数字が変わっても幅が変わらないこと（明朝体の数字は字ごとに幅がちがい、隣の「目安」が1秒ごとに動いていた。2026-11-06）。
     // CI は明朝体を読まず数字の幅がそろってしまうので、幅を決める指定（min-width）があり、最も長い時間でも収まることも見る
     const clk = await page.evaluate(() => {
