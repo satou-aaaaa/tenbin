@@ -515,6 +515,35 @@ if (process.argv.includes("--browser")) {
     if (bad.length) ng(`分野の論文の一覧: ${bad.join(" / ")}`); else ok(`分野の論文の一覧は、長いとき最初の数問だけ見せ「残り〇問も見る」で全部出る（${seen}分野）`);
     await page.close();
   }
+  // 札の中の字が札の右からはみ出さない（2026-11-15 分野の教科書の札を2列にしたら「労働契約の成立と終了・約6分・3問」が 11px はみ出していた。
+  // 画面の横はみ出しは外側の余白に隠れて出ないので、札ごとに中身の右端を比べる。閉じた折りたたみも開いて、分野と試験の対策の画面で見る）
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`札のはみ出し: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    page.on("dialog", (d) => d.dismiss());
+    const bad = []; let n = 0;
+    await page.goto(url, { waitUntil: "load" }); await page.evaluate(() => { localStorage.clear(); localStorage.setItem("tenbin-onboard", "1"); }); await page.reload({ waitUntil: "load" });
+    const goes = await page.evaluate(() => { showOffice(); return [...document.querySelectorAll(".bnrow")].map((_, i) => ["bn", i]).concat([...document.querySelectorAll("#app .exlist .exrow")].map((_, i) => ["ex", i])); });
+    for (const [k, i] of goes) {
+      await page.evaluate(([k, i]) => { showOffice(); (k === "bn" ? document.querySelectorAll(".bnrow") : document.querySelectorAll("#app .exlist .exrow"))[i].click(); }, [k, i]);
+      await page.waitForTimeout(150);
+      const r = await page.evaluate(() => { document.querySelectorAll("#app details").forEach((d) => { d.open = true; }); const out = [], name = (document.querySelector("#app > .chapter-head")?.textContent || "").replace(/‹ 目次|‹ 分野|⚙ 設定/g, "");
+        for (const b of document.querySelectorAll("#app .wlist > button, #app .exlist > button")) { const br = b.getBoundingClientRect(); if (!br.width) continue;
+          for (const c of b.querySelectorAll("span")) { const cr = c.getBoundingClientRect(); if (cr.width && cr.right > br.right + 0.5) { out.push(`${name}「${c.textContent.trim().slice(0, 14)}」${Math.round(cr.right - br.right)}px`); break; } } }
+        return out; });
+      n++; bad.push(...r);
+    }
+    // ホームの試験の一覧は、問題数を先に出し（「記述320問」と読めないように）、本試験までの日数は1行で
+    const home = await page.evaluate(() => { showOffice(); const out = [];
+      for (const s of document.querySelectorAll("#app .exlist .exrow .ch-sub:first-of-type")) { const t = s.textContent;
+        if (/[^\d]\d+問(本試験|$)/.test(t) && !/^論文/.test(t)) out.push(`数が後ろ「${t.slice(0, 20)}」`);
+        const d = s.querySelector(".uxwD"); if (d && d.getClientRects().length > 1) out.push(`日数が折り返す「${t.slice(0, 20)}」`); }
+      return out; });
+    bad.push(...home);
+    if (bad.length) ng(`札のはみ出し・試験の一覧: ${[...new Set(bad)].slice(0, 10).join(" / ")}`); else ok(`分野・試験の対策の画面（${n}画面）で札の中身がはみ出さず、ホームの試験の一覧は問題数が先`);
+    await page.close();
+  }
   // 応援のお願い: 何も解いていないうちは出ない。10問を越えて目次を開くと1回だけ出る。「もう出さない」のあとは出ない
   {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });

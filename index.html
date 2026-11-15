@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611110428";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611151400";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -563,6 +563,11 @@ html body .wlist:has(> button.gyb) { grid-template-columns: repeat(auto-fill, mi
 html body .wlist > button.gyb { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; padding: 6px 10px; }
 html body .wlist > button.gyb .ch-title { line-height: 1.35; }
 html body .wlist > button.gyb[data-r="trap"], html body .wlist > button.gyb[data-gk="trap"] { grid-column: 1 / -1; }
+/* 第14回：2列にした分野・教科書の札で、下の小さい字（単元名・約6分・3問）が枠の右へはみ出していた（.wlist .ch-sub の nowrap）。折り返す */
+html body .wlist > button.gyb .ch-sub { white-space: normal; }
+/* 第14回：ホームの試験の一覧は、問題数を先に（「記述320問」と読めないように） */
+html body .exrow .uxwN { color: var(--chalk); font-weight: 700; }
+html body .exrow .ch-sub .uxwD { display: block; }
 /* 第13回：分野の論文の一覧が長いときは、最初の6問と続きの問題だけ見せ、残りは「残り〇問も見る」で出す */
 html body .wlist > button.uxwAll { grid-column: 1 / -1; justify-content: center; border-style: dashed; color: var(--gold); background: transparent; }
 </style>
@@ -660,6 +665,21 @@ html body .wlist > button.uxwAll { grid-column: 1 / -1; justify-content: center;
   }
   const start = () => { const a = document.getElementById("app"); if (!a) return; fix(); new MutationObserver(fix).observe(a, { childList: true }); };
   if (document.getElementById("app")) start(); else new MutationObserver((l, o) => { if (document.getElementById("app")) { o.disconnect(); start(); } }).observe(document.documentElement, { childList: true, subtree: true });  // #app ができたらすぐ（DOMContentLoaded を待つと、ホームを描いたあとに枠が足されて画面がずれる。2026-11-09 Lighthouse の CLS）
+})();
+// 第14回：ホームの試験の一覧の説明「5肢択一・多肢・記述320問」は、数が最後の「記述」にだけ付いて読める。数を先に出し、形式はかっこに入れる
+(function () {
+  function lead() {
+    document.querySelectorAll("#app .exlist .exrow").forEach(r => {
+      const sub = r.querySelector(".ch-sub"); if (!sub || sub.dataset.uxw) return; sub.dataset.uxw = "1";
+      const days = sub.querySelector(".nw");
+      if (days) { days.remove(); days.classList.add("uxwD"); days.innerHTML = days.innerHTML.replace(/^・/, ""); }  // 本試験までの日数は次の行に（途中で折り返さない）
+      const m = sub.innerHTML.match(/^([^<>]*?[^\d<>])(\d+)問$/);
+      if (m && !/問/.test(m[1])) sub.innerHTML = '<span class="uxwN">' + m[2] + "問</span>" + (/（/.test(m[1]) ? "・" + m[1] : "（" + m[1] + "）");  // 「論文（実務基礎8問）・短答262問」のように数が2つあるものはそのまま
+      if (days) sub.appendChild(days);
+    });
+  }
+  const start = () => { const a = document.getElementById("app"); if (!a) return; lead(); new MutationObserver(lead).observe(a, { childList: true }); };
+  if (document.getElementById("app")) start(); else new MutationObserver((l, o) => { if (document.getElementById("app")) { o.disconnect(); start(); } }).observe(document.documentElement, { childList: true, subtree: true });
 })();
 // 第13回：分野の画面の論文の一覧（17問など）が長く、ページの半分近くを占めていた。最初の6問と、復習・書きかけの問題だけ見せる
 (function () {
