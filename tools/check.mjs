@@ -544,6 +544,30 @@ if (process.argv.includes("--browser")) {
     if (bad.length) ng(`札のはみ出し・試験の一覧: ${[...new Set(bad)].slice(0, 10).join(" / ")}`); else ok(`分野・試験の対策の画面（${n}画面）で札の中身がはみ出さず、ホームの試験の一覧は問題数が先`);
     await page.close();
   }
+  // 試験の対策の画面で、毎日使う「分野から選ぶ」は上の「10問解く」のすぐ下（2026-11-21 模試の下、スマホで1374〜2212px にあった。
+  // W3C WAI「Make it Easy to Find the Most Important Tasks and Features」）。学習の記録は、増減0を「0多い」と書かない
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`分野から選ぶの位置: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    page.on("dialog", (d) => d.dismiss());
+    const bad = []; let n = 0;
+    await page.goto(url, { waitUntil: "load" }); await page.evaluate(() => { localStorage.clear(); localStorage.setItem("tenbin-onboard", "1"); }); await page.reload({ waitUntil: "load" });
+    const rows = await page.evaluate(() => { showOffice(); return document.querySelectorAll("#app .exlist .exrow").length; });
+    for (let i = 0; i < rows; i++) {
+      await page.evaluate((i) => { showOffice(); document.querySelectorAll("#app .exlist .exrow")[i].click(); }, i); await page.waitForTimeout(150);
+      const r = await page.evaluate(() => { const name = (document.querySelector("#app > .chapter-head")?.textContent || "").replace(/‹ 目次|⚙ 設定/g, "");
+        const h = [...document.querySelectorAll("#app > h2.section-label")].find((x) => /^(分野|形式と科目)から選ぶ/.test(x.textContent.trim())); if (!h) return null;
+        return { name, ok: !!h.previousElementSibling?.matches("section.today"), top: Math.round(h.getBoundingClientRect().top + scrollY) }; });
+      if (!r) continue; n++;
+      if (!r.ok || r.top > 600) bad.push(`${r.name}: 「分野から選ぶ」が上の枠のすぐ下にない（${r.top}px）`);
+    }
+    if (!n) bad.push("「分野から選ぶ」のある試験の対策の画面が見つからない（画面の作りが変わった？）");
+    const wk = await page.evaluate(async () => { if (typeof showRecord !== "function") return null; showRecord(); await new Promise((ok) => setTimeout(ok, 100)); const t = document.querySelector(".rcweek .note")?.textContent || ""; showOffice(); return t; });
+    if (wk !== null && /より0(多い|少ない)/.test(wk)) bad.push(`学習の記録「${wk}」`);
+    if (bad.length) ng(`分野から選ぶの位置・記録の言い方: ${bad.join(" / ")}`); else ok(`試験の対策の画面（${n}画面）で「分野から選ぶ」は上の枠のすぐ下、学習の記録は増減0を「同じ」と書く`);
+    await page.close();
+  }
   // 応援のお願い: 何も解いていないうちは出ない。10問を越えて目次を開くと1回だけ出る。「もう出さない」のあとは出ない
   {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });

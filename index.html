@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611151400";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611211547";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -568,6 +568,8 @@ html body .wlist > button.gyb .ch-sub { white-space: normal; }
 /* 第14回：ホームの試験の一覧は、問題数を先に（「記述320問」と読めないように） */
 html body .exrow .uxwN { color: var(--chalk); font-weight: 700; }
 html body .exrow .ch-sub .uxwD { display: block; }
+/* 第15回：学習の記録の「前の7日と比べて」は1かたまりで折り返す */
+html body .rcweek .note { display: inline-block; }
 /* 第13回：分野の論文の一覧が長いときは、最初の6問と続きの問題だけ見せ、残りは「残り〇問も見る」で出す */
 html body .wlist > button.uxwAll { grid-column: 1 / -1; justify-content: center; border-style: dashed; color: var(--gold); background: transparent; }
 </style>
@@ -679,6 +681,22 @@ html body .wlist > button.uxwAll { grid-column: 1 / -1; justify-content: center;
     });
   }
   const start = () => { const a = document.getElementById("app"); if (!a) return; lead(); new MutationObserver(lead).observe(a, { childList: true }); };
+  if (document.getElementById("app")) start(); else new MutationObserver((l, o) => { if (document.getElementById("app")) { o.disconnect(); start(); } }).observe(document.documentElement, { childList: true, subtree: true });
+})();
+// 第15回：試験の対策の画面で、毎日使う「分野から選ぶ」が模試の下（スマホで画面2〜3枚ぶん下）にあった。いちばん上の「10問解く」のすぐ下へ移す
+// （W3C WAI「Make it Easy to Find the Most Important Tasks and Features」）。学習の記録の「前の7日より0多い」は「前の7日と同じ」に
+(function () {
+  function fix() {
+    const a = document.getElementById("app"); if (!a) return;
+    const head = a.querySelector(":scope > .chapter-head"), today = a.querySelector(":scope > section.today");
+    if (head && today && /の対策/.test(head.textContent)) {
+      const h = [...a.querySelectorAll(":scope > h2.section-label")].find(x => /^(分野|形式と科目)から選ぶ/.test(x.textContent.trim()));
+      const w = h && h.nextElementSibling;
+      if (h && w && w.matches("section.wlist") && !h.dataset.uxw) { h.dataset.uxw = "1"; today.after(h, w); }
+    }
+    a.querySelectorAll(".rcweek .note").forEach(n => { if (/^前の7日より0多い$/.test(n.textContent.trim())) n.textContent = "前の7日と同じ"; });
+  }
+  const start = () => { const a = document.getElementById("app"); if (!a) return; fix(); new MutationObserver(fix).observe(a, { childList: true }); };
   if (document.getElementById("app")) start(); else new MutationObserver((l, o) => { if (document.getElementById("app")) { o.disconnect(); start(); } }).observe(document.documentElement, { childList: true, subtree: true });
 })();
 // 第13回：分野の画面の論文の一覧（17問など）が長く、ページの半分近くを占めていた。最初の6問と、復習・書きかけの問題だけ見せる
