@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611230538";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611230545";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -28649,6 +28649,279 @@ function scrPart(id) {
 })();
 showOffice();
 if (window.__tenbinOpenHash) window.__tenbinOpenHash();  // URL の # の画面を開く（16.）
+</script>
+
+<style id="kaizen-css">
+/* 2026-11-23 学習の改善（kaizen-js と対）：自信度・答案構成ドリル・論点あて・まちがいを知らせる */
+.kzConf { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; }
+.kzConf > span { font-size: 13px; color: var(--muted); margin-right: 2px; }
+.kzConf button { min-height: 44px; padding: 4px 12px; font-size: 14px; }
+.kzConf button[aria-pressed="true"] { background: var(--gold); color: var(--deep); border-color: var(--gold); font-weight: 700; }
+.kzNote { margin: 0; padding: 8px 10px; border-radius: 4px; font-size: 14px; line-height: 1.7; border: 1px solid var(--gold); background: color-mix(in srgb, var(--gold) 10%, transparent); }
+.kzNote.hc { border-color: var(--miss); background: color-mix(in srgb, var(--miss) 12%, transparent); }
+.kzNote b { color: var(--gold); }
+.kzNote.hc b { color: var(--miss); }
+.kzRep { margin: 4px 0 0; font-size: 13px; }
+.kzRep a { color: var(--muted); display: inline-block; padding: 12px 0; margin: -8px 0; text-underline-offset: 3px; }
+.kzEntry { display: grid; gap: 8px; border-color: var(--gold); }
+.kzEntry h2 { font-family: var(--font-pixel); color: var(--gold); font-size: 17px; }
+.kzEntry .kzBtns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 8px; }
+.kzEntry .kzBtns button { min-height: 48px; text-align: left; }
+.kzEntry .kzBtns button small { display: block; font-size: 12px; font-weight: 400; color: inherit; opacity: .85; }
+.kzSteps { display: flex; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.kzSteps li { flex: 1; }
+.kzSteps button { width: 100%; min-height: 44px; padding: 4px 6px; font-size: 13px; line-height: 1.3; }
+.kzSteps button[aria-current="step"] { border-color: var(--gold); color: var(--gold); font-weight: 700; }
+.kzSteps button.done::before { content: "✓ "; color: var(--hit); }
+.kzParts { display: grid; gap: 8px; }
+.kzParts button { text-align: left; font-size: 14px; line-height: 1.7; }
+.kzParts button.used { opacity: .45; }
+.kzParts button.bad { border-color: var(--miss); }
+.kzBoard { display: grid; gap: 8px; }
+.kzBoard > div { border-left: 3px solid var(--line); padding-left: 10px; }
+.kzBoard > div.ok { border-color: var(--gold); }
+.kzBoard h4 { margin: 0; font-size: 13px; color: var(--gold); font-family: var(--font-pixel); font-weight: 600; }
+.kzBoard p { margin: 2px 0 0; font-size: 14px; }
+.kzWrite label { display: grid; gap: 4px; margin-bottom: 10px; }
+.kzWrite label > span { font-size: 14px; color: var(--gold); font-family: var(--font-pixel); }
+</style>
+<script id="kaizen-js">
+// ===== 2026-11-23 学習の改善 =====
+// 1. 自信度つきの復習：答える前に「自信あり・たぶん・勘」を押せる（押さなくてもよい）。
+//    自信ありでまちがえた問題は解説を強調して翌日も出し、勘で当たった問題は覚えたことにせず翌日もう一度出す。
+//    根拠：自信を持ってまちがえたことほど、正しい答えを見ると直りやすい（過剰修正効果。Butterfield & Metcalfe 2001, JEP:LMC 27(6)）。
+// 2. 答案構成ドリル：問題提起→規範→あてはめ→結論の骨組みを、並べる→選ぶ→自分で書くと段階的に助けを減らして練習する
+//    （お手本から少しずつ助けを外す。Renkl & Atkinson 2003, Educational Psychologist 38(1)）。
+// 3. 論点あて（分野まぜ）：科目が続かないように並べた事例から、まず問題になる論点を選ぶ（交互練習。Rohrer & Taylor 2007, Instructional Science 35）。
+// 4. まちがいを知らせる：答え合わせと答案の見比べの下に、問題の番号を入れた感想フォームへのリンクを置く。
+(function () {
+  if (typeof S === "undefined" || typeof record !== "function" || !document.getElementById("app")) return;
+  const KZ = () => {
+    if (!S.kz) { let s = null; try { s = typeof saved !== "undefined" && saved.kz; } catch (e) {} S.kz = s || {}; }
+    const k = S.kz; k.drill = k.drill || {}; k.hc = k.hc || 0; k.lucky = k.lucky || 0; k.ronten = k.ronten || [0, 0]; return k;
+  };
+  KZ();
+  const app = document.getElementById("app");
+  const FORM = "https://docs.google.com/forms/d/e/1FAIpQLSftS0o3joZDdMLIBL_czoEonBo2tu9_ilndrUc89b2Waktmvw/viewform";
+  const repUrl = id => FORM + "?usp=pp_url&entry.241861188=" + encodeURIComponent("問題・答え・出典のまちがい") + "&entry.443796210=" + encodeURIComponent("天秤の書")
+    + "&entry.1094269478=" + encodeURIComponent("問題 " + id + "（" + (/github\.io$/.test(location.hostname) ? "公開版" : "claude.ai 版") + "）");
+  const repHTML = id => `<p class="kzRep"><a href="${repUrl(id)}" target="_blank" rel="noopener">この問題・答え・出典のまちがいを知らせる（問題 ${esc(id)}）</a></p>`;
+  window.kzRepUrl = repUrl;
+
+  // ---- 1. 自信度 ----
+  let cur = null;  // { el: 手ごたえのボタンの枠, c: 0 勘 / 1 たぶん / 2 自信あり / null 押していない }
+  const inMock = () => !!app.querySelector("#gyTimer, #gxTimer, .gytimer");
+  function addConf() {
+    if (inMock()) return;
+    app.querySelectorAll(".choices:not([data-kz])").forEach(ch => {
+      ch.dataset.kz = "1";
+      if (ch.querySelector("button:disabled")) return;
+      const g = document.createElement("div"); g.className = "kzConf"; g.setAttribute("role", "group"); g.setAttribute("aria-label", "答える前の手ごたえ（押さなくてもよい）");
+      g.innerHTML = '<span>手ごたえ</span><button type="button" data-c="2" aria-pressed="false">自信あり</button><button type="button" data-c="1" aria-pressed="false">たぶん</button><button type="button" data-c="0" aria-pressed="false">勘</button>';
+      const me = { el: g, c: null }; cur = me;
+      g.querySelectorAll("button").forEach(b => b.onclick = () => {
+        const on = b.getAttribute("aria-pressed") !== "true";
+        g.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", "false"));
+        b.setAttribute("aria-pressed", String(on)); me.c = on ? +b.dataset.c : null; cur = me;
+      });
+      ch.before(g);
+    });
+  }
+  const origRecord = record;
+  window.record = function (q, ok) {
+    const c = cur && cur.el.isConnected ? cur.c : null;
+    const r0 = origRecord.apply(this, arguments);
+    const k = KZ(); let note = "";
+    if (c != null && q && q.id) {
+      const r = S.srs[q.id];
+      if (ok && c < 2 && r) { r.box = -1; r.due = today() + 1; k.lucky++; note = `<p class="kzNote"><b>当たりでも、もう一度。</b>${c ? "「たぶん」" : "「勘」"}で当たった問題は、覚えたことにせず、あしたもう一度出します。</p>`; }
+      else if (!ok && c === 2) { k.hc++; note = `<p class="kzNote hc"><b>自信があったのに、まちがえた問題です。</b>こういう思い込みは、正しい答えと理由を読むと直りやすいと分かっています。下の解説をゆっくり読んでください。</p>`; }
+      save();
+      cur.el.querySelectorAll("button").forEach(b => b.disabled = true);
+    }
+    if (q && q.id && cur && cur.el.isConnected) {
+      const id = q.id;
+      setTimeout(() => {
+        const m = document.getElementById("msg"); if (!m || m.hidden || m.querySelector(".kzRep")) return;
+        if (note) m.insertAdjacentHTML("afterbegin", note);
+        const last = m.querySelector(":scope > .row:last-child");
+        if (last) last.insertAdjacentHTML("beforebegin", repHTML(id)); else m.insertAdjacentHTML("beforeend", repHTML(id));
+      }, 0);
+    }
+    return r0;
+  };
+
+  // ---- 4. 論文の答案を見比べた画面にも「まちがいを知らせる」 ----
+  if (typeof writeCompare === "function") {
+    const origWC = writeCompare;
+    window.writeCompare = function (id) {
+      const r = origWC.apply(this, arguments);
+      try { const c = app.querySelector(".cites") || [...app.querySelectorAll(".cmp")].pop(); if (c && !app.querySelector(".kzRep")) c.insertAdjacentHTML("afterend", repHTML(id)); } catch (e) {}
+      return r;
+    };
+  }
+
+  // ---- 2・3 の問題 ----
+  const basics = () => probs().filter(p => !p.big && Array.isArray(p.m) && p.m.length === 4 && p.facts && p.facts.length && p.p && p.k);
+  const issueOf = p => String(p.p).replace(/を問題に(した|する)$/, "").replace(/か$/, "か");
+  const PART = ["問題提起", "規範", "あてはめ", "結論"];
+  const back = () => (window.showRonbun || showOffice)();
+  const pick3 = (p, f) => { const pool = basics().filter(x => x.id !== p.id); const same = shuffle(pool.filter(x => x.kamoku === p.kamoku)), other = shuffle(pool.filter(x => x.kamoku !== p.kamoku));
+    return [...same.slice(0, 1), ...other].slice(0, 3).map(f); };
+  function nextDrill() {
+    const ps = basics(), k = KZ().drill;
+    const due = ps.filter(p => typeof isDue === "function" && isDue("e:" + p.id) && (k[p.id] || 0) < 3);
+    const list = due.length ? due : ps.filter(p => (k[p.id] || 0) < 3);
+    const pool = list.length ? list : ps;
+    const lo = Math.min(...pool.map(p => k[p.id] || 0));
+    return shuffle(pool.filter(p => (k[p.id] || 0) === lo))[0];
+  }
+
+  // ---- 2. 答案構成ドリル ----
+  window.kzDrill = function kzDrill(id, stage) {
+    quiz = null;
+    const p = (id && probOf(id)) || nextDrill(); if (!p) return;
+    const lv = KZ().drill[p.id] || 0, st = stage == null ? Math.min(lv, 2) : stage;
+    const NAMES = ["1 並べる", "2 選ぶ", "3 書く"];
+    app.innerHTML = `<div class="chapter-head">答案構成ドリル</div>
+      <ol class="kzSteps" aria-label="段階">${NAMES.map((n, i) => `<li><button type="button" data-st="${i}" class="${lv > i ? "done" : ""}" ${i === st ? 'aria-current="step"' : ""} ${i > lv ? "disabled" : ""}>${n}</button></li>`).join("")}</ol>
+      <section class="win facts">
+        <div class="qhead"><span class="tag">${esc(p.kamoku)}</span><span class="qcount">${esc(p.title)}</span></div>
+        ${p.story.map(t => `<p class="quote">${esc(t)}</p>`).join("")}
+        <ul class="memo">${shuffle(p.facts).map(f => `<li>${esc(f.fact)}</li>`).join("")}</ul>
+        <h4 class="ph">【設問】</h4><p class="question">${esc(p.toi)}</p>
+      </section>
+      <section class="win" id="kzBody"></section>
+      <section class="win msg" id="msg" hidden></section>
+      <div class="row"><button id="kzOther">別の問題</button><button id="quit">やめる</button></div>`;
+    app.querySelectorAll(".kzSteps button").forEach(b => b.onclick = () => kzDrill(p.id, +b.dataset.st));
+    document.getElementById("quit").onclick = back;
+    document.getElementById("kzOther").onclick = () => kzDrill(null);
+    toTop();
+    const body = document.getElementById("kzBody"), msg = document.getElementById("msg");
+    const finish = (good, html) => {
+      const k = KZ(); if (good && (k.drill[p.id] || 0) < st + 1) k.drill[p.id] = st + 1; save();
+      msg.hidden = false;
+      msg.innerHTML = `${html}${repHTML(p.id)}`;
+      const nextSt = good ? st + 1 : st;
+      showNext(msg, nextSt <= 2 ? `つぎの段階（${NAMES[nextSt]}）▶` : "答案を最後まで書く ▶", () => nextSt <= 2 ? kzDrill(p.id, nextSt) : startWrite(p.id));
+      if (nextSt > 2) msg.insertAdjacentHTML("beforeend", `<div class="row"><button id="kzNext">次の問題のドリル</button></div>`), document.getElementById("kzNext").onclick = () => kzDrill(null);
+      if (good) completeDay();
+    };
+    if (st === 0) {
+      // 段1：模範答案の4つの段落を、問題提起→規範→あてはめ→結論の順に押す
+      const order = shuffle([0, 1, 2, 3]); let n = 0, miss = 0;
+      body.innerHTML = `<h3 class="ph">模範答案の段落を、答案の順に押してください</h3><p class="note">いま探すもの：<b id="kzWant">${PART[0]}</b></p>
+        <div class="kzParts">${order.map(i => `<button type="button" data-i="${i}">${esc(p.m[i])}</button>`).join("")}</div>
+        <div class="kzBoard" id="kzBoard"></div>`;
+      body.querySelectorAll(".kzParts button").forEach(b => b.onclick = () => {
+        const i = +b.dataset.i; if (b.classList.contains("used")) return;
+        if (i !== n) { miss++; b.classList.add("bad"); setTimeout(() => b.classList.remove("bad"), 700); document.getElementById("kzWant").textContent = `${PART[n]}（いま押したのは「${PART[i]}」の段落）`; return; }
+        b.classList.add("used"); b.disabled = true;
+        document.getElementById("kzBoard").insertAdjacentHTML("beforeend", `<div class="ok"><h4>${PART[i]}</h4><p>${esc(p.m[i])}</p></div>`);
+        n++; if (n < 4) { document.getElementById("kzWant").textContent = PART[n]; return; }
+        body.querySelector(".kzParts").remove(); body.querySelector(".note").remove();
+        finish(true, `<p class="line good">${miss ? `${miss}回まちがえましたが、` : ""}答案の骨組みができました。</p><p class="note">問題提起（何が問題か・条文）→ 規範（判断の基準）→ あてはめ（事実を基準に当てる）→ 結論（設問に答える）。次は、規範とあてはめに使う事実を選びます。</p>`);
+      });
+    } else if (st === 1) {
+      // 段2：正しい規範を選び、あてはめに使う事実を選ぶ
+      const opts = shuffle([p.m[1], ...pick3(p, x => x.m[1]).slice(0, 2)]);
+      body.innerHTML = `<div class="kzBoard"><div class="ok"><h4>問題提起</h4><p>${esc(p.m[0])}</p></div></div>
+        <h3 class="ph">（1）この問題提起に続く「規範」はどれ？</h3><div class="kzParts" id="kzNorm">${opts.map((o, i) => `<button type="button" data-i="${i}">${esc(o)}</button>`).join("")}</div>
+        <h3 class="ph">（2）あてはめに使う事実を、全部選んでください</h3>
+        <div class="factpick" id="kzFacts">${shuffle(p.facts).map(f => `<button type="button" aria-pressed="false" data-k="${f.key ? 1 : 0}">${esc(f.fact)}</button>`).join("")}</div>
+        <div class="row"><button class="btn-gold" id="kzCheck" disabled>答え合わせ</button></div>`;
+      let normPick = -1;
+      body.querySelectorAll("#kzNorm button").forEach(b => b.onclick = () => { normPick = +b.dataset.i; body.querySelectorAll("#kzNorm button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); body.querySelectorAll("#kzNorm button").forEach(x => x.style.borderColor = x === b ? "var(--gold)" : ""); document.getElementById("kzCheck").disabled = false; });
+      body.querySelectorAll("#kzFacts button").forEach(b => b.onclick = () => b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true")));
+      document.getElementById("kzCheck").onclick = () => {
+        const nOk = opts[normPick] === p.m[1];
+        let fOk = 0, fAll = 0;
+        body.querySelectorAll("#kzNorm button").forEach(b => { b.disabled = true; if (opts[+b.dataset.i] === p.m[1]) b.classList.add("right"); else if (+b.dataset.i === normPick) b.classList.add("wrong"); b.style.borderColor = opts[+b.dataset.i] === p.m[1] ? "var(--hit)" : +b.dataset.i === normPick ? "var(--miss)" : ""; });
+        body.querySelectorAll("#kzFacts button").forEach(b => { const on = b.getAttribute("aria-pressed") === "true", key = b.dataset.k === "1"; fAll++; if (on === key) fOk++; b.disabled = true; b.classList.add(key ? "right" : on ? "wrong" : "dim"); });
+        document.getElementById("kzCheck").remove();
+        const good = nOk && fOk === fAll;
+        finish(good, `<p class="line ${good ? "good" : "bad"}">${good ? "規範も事実も、ばっちりです。" : `規範は${nOk ? "正解" : "ちがいました"}・事実は ${fOk}/${fAll} 個あっていました。`}</p>
+          <div class="kzBoard"><div class="ok"><h4>あてはめ（模範答案）</h4><p>${esc(p.m[2])}</p></div><div class="ok"><h4>結論</h4><p>${esc(p.m[3])}</p></div></div>
+          <p class="note">緑の枠が、あてはめに使う事実です。使わない事実（ひっかけ）は答案に書いても点になりません。${good ? "次は、骨組みを自分で書きます。" : "もう一度この段階をやってから進みましょう。"}</p>`);
+      };
+    } else {
+      // 段3：骨組みを自分で書いて、模範答案と見比べる（1つの欄に1〜2行で）
+      body.innerHTML = `<h3 class="ph">骨組みを、自分の言葉で1〜2行ずつ書いてください（目安 8分）</h3><div class="kzWrite">${WPARTS.map((w, i) => `<label><span>${w[0]}${w[1] ? `（${w[1]}）` : ""}</span><textarea rows="2" data-i="${i}" placeholder="${esc(w[2])}"></textarea></label>`).join("")}</div>
+        <div class="row"><button class="btn-gold" id="kzCmp">模範答案と見比べる</button></div>`;
+      document.getElementById("kzCmp").onclick = () => {
+        const mine = [...body.querySelectorAll("textarea")].map(t => t.value.trim());
+        const checks = writeChecks(p).flat();
+        body.innerHTML = `<div class="kzBoard">${PART.map((h, i) => `<div class="ok"><h4>${h}</h4><p style="white-space:pre-wrap;color:var(--muted)">あなた：${esc(mine[i] || "（空らん）")}</p><p>模範：${esc(p.m[i])}</p></div>`).join("")}</div>
+          <h3 class="ph">できたものに印をつけてください</h3><div class="checks">${checks.map((c, i) => `<label><input type="checkbox" data-i="${i}"><span>${esc(c)}</span></label>`).join("")}</div>
+          <div class="row"><button class="btn-gold" id="kzDone">採点する</button></div>`;
+        document.getElementById("kzDone").onclick = () => {
+          const n = body.querySelectorAll(".checks input:checked").length, ratio = n / checks.length, good = ratio >= 0.7;
+          body.querySelectorAll(".checks input").forEach(x => x.disabled = true); document.getElementById("kzDone").remove();
+          finish(good, `<p class="line ${good ? "good" : "bad"}">${n}/${checks.length} できました。</p><p class="note">${good ? "骨組みは書けています。最後に、時間を計って答案を全部書いてみましょう。" : "7割に届きませんでした。足りなかった観点を見直して、もう一度書いてみましょう。"}</p>`);
+        };
+      };
+    }
+  };
+
+  // ---- 3. 論点あて（分野まぜ） ----
+  window.kzRonten = function kzRonten() {
+    quiz = null;
+    // 科目ごとに分け、順に1問ずつ取る（同じ科目が続かない＝交互練習）
+    const by = {}; shuffle(basics()).forEach(p => (by[p.kamoku] = by[p.kamoku] || []).push(p));
+    const keys = shuffle(Object.keys(by)), deck = [];
+    while (deck.length < 10 && keys.some(k => by[k].length)) keys.forEach(k => { if (by[k].length && deck.length < 10) deck.push(by[k].shift()); });
+    rq({ deck, i: 0, right: 0 });
+  };
+  function rq(d) {
+    if (d.i >= d.deck.length) {
+      const note = completeDay(), k = KZ();
+      app.innerHTML = `<div class="chapter-head">論点あて（分野まぜ）</div><section class="win msg"><p class="line good" style="font-size:20px">おわり！</p>
+        <p class="tnum">${d.deck.length}問中 ${d.right}問正解（これまでの合計 ${k.ronten[0]}/${k.ronten[1]}）</p>${note ? `<p class="note">${esc(note)}</p>` : ""}
+        <p class="note">論文の試験では、どの論点の問題かを自分で見つけるところから始まります。科目をまぜて解くと、この「見分ける力」がつきやすいと分かっています。</p></section>
+        <div class="row"><button id="kzAgain">もう10問</button><button class="btn-gold" id="quit">もどる</button></div>`;
+      document.getElementById("quit").onclick = back; document.getElementById("kzAgain").onclick = window.kzRonten; toTop(); return;
+    }
+    const p = d.deck[d.i], opts = shuffle([issueOf(p), ...pick3(p, issueOf)]), a = opts.indexOf(issueOf(p));
+    app.innerHTML = `<div class="chapter-head">論点あて（分野まぜ）</div>
+      <div class="dprog" aria-hidden="true"><i style="width:${d.i / d.deck.length * 100}%"></i></div>
+      <section class="win"><div class="qhead"><span class="tag">${esc(p.kamoku)}</span><span class="qcount tnum">${d.i + 1}/${d.deck.length}</span></div>
+        ${p.story.map(t => `<p class="quote">${esc(t)}</p>`).join("")}
+        <p class="question" style="margin-top:10px">この事例で、まず問題になるのはどれ？</p>
+        <div class="choices">${opts.map((o, i) => `<button data-i="${i}"><span class="key">${i + 1}</span><span>${esc(o)}</span></button>`).join("")}</div></section>
+      <section class="win msg" id="msg" hidden></section><div class="row"><button id="quit">やめる</button></div>`;
+    document.getElementById("quit").onclick = back; toTop();
+    app.querySelector(".choices").dataset.kz = "1";  // ここは記録（間隔の復習）に入らない問題なので、手ごたえは出さない
+    quiz = { q: { t: "choice", c: opts, a }, answered: false, pick(i) {
+      if (this.answered) return; this.answered = true;
+      app.querySelectorAll(".choices button").forEach((b, j) => { b.disabled = true; if (j === a) b.classList.add("right"); else if (j === i) b.classList.add("wrong"); });
+      const ok = i === a, k = KZ(); k.ronten[1]++; if (ok) { k.ronten[0]++; d.right++; } save();
+      const msg = document.getElementById("msg"); msg.hidden = false;
+      msg.innerHTML = `<p class="line ${ok ? "good" : "bad"}">${ok ? "せいかい！" : "ざんねん…"}</p><p class="explain"><b>設問：</b>${esc(p.toi)}</p><p class="explain"><b>問題提起の例：</b>${esc(p.m[0])}</p>${repHTML(p.id)}`;
+      showNext(msg, d.i + 1 >= d.deck.length ? "結果を見る" : "つぎへ ▶", () => { d.i++; rq(d); });
+    } };
+    app.querySelectorAll(".choices button").forEach(b => b.onclick = () => quiz.pick(+b.dataset.i));
+  }
+
+  // ---- 2・3 の入口：司法試験・論文式の画面 ----
+  function addEntry() {
+    const head = app.querySelector(":scope > .chapter-head");
+    const title = head ? [...head.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join("").trim() : "";  // 見出しの文字だけ（‹ 目次・設定のボタンを除く）
+    if (title !== "司法試験・論文式" || app.querySelector("#kzEntry")) return;
+    const ps = basics(), k = KZ().drill, done = ps.filter(p => (k[p.id] || 0) >= 3).length;
+    const s = document.createElement("section"); s.className = "win kzEntry"; s.id = "kzEntry"; s.setAttribute("aria-labelledby", "kzEntryH");
+    s.innerHTML = `<h2 id="kzEntryH">すきま時間の論文練習</h2><p class="note">答案を全部書く前の練習です。骨組みだけを組む「答案構成ドリル」は、並べる→選ぶ→書くと、少しずつ助けを減らします（3段まで終えた問題 ${done}/${ps.length}）。</p>
+      <div class="kzBtns"><button class="btn-gold" id="kzGoDrill">答案構成ドリル<small>1問 5〜10分</small></button><button id="kzGoRonten">論点あて（分野まぜ）<small>10問・科目をまぜて論点を見分ける</small></button></div>`;
+    const tiles = app.querySelector(":scope > nav.tiles");
+    if (tiles) tiles.after(s); else head.after(s);
+    s.querySelector("#kzGoDrill").onclick = () => window.kzDrill(null);
+    s.querySelector("#kzGoRonten").onclick = window.kzRonten;
+  }
+
+  const scan = () => { try { addConf(); addEntry(); } catch (e) { console.error("kaizen", e); } };
+  scan();
+  new MutationObserver(scan).observe(app, { childList: true, subtree: true });
+})();
 </script>
 
 <p style="text-align:center;margin:16px 0 24px;font:13px system-ui,sans-serif"><a href="changes.html" style="color:#cfe3d9">更新情報</a>　<a id="kofi" href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener noreferrer" style="color:#cfe3d9">☕ Ko-fi で応援</a><br><span style="display:inline-block;margin-top:6px;color:#9fbfb2;font-size:12px">天秤の書は無料・広告なしで、ひとりで作っています。応援は、問題の追加と判例の確かめに使います。</span></p>

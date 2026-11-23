@@ -626,6 +626,56 @@ if (process.argv.includes("--browser")) {
     else ok(`論文${r.n}問が分野に入り、判例はすべて参考判例にあり、全${r.shown}問の解説が模範答案の下に出る`);
     await page.close();
   }
+  // 参考判例（CITES）の引用の形（2026-11-23）：判例は一次資料で確かめ、裁判所・日付・事件番号・掲載誌を書く決まり。
+  // 足すたびに手で見るだけだと欠けを見落とすので、欠けた項目があれば落とす。事件番号と裁判所ウェブサイトの URL は、
+  // 大審院などサイトに載っていない・ページを確認できない判例だけ、note に「掲載なし」「確認できず」と理由を書けば省いてよい。
+  // 同じ事件番号でも法廷がちがう判決はある（昭和36(オ)1378 は大法廷 民集19巻6号1600頁と第三小法廷 同1656頁。裁判所ウェブサイト 53752・53753 で確認）ので、重なりは落とさない。
+  // 学習の改善（kaizen-js）：自信度・答案構成ドリル・論点あて・まちがいを知らせる が動くこと
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on("pageerror", (e) => errors.push(`学習の改善: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1500);
+    const r = await page.evaluate(async () => {
+      const bad = [], w = (ms) => new Promise((res) => setTimeout(res, ms));
+      const ERA = /^(明治|大正|昭和|平成|令和)(元|\d+)年\d+月\d+日$/;
+      for (const c of CITES) {
+        const name = c.name || "(名前なし)", off = /掲載なし|確認できず/.test(c.note || "");  // 省くときは note に理由を書く（黙って空にしない）
+        if (!ERA.test(c.date || "")) bad.push(`判例「${name}」：日付の形`);
+        for (const k of ["name", "court", "form", "report"]) if (!String(c[k] || "").trim()) bad.push(`判例「${name}」：${k} が空`);
+        if (!off && !/^(明治|大正|昭和|平成|令和)(元|\d+)年\(.+\)第\d+号(等)?$/.test(c.no || "")) bad.push(`判例「${name}」：事件番号の形（${c.no}）`);
+        if (!off && !/^https:\/\/www\.courts\.go\.jp\//.test(c.url || "")) bad.push(`判例「${name}」：裁判所ウェブサイトの URL がない`);
+      }
+      if (typeof kzDrill !== "function" || typeof kzRonten !== "function") { bad.push("kaizen-js が無い（答案構成ドリル・論点あて）"); return bad; }
+      startDrill(); await w(50);
+      if (!document.querySelector(".kzConf")) bad.push("復習ドリルに手ごたえのボタンが出ない");
+      document.querySelector('.kzConf [data-c="2"]').click();
+      const q = quiz.q; quiz.pick((q.a + 1) % (q.t === "ox" ? 2 : q.c.length)); await w(50);
+      if (!document.querySelector("#msg .kzNote.hc")) bad.push("自信ありでまちがえても知らせが出ない");
+      if (!document.querySelector("#msg .kzRep a[href^='https://docs.google.com/forms/']")) bad.push("答え合わせに「まちがいを知らせる」が出ない");
+      document.getElementById("next").click(); await w(50);
+      document.querySelector('.kzConf [data-c="0"]').click();
+      const q2 = quiz.q; quiz.pick(q2.a); await w(50);
+      if (S.srs[q2.id].box !== -1 || S.srs[q2.id].due !== today() + 1) bad.push("勘で当たった問題が、あしたの復習に回らない");
+      showRonbun(); await w(80);
+      if (!document.getElementById("kzEntry")) bad.push("論文の画面に答案構成ドリルの入口がない");
+      kzDrill(null); await w(30);
+      for (let n = 0; n < 4; n++) { document.querySelector(`.kzParts button[data-i="${n}"]`).click(); await w(5); }
+      const id = Object.keys(S.kz.drill)[0];
+      if (S.kz.drill[id] !== 1) bad.push("答案構成ドリルの段1を終えても記録されない");
+      if (document.documentElement.scrollWidth > innerWidth + 1) bad.push("答案構成ドリルが横にはみ出す");
+      kzRonten(); await w(30);
+      const kams = [];
+      for (let i = 0; i < 10 && document.querySelector(".choices"); i++) { kams.push(document.querySelector(".qhead .tag").textContent); quiz.pick(quiz.q.a); await w(5); document.getElementById("next").click(); await w(5); }
+      if (kams.some((k, i) => i && k === kams[i - 1])) bad.push(`論点あてで同じ科目が続く（${kams.join(",")}）`);
+      if (typeof gyExamOpen === "function") { const keep = S.gyExam; gyExamOpen(true); await w(30); if (document.querySelector(".kzConf")) bad.push("模試に手ごたえのボタンが出る"); S.gyExam = keep; }
+      for (const b of document.querySelectorAll(".kzConf button, .kzEntry button")) if (b.getBoundingClientRect().height < 44) bad.push("押す所が 44px より低い");
+      showOffice(); return bad;
+    });
+    if (r.length) ng(`参考判例の引用・学習の改善: ${[...new Set(r)].slice(0, 12).join(" / ")}`);
+    else ok("参考判例はすべて裁判所・日付・事件番号・掲載誌がそろい、自信度・答案構成ドリル・論点あて・まちがいを知らせる が動く");
+    await page.close();
+  }
   // 択一の答えと解説が食い違わないこと（2026-11-05）。毎日問題を足すので、手で見落としても CI で止める。
   // 1) 形：選択肢2つ以上・空や重複なし・正解の番号が範囲内・肢ごとの解説の数＝選択肢の数・id の重複なし
   // 2) 「正解です」で始まる解説は正解の肢だけ。「正しいものはどれか」で正解でない肢の解説が「正しい」で始まる（逆も）ものはだめ
