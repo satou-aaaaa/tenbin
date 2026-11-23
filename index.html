@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611230447";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611230453";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -28449,7 +28449,11 @@ function shMount(kind, title) {
   setX(); txt.oninput = setX;
   let blob = null, cvs = null;
   const ready = shCard(d).then(cv => new Promise(r => { cvs = cv; cv.toBlob(b => { blob = b; if (b) img.src = URL.createObjectURL(b); r(b); }, "image/png"); }));  // 画面を移ったあとに出来ても困らないよう、要素は先に取っておく
-  if (navigator.share) $("shNative").hidden = false;
+  // Claude の Artifact（枠の中）では、共有（web-share の許可がない）と保存（ダウンロードできない）が効かないので出さない
+  const framed = (() => { try { return window.top !== window; } catch (e) { return true; } })();
+  const fp = document.permissionsPolicy || document.featurePolicy;
+  if (navigator.share && !(fp && fp.allowsFeature && !fp.allowsFeature("web-share"))) $("shNative").hidden = false;
+  if (framed) { $("shSave").hidden = true; $("shMsg").textContent = "画像は、長押し（パソコンは右クリック）で保存できます。"; }
   $("shOpen").onclick = () => { const p = $("shPanel"), o = p.hidden; p.hidden = !o; $("shOpen").setAttribute("aria-expanded", String(o)); };
   $("shNative").onclick = async () => {
     const data = { title: "天秤の書", text: full().replace(/\n\S+$/, ""), url: SH_URL };
