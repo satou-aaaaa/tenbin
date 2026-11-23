@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611230545";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611230559";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -28763,7 +28763,7 @@ if (window.__tenbinOpenHash) window.__tenbinOpenHash();  // URL の # の画面�
 
   // ---- 2・3 の問題 ----
   const basics = () => probs().filter(p => !p.big && Array.isArray(p.m) && p.m.length === 4 && p.facts && p.facts.length && p.p && p.k);
-  const issueOf = p => String(p.p).replace(/を問題に(した|する)$/, "").replace(/か$/, "か");
+  const issueOf = p => String(p.p).replace(/を問題に(した|する)$/, "");
   const PART = ["問題提起", "規範", "あてはめ", "結論"];
   const back = () => (window.showRonbun || showOffice)();
   const pick3 = (p, f) => { const pool = basics().filter(x => x.id !== p.id); const same = shuffle(pool.filter(x => x.kamoku === p.kamoku)), other = shuffle(pool.filter(x => x.kamoku !== p.kamoku));
