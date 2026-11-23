@@ -343,7 +343,7 @@ if (process.argv.includes("--browser")) {
     const bad = [];
     const btnOk = () => page.evaluate(() => { const b = document.querySelector("#app .uxwSetBtn"); if (!b) return "なし"; const r = b.getBoundingClientRect(); return r.height >= 43.5 && r.width > 0 ? "" : `高さ${Math.round(r.height)}px`; });
     let m = await btnOk(); if (m) bad.push(`ホームの設定ボタン: ${m}`);
-    await page.click("#goGyosei"); await page.waitForTimeout(500);
+    await page.evaluate(() => showShiken()); await page.click("#goGyosei"); await page.waitForTimeout(500);
     m = await btnOk(); if (m) bad.push(`行政書士の画面の設定ボタン: ${m}`);
     if (m !== "なし") { await page.click("#app .uxwSetBtn"); await page.waitForTimeout(200); }
     if (m === "なし") {} else if (!(await page.evaluate(() => document.getElementById("uxwSet")?.open))) bad.push("設定の窓が開かない");
@@ -370,7 +370,7 @@ if (process.argv.includes("--browser")) {
     page.on("dialog", (d) => d.dismiss());
     const bad = [];
     for (const k of ["shoshi", "yobi", "takken"]) {
-      await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1000);
+      await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(1000); await page.evaluate(() => showShiken());
       const b = await page.$(`#app .xmentry[data-k="${k}"]`); if (!b) { bad.push(`${k}: 入口がない`); continue; }
       await b.click(); await page.waitForTimeout(500);
       const r = await page.evaluate(() => ({ n: document.querySelectorAll("#app details.uxwMore").length,
@@ -414,7 +414,7 @@ if (process.argv.includes("--browser")) {
     await page.evaluate(() => { localStorage.clear(); localStorage.setItem("roppo-quest-v2", JSON.stringify({ stats: { q1: [1, 1] } })); }); await page.reload({ waitUntil: "load" }); await page.waitForTimeout(1000);
     if (await card()) bad.push("記録のある人にも質問が出る");
     // 設定の窓から選び直す（ホーム以外の画面でも選べる）
-    await page.click("#goGyosei"); await page.waitForTimeout(400);
+    await page.evaluate(() => showShiken()); await page.click("#goGyosei"); await page.waitForTimeout(400);
     const sb = await page.$("#app .uxwSetBtn");
     if (sb) { await sb.click(); await page.waitForTimeout(200);
       const eb = await page.$("#uxwSet .uxwExams button:has-text('司法書士')");
@@ -448,20 +448,20 @@ if (process.argv.includes("--browser")) {
     const go = async () => { await page.goto(url, { waitUntil: "load" }); await page.evaluate(() => { localStorage.clear(); localStorage.setItem("tenbin-onboard", "1"); }); await page.reload({ waitUntil: "load" }); await page.waitForTimeout(1000); };
     await go();
     for (const k of ["takken", "shoshi"]) {
-      await page.evaluate(() => showOffice()); await page.waitForTimeout(300);
+      await page.evaluate(() => showShiken()); await page.waitForTimeout(300);
       const b = await page.$(`#app .xmentry[data-k="${k}"]`); if (!b) { bad.push(`${k}: 入口がない`); continue; }
       await b.click(); await page.waitForTimeout(400);
       const r = await page.evaluate(() => ({ old: !!document.getElementById("xmBackL"), home: !!document.querySelector("#app #home") }));
       if (r.old) bad.push(`${k}: 「試験の一覧にもどる」が出る`); if (!r.home) bad.push(`${k}: 「目次にもどる」がない`);
     }
-    await go();
+    await go(); await page.evaluate(() => showBunya());
     const row = await page.$("#app .bnrow");
     if (row) { await row.click(); await page.waitForTimeout(300); const nx = await page.$("#bnNext");
       if (nx) { await nx.click(); await page.waitForTimeout(400);
         const top = await page.$("#app > .chapter-head .topback");
         if (!top) bad.push("教科書の単元の上に戻る所がない");
         else { await top.click(); await page.waitForTimeout(400); const viaTop = await page.evaluate(() => document.querySelector("#app > .chapter-head")?.textContent || "");
-          await go(); await page.click("#app .bnrow"); await page.waitForTimeout(300); await page.click("#bnNext"); await page.waitForTimeout(400);
+          await go(); await page.evaluate(() => showBunya()); await page.click("#app .bnrow"); await page.waitForTimeout(300); await page.click("#bnNext"); await page.waitForTimeout(400);
           const lst = await page.$("#tbList"); if (!lst) bad.push("教科書の単元の下に「分野の目次」がない"); else { await lst.click(); await page.waitForTimeout(400);
             const viaList = await page.evaluate(() => document.querySelector("#app > .chapter-head")?.textContent || "");
             if (viaTop !== viaList) bad.push(`上の「‹ 分野」と下の「分野の目次」の行き先がちがう（${viaTop.slice(0, 12)}・${viaList.slice(0, 12)}）`); } } } }
@@ -477,6 +477,7 @@ if (process.argv.includes("--browser")) {
     const bad = [];
     for (const sel of ['.xmentry[data-k="shoshi"]', '.xmentry[data-k="takken"]', "#goGyosei"]) {
       await page.goto(url, { waitUntil: "load" }); await page.evaluate(() => { localStorage.clear(); localStorage.setItem("tenbin-onboard", "1"); }); await page.reload({ waitUntil: "load" }); await page.waitForTimeout(1000);
+      await page.evaluate(() => showShiken());
       const b = await page.$("#app " + sel); if (!b) { bad.push(`${sel}: 入口がない`); continue; }
       await b.click(); await page.waitForTimeout(400);
       const r = await page.evaluate(() => { const bs = [...document.querySelectorAll("#app .wlist > button.gyb")].filter((x) => !/trap/.test(x.dataset.r || x.dataset.gk || ""));
@@ -535,7 +536,7 @@ if (process.argv.includes("--browser")) {
       n++; bad.push(...r);
     }
     // ホームの試験の一覧は、問題数を先に出し（「記述320問」と読めないように）、本試験までの日数は1行で
-    const home = await page.evaluate(() => { showOffice(); const out = [];
+    const home = await page.evaluate(() => { showShiken(); const out = [];
       for (const s of document.querySelectorAll("#app .exlist .exrow .ch-sub:first-of-type")) { const t = s.textContent;
         if (/[^\d]\d+問(本試験|$)/.test(t) && !/^論文/.test(t)) out.push(`数が後ろ「${t.slice(0, 20)}」`);
         const d = s.querySelector(".uxwD"); if (d && d.getClientRects().length > 1) out.push(`日数が折り返す「${t.slice(0, 20)}」`); }
@@ -747,7 +748,8 @@ if (process.argv.includes("--browser")) {
           b.click(); await tick(); if (d && !d.hidden) out.push(`${n}：閉じない`); } };
       try {
         showOffice(); await tick(); await press("目次の今日の学習");
-        $app.querySelectorAll("details").forEach((d) => d.open = true); await tick(); await press("目次（新人研修）");
+        showSonota(); await tick();  // 新人研修・このアプリについては「そのほか」の画面（2026-11-23 画面を分ける）
+        $app.querySelectorAll("details").forEach((d) => d.open = true); await tick(); await press("そのほか（新人研修）");
         const all = $app.querySelector(".kjabout .kjall"); if (!all) out.push("「このアプリについて」に研究の一覧を開くボタンがない");
         else { all.click(); await tick(); if ($app.querySelectorAll(".kjitem").length !== KONKYO.length) out.push("研究の一覧の数が合わない"); }
         if (typeof showRecord === "function") { showRecord(); await tick(); await press("学習の記録"); }
@@ -1052,6 +1054,45 @@ if (process.argv.includes("--browser")) {
     if (!before.wait || before.art) ng(`本文が届く前の「根拠条文（本文）」が仮の枠にならない（${before.id}）`);
     else if (after.wait || !after.art) ng(`本文が届いたあと「根拠条文（本文）」が描き直されない（${before.id}）`);
     else ok("本文が届く前の「根拠条文（本文）」は仮の枠で、届いたら本文に描き直される");
+    await page.close();
+  }
+  // 画面を分ける（2026-11-23 satou「天秤の書も、画面を整理してください」。shared-workflows routines/ui-rules.md U10〜U12）：
+  // ホームは「今日の学習」と行き先5つだけ。どの画面も、見えている見出し（h2）5つまで・スマホで3画面分まで・畳んだ中にさらに畳まない。
+  // 画面ごとに URL の # が付き、その URL で開くとその画面が出て、「戻る」でホームへ戻る。新しい入口をホームに直に足したら落とす
+  for (const vp of [{ name: "スマホ", width: 390, height: 844 }, { name: "PC", width: 1366, height: 768 }]) {
+    const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
+    page.on("pageerror", (e) => errors.push(`画面を分ける ${vp.name}: ${e.message}`));
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    page.on("dialog", (d) => d.dismiss());
+    const bad = [];
+    const SCR = { "": "showOffice", bunya: "showBunya", shiken: "showShiken", kiroku: "showRecord", sagasu: "showSearch", sonota: "showSonota" };
+    const measure = () => page.evaluate(() => { const a = document.getElementById("app"), vis = (e) => e.getClientRects().length > 0;
+      return { h2: [...a.querySelectorAll("h2")].filter(vis).length, tall: document.documentElement.scrollHeight / innerHeight,
+        nest: [...a.querySelectorAll("details details")].filter(vis).length, dest: a.querySelectorAll(":scope > nav.scrnav > button").length,
+        hash: location.hash, head: (a.querySelector(":scope > .chapter-head") || {}).textContent || "" }; });
+    await page.goto(url, { waitUntil: "load" }); await page.evaluate(() => { localStorage.clear(); localStorage.setItem("tenbin-onboard", "1"); });
+    for (const [h, fn] of Object.entries(SCR)) {
+      await page.goto("about:blank"); await page.goto(url + (h ? "#" + h : ""), { waitUntil: "load" }); await page.waitForTimeout(900);
+      const r = await measure(), name = h || "ホーム";
+      if (!h && (r.dest < 3 || r.dest > 5)) bad.push(`ホームの行き先 ${r.dest}（3〜5）`);
+      if (h && r.hash !== "#" + h) bad.push(`#${h} で開くと # が ${r.hash || "なし"}`);
+      if (h && !r.head) bad.push(`#${h} で開いても画面が出ない`);
+      if (r.h2 > 5) bad.push(`${name}: 見出し ${r.h2}（5まで）`);
+      if (vp.width < 500 && r.tall > 3) bad.push(`${name}: 長さ 画面${r.tall.toFixed(1)}個分（3まで）`);
+      if (r.nest) bad.push(`${name}: 畳んだ中にさらに畳む ${r.nest}`);
+      if (h) { await page.goBack(); await page.waitForTimeout(400); const b = await measure();
+        if (b.hash || b.dest < 3) bad.push(`#${h} から「戻る」でホームに戻らない（${b.hash} ${b.head.slice(0, 10)}）`); }
+    }
+    // ホームの入口を押すと画面が変わり、# が付く。行き先の画面で「目次にもどる」を押すと # が消える
+    await page.goto("about:blank"); await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(900);
+    for (const [id, h] of [["scrBunya", "bunya"], ["scrShiken", "shiken"], ["scrSonota", "sonota"]]) {
+      await page.click("#" + id); await page.waitForTimeout(300);
+      if ((await measure()).hash !== "#" + h) bad.push(`${id} を押しても # が ${h} にならない`);
+      await page.click("#app #home"); await page.waitForTimeout(300);
+      if ((await measure()).hash) bad.push(`${h} の「目次にもどる」で # が消えない`);
+    }
+    if (bad.length) ng(`${vp.name}: 画面の分け方（U10〜U12）と #: ${[...new Set(bad)].slice(0, 10).join(" / ")}`);
+    else ok(`${vp.name}: ホームは行き先5つ、どの画面も見出し5つまで・3画面分まで・畳みは1段、# で開けて「戻る」でホームへ`);
     await page.close();
   }
   // オフライン：一度開いたあと、ネットが切れても画面と条文の本文が出ること（sw.js が jobun.json も取っておく）

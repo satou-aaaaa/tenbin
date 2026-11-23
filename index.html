@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611230509";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611230538";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10231,7 +10231,7 @@ function gyExamBind() {
 //   例：教科書から解いた問題で「やめる」は行政書士の画面へ行く）。今は、通ってきた画面（SCREENS の関数の呼び出し）を順に記録して、そこへ戻す。
 // 問題を解いている途中・模試などの記録しない画面では、後片付けのボタン（中断・やめる）を押してから、問題を始めた画面に戻す。
 (() => {
-  const SCREENS = ["showOffice", "showRonbun", "showGyosei", "showTb", "showTbUnit", "showXm", "showXmList", "showKm", "showKmSub", "showSearch", "showRecord", "showKonkyo", "showHanrei", "showHanreiCard"];  // 記録する画面（新しい画面の関数を作ったらここに足す）
+  const SCREENS = ["showOffice", "showRonbun", "showGyosei", "showTb", "showTbUnit", "showXm", "showXmList", "showKm", "showKmSub", "showSearch", "showRecord", "showKonkyo", "showHanrei", "showHanreiCard", "showBunya", "showShiken", "showSonota"];  // 記録する画面（新しい画面の関数を作ったらここに足す）
   // 記録しない画面（問題を解いている途中・模試など）から出るときに押す「後片付け」のボタン（タイマーを止める・途中を保存する）
   const EXIT = ["#gxPause", "#quit", "#gxBackG", "#xmAgain", "#gyBack"];
   const vis = sel => { const b = document.querySelector(sel); return b && !b.disabled && b.getClientRects().length ? b : null; };
@@ -28549,7 +28549,106 @@ document.addEventListener("keydown", e => {
   if (idx >= 0 && idx < n) quiz.pick(idx);
 });
 
+// ===== 16. 画面を分ける（2026-11-23 satou「天秤の書も、画面を整理してください」） =====
+// ホームに「分野・試験7つ・さがす・そのほか（中にさらに畳んだ一覧）」まで全部載せていて、開いてすぐ押せる所が30を超えていた。
+// 決まり：shared-workflows routines/ui-rules.md U10〜U12（1画面に目的1つ・見出し5つまで・長さはスマホ3画面分まで・行き先は5まで・畳むのは1段まで）。
+// 根拠：NN/g「Progressive Disclosure」（最初は大事な数個だけ見せる）・Android「Navigation patterns」（主な行き先は3〜5）・NN/g「Accordions on Desktop」（入れ子の畳みは迷う）。
+// ・ホームは「今日の学習」と行き先5つ（分野で学ぶ・試験の対策・学習の記録・さがす・そのほか）だけ。前からの部品（試験の一覧など）は隠した箱に残し、
+//   ほかの手直し（「前回の続き」・初めての人に試験を聞く・設定の試験の一覧）がそのまま読めるようにする。
+// ・画面ごとに URL の # を付ける（#bunya など）。再読み込み・共有した URL でその画面が開く。共通部品 game-core の Core.screens と同じ # の付け方。
+//   「戻る」はこれまでどおり 7. の「通ってきた画面」の記録で戻す（# は replaceState で書き換えるだけで、履歴を増やさない）。
+const SCR_PART = {
+  bunya: { title: "分野で学ぶ", keep: () => [document.getElementById("bnLearn")] },
+  shiken: { title: "試験の対策", keep: () => [$app.querySelector(":scope > .kmhead"), $app.querySelector(":scope > nav.exlist")] },
+  sonota: { title: "そのほか", keep: () => [$app.querySelector(":scope > details.others")] },
+};
+let scrFull = null, scrBusy = false;
+function showBunya() { scrPart("bunya"); }
+function showShiken() { scrPart("shiken"); }
+function showSonota() { scrPart("sonota"); }
+function scrPart(id) {
+  const s = SCR_PART[id];
+  scrBusy = true; try { scrFull(); } finally { scrBusy = false; }
+  const keep = s.keep().filter(Boolean);
+  [...$app.children].forEach(n => { if (!keep.includes(n)) n.remove(); });
+  if (id === "sonota" && keep[0]) {  // 畳んだ「そのほか」を開いて並べる（畳むのは中の1段だけ。U12）
+    const d = keep[0], box = document.createElement("div"); box.className = "scrsonota";
+    [...d.children].forEach(n => { if (n.tagName !== "SUMMARY") box.appendChild(n); });
+    d.replaceWith(box);
+    box.querySelectorAll(":scope > details.training").forEach(t => t.classList.add("win"));
+  }
+  if (id === "bunya") { const h = $app.querySelector("#bnLearn h2"); if (h) h.textContent = "分野を選ぶ（教科書→問題）"; }
+  if (id === "shiken") { const h = $app.querySelector(".kmhead h2"); if (h) h.textContent = "試験を選ぶ（演習・模試）"; }
+  $app.insertAdjacentHTML("afterbegin", `<div class="chapter-head">${esc(s.title)}</div>`);
+  $app.insertAdjacentHTML("beforeend", `<div class="row"><button class="btn-gold" id="home">目次にもどる</button></div>`);
+  document.getElementById("home").onclick = () => showOffice();
+  toTop();
+}
+(() => {
+  const css = document.createElement("style");
+  css.textContent = `.scrnav { display: grid; gap: 8px; }
+.scrnav .scrrow { min-height: 64px; }
+.scrnav .scrrow .ch-sub b { color: var(--gold); font-weight: 700; }
+.scrsonota { display: grid; gap: 12px; }
+.scrsonota > details.win { margin: 0; }
+.scrsonota > details.training > summary.section-label { margin: 0; }
+@media (min-width: 700px) { .scrnav { grid-template-columns: 1fr 1fr; } .scrnav .scrrow:last-child { grid-column: 1 / -1; } }`;
+  document.head.appendChild(css);
+  scrFull = showOffice;
+  showOffice = function (...a) {
+    const r = scrFull.apply(this, a);
+    if (scrBusy) return r;
+    try {
+      const today = $app.querySelector(":scope > section.today"); if (!today) return r;  // ほかの画面へ回った（答案からの「もどる」など）
+      const src = document.createElement("div"); src.hidden = true; src.className = "scrsrc";  // 前からの部品は見せずに残す（上の説明）
+      [document.getElementById("bnLearn"), $app.querySelector(":scope > .kmhead"), $app.querySelector(":scope > nav.exlist")].forEach(n => n && src.appendChild(n));
+      const oth = $app.querySelector(":scope > details.others"); if (oth) oth.remove();  // 「そのほか」は自分の画面で描き直す
+      const D = typeof kmData === "function" ? kmData() : null;
+      const fields = src.querySelectorAll("#bnLearn .bnrow").length;
+      let last = ""; try { const k = JSON.parse(localStorage.getItem("tenbin-last-exam") || "[]")[0]; const row = k && [...src.querySelectorAll(".exlist .exrow")].find(r => (r.id === "goRonbun" ? "ronbun" : r.id === "goGyosei" ? "gyosei" : "xm:" + r.dataset.k) === k); last = row ? row.querySelector(".ch-title").textContent.trim() : ""; } catch {}
+      const exams = src.querySelectorAll(".exlist .exrow").length;
+      const due = [...src.querySelectorAll(".exlist .due")].reduce((t, b) => t + (+(b.textContent.match(/\d+/) || [0])[0]), 0);
+      const row = (id, ic, t, sub, state) => `<button class="chapter gyentry scrrow" id="${id}"><b class="pixel" aria-hidden="true">${ic}</b><span><span class="ch-title">${t}</span><span class="ch-sub">${sub}</span></span><span class="ch-state">${state || "▶"}</span></button>`;
+      today.insertAdjacentHTML("afterend", `<h2 class="section-label">学ぶ・調べる</h2><nav class="scrnav" aria-label="行き先">
+        ${row("scrBunya", "学", "分野で学ぶ", `教科書を読んで、すぐ問題で確かめる（${fields ? fields + "分野・" : ""}重要判例）`)}
+        ${row("scrShiken", "試", "試験の対策", `演習・本番形式の模試（${exams}つの試験）${last ? `<br>前回：<b>${esc(last)}</b>` : ""}`, due ? `<b class="due">復習${due}</b>` : "")}
+        ${row("scrKiroku", "録", "学習の記録", "16週間の記録・科目ごとの成績")}
+        ${row("scrSagasu", "探", "さがす", "論文・教科書・判例・条文・択一")}
+        ${row("scrSonota", "他", "そのほか", "新人研修・判例一覧・文字の大きさ・画面の色・ホーム画面に追加・このアプリについて")}
+      </nav>`);
+      $app.appendChild(src);
+      const go = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = () => window[fn](); };
+      go("scrBunya", "showBunya"); go("scrShiken", "showShiken"); go("scrKiroku", "showRecord"); go("scrSagasu", "showSearch"); go("scrSonota", "showSonota");
+    } catch (e) { console.warn("screens home", e); }
+    return r;
+  };
+  // ---- # と画面 ----
+  const MAP = { bunya: "showBunya", shiken: "showShiken", kiroku: "showRecord", sagasu: "showSearch", sonota: "showSonota", ronbun: "showRonbun", gyosei: "showGyosei", hanrei: "showHanrei", kamoku: "showKm" };
+  const NAME = Object.fromEntries(Object.entries(MAP).map(([h, n]) => [n, h]));
+  const TITLE = "天秤の書";
+  const hashOf = e => { const m = /^(\w+)(\[.*\])$/.exec(e || ""); if (!m) return null; const [, n, a] = m; let args = []; try { args = JSON.parse(a); } catch {}
+    if (n === "showOffice") return "";
+    if (n === "showXm" && typeof args[0] === "string") return "xm-" + args[0];
+    return n in NAME && !args.length ? NAME[n] : null; };
+  const open = h => { try { h = decodeURIComponent(h); } catch { return false; }
+    if (h.startsWith("xm-") && typeof XM_CONF !== "undefined" && XM_CONF[h.slice(3)]) { window.showXm(h.slice(3)); return true; }
+    if (MAP[h] && typeof window[MAP[h]] === "function") { window[MAP[h]](); return true; } return false; };
+  const sync = () => {
+    const nav = window.__tenbinNav; if (!nav || !nav.onTop()) return;  // 問題を解いている途中などは、入ってきた画面の # のまま
+    const st = nav.stack(), h = hashOf(st[st.length - 1]); if (h == null) return;
+    const head = $app.querySelector(":scope > .chapter-head"), name = head ? (c => { c.querySelectorAll("button").forEach(b => b.remove()); return c.textContent.replace(/\s+/g, " ").trim(); })(head.cloneNode(true)) : "";
+    document.title = h && name ? `${name}｜${TITLE}` : TITLE;
+    if (decodeURIComponent(location.hash.slice(1)) === h) return;
+    try { history.replaceState(history.state, "", h ? "#" + h : location.pathname + location.search); } catch {}
+  };
+  new MutationObserver(() => queueMicrotask(sync)).observe($app, { childList: true });
+  // URL の # を手で変えたとき（ブックマーク・リンク）。「戻る」のときは 7. が画面を戻し、上の sync が # を合わせ終わっているので何もしない
+  const nowHash = () => { const nav = window.__tenbinNav, st = nav ? nav.stack() : []; return hashOf(st[st.length - 1]); };
+  addEventListener("hashchange", () => { let h = location.hash.slice(1); try { h = decodeURIComponent(h); } catch {} if (h === nowHash()) return; if (h) open(h); else showOffice(); });
+  window.__tenbinOpenHash = () => { const h = location.hash.slice(1); if (h) open(h); };
+})();
 showOffice();
+if (window.__tenbinOpenHash) window.__tenbinOpenHash();  // URL の # の画面を開く（16.）
 </script>
 
 <p style="text-align:center;margin:16px 0 24px;font:13px system-ui,sans-serif"><a href="changes.html" style="color:#cfe3d9">更新情報</a>　<a id="kofi" href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener noreferrer" style="color:#cfe3d9">☕ Ko-fi で応援</a><br><span style="display:inline-block;margin-top:6px;color:#9fbfb2;font-size:12px">天秤の書は無料・広告なしで、ひとりで作っています。応援は、問題の追加と判例の確かめに使います。</span></p>
@@ -28628,10 +28727,10 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
     const d = Math.floor((Date.now() - last) / DAY);
     return d >= EVERY ? "最後に記録を書き出してから" + d + "日たちました。控えを取り直しておきましょう。" : "";
   };
-  // 書き出しボタンがある画面（目次）のときだけ出す
+  // 目次（ホーム）のときだけ出す。書き出しボタンは 2026-11-23 から「そのほか」の画面にある（画面を分けた）
   let shown = false;
   const check = () => {
-    const m = document.getElementById("expBtn") ? due() : "";
+    const m = document.querySelector("#app > header.title") ? due() : "";
     if (m && msg.textContent !== m) msg.textContent = m; // 同じ文なら触らない（監視が回り続けないように）
     if (!!m !== shown) { shown = !!m; bar.style.display = m ? "flex" : "none"; }
   };
@@ -28643,6 +28742,7 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
     if (e.target.closest && e.target.closest("#expBtn")) { put("tenbin-lastexp", String(Date.now())); check(); }
   }, true);
   document.getElementById("tenbin-backup-go").onclick = () => {
+    if (!document.getElementById("expBtn") && typeof window.showSonota === "function") window.showSonota();  // 書き出しは「そのほか」の画面
     const b = document.getElementById("expBtn");
     // 書き出しボタンを包む折りたたみ（「その他」→「記録の引っ越し」）を全部開く
     for (let d = b && b.closest("details"); d; d = d.parentElement && d.parentElement.closest("details")) d.open = true;
@@ -28666,7 +28766,7 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
     return ["cases", "essays", "stats"].reduce((n, k) => n + (v[k] ? Object.keys(v[k]).length : 0), 0); } catch { return 0; } };
   const step = n => STEPS.filter(s => n >= s).pop() || 0;
   const due = () => {
-    if (get("tenbin-kofi-never") || !document.getElementById("expBtn")) return "";
+    if (get("tenbin-kofi-never") || !document.querySelector("#app > header.title")) return "";
     const back = document.getElementById("tenbin-backup"), upd = document.getElementById("tenbin-update");
     if ((back && back.style.display !== "none") || (upd && upd.style.display !== "none")) return "";
     const n = done(), s = step(n);
@@ -28678,7 +28778,7 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
   const hide = () => { shown = false; bar.style.display = "none"; };
   const seen = () => { put("tenbin-kofi-step", String(step(done()))); put("tenbin-kofi-last", String(Date.now())); };
   const check = () => {
-    if (shown) { if (!document.getElementById("expBtn")) hide(); return; } // 出したら、目次から離れるまでそのまま
+    if (shown) { if (!document.querySelector("#app > header.title")) hide(); return; } // 出したら、目次から離れるまでそのまま
     const m = due(); if (!m) return;
     msg.textContent = m; shown = true; bar.style.display = "flex"; seen(); // 一度出したら、次の節目まで出さない
   };

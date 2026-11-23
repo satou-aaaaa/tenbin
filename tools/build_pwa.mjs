@@ -187,10 +187,10 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
     const d = Math.floor((Date.now() - last) / DAY);
     return d >= EVERY ? "最後に記録を書き出してから" + d + "日たちました。控えを取り直しておきましょう。" : "";
   };
-  // 書き出しボタンがある画面（目次）のときだけ出す
+  // 目次（ホーム）のときだけ出す。書き出しボタンは 2026-11-23 から「そのほか」の画面にある（画面を分けた）
   let shown = false;
   const check = () => {
-    const m = document.getElementById("expBtn") ? due() : "";
+    const m = document.querySelector("#app > header.title") ? due() : "";
     if (m && msg.textContent !== m) msg.textContent = m; // 同じ文なら触らない（監視が回り続けないように）
     if (!!m !== shown) { shown = !!m; bar.style.display = m ? "flex" : "none"; }
   };
@@ -202,6 +202,7 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
     if (e.target.closest && e.target.closest("#expBtn")) { put("tenbin-lastexp", String(Date.now())); check(); }
   }, true);
   document.getElementById("tenbin-backup-go").onclick = () => {
+    if (!document.getElementById("expBtn") && typeof window.showSonota === "function") window.showSonota();  // 書き出しは「そのほか」の画面
     const b = document.getElementById("expBtn");
     // 書き出しボタンを包む折りたたみ（「その他」→「記録の引っ越し」）を全部開く
     for (let d = b && b.closest("details"); d; d = d.parentElement && d.parentElement.closest("details")) d.open = true;
@@ -225,7 +226,7 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
     return ["cases", "essays", "stats"].reduce((n, k) => n + (v[k] ? Object.keys(v[k]).length : 0), 0); } catch { return 0; } };
   const step = n => STEPS.filter(s => n >= s).pop() || 0;
   const due = () => {
-    if (get("tenbin-kofi-never") || !document.getElementById("expBtn")) return "";
+    if (get("tenbin-kofi-never") || !document.querySelector("#app > header.title")) return "";
     const back = document.getElementById("tenbin-backup"), upd = document.getElementById("tenbin-update");
     if ((back && back.style.display !== "none") || (upd && upd.style.display !== "none")) return "";
     const n = done(), s = step(n);
@@ -237,7 +238,7 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
   const hide = () => { shown = false; bar.style.display = "none"; };
   const seen = () => { put("tenbin-kofi-step", String(step(done()))); put("tenbin-kofi-last", String(Date.now())); };
   const check = () => {
-    if (shown) { if (!document.getElementById("expBtn")) hide(); return; } // 出したら、目次から離れるまでそのまま
+    if (shown) { if (!document.querySelector("#app > header.title")) hide(); return; } // 出したら、目次から離れるまでそのまま
     const m = due(); if (!m) return;
     msg.textContent = m; shown = true; bar.style.display = "flex"; seen(); // 一度出したら、次の節目まで出さない
   };
