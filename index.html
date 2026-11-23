@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611230453";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611230509";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -28381,7 +28381,7 @@ function shRead(kind, title) {
   const pass = g ? sec.querySelector(".gyres.ok") ? true : false : null;
   const streak = S.streak && S.streak.count > 0 ? S.streak.count : 0;
   const tag = (SH_TAGS.find(([r]) => r.test(name)) || [, kind === "case" ? "司法試験" : ""])[1];
-  return { kind, name, main: main && !/^おつかれさま|^ドリル完了/.test(main) ? main : "", big, rate, pass, streak, tag };
+  return { kind, name, main: main && !/^おつかれさま|^ドリル完了|点\/\d/.test(main) ? main : "", big, rate, pass, streak, tag };
 }
 function shText(d) {
   return [`「天秤の書」で${d.name}に取り組みました。`, `${d.big}${d.rate ? `（評価 ${d.rate}）` : ""}${d.main && !d.rate ? `　${d.main}` : ""}`, d.streak > 1 ? `${d.streak}日連続で学習中` : ""].filter(Boolean).join("\n");
@@ -28424,7 +28424,11 @@ function shMount(kind, title) {
   const d = shRead(kind, title); if (!d) return false;
   // 結果のすぐ下に置く（達成した瞬間に見える所。見直しの一覧より上）
   const res = $app.querySelector("section.win.msg, section.win.today"), row = res && res.parentElement === $app ? res.nextElementSibling : null;
-  const box = document.createElement("section"); box.className = "win shbox"; box.id = "shBox";
+  shBuild(d, box => { if (row) row.before(box); else if (res && res.parentElement === $app) res.after(box); else $app.appendChild(box); });
+  return true;
+}
+function shBuild(d, place) {
+  const box = document.createElement("section"); box.className = "win shbox"; box.id = "shBox"; box.dataset.big = d.big;
   box.innerHTML = `<button type="button" class="shopen" id="shOpen" aria-expanded="false" aria-controls="shPanel"><span aria-hidden="true">📣</span> 結果を共有する</button>
     <div id="shPanel" hidden>
       <p class="note" style="margin:8px 0">X や LINE などに、自分で送れます。名前や答案の文章は載りません。文面は直せます。</p>
@@ -28440,7 +28444,7 @@ function shMount(kind, title) {
       </div>
       <p class="note shmsg" role="status" aria-live="polite" id="shMsg"></p>
     </div>`;
-  if (row) row.before(box); else if (res && res.parentElement === $app) res.after(box); else $app.appendChild(box);
+  place(box);
   const $ = id => box.querySelector("#" + id), txt = $("shTxt"), msg = $("shMsg"), img = $("shImg");
   txt.value = shText(d);
   const tags = ["天秤の書", d.tag].filter(Boolean);
@@ -28473,16 +28477,36 @@ function shMount(kind, title) {
     document.body.appendChild(a); a.click(); a.remove();
     shToast(msg, "画像を保存しました（保存されないときは、上の画像を長押しして保存してください）。");
   };
-  return true;
+  return box;
+}
+// AI の添削・採点の点数（論文・行政書士の記述・司法書士の記述）。点数が出たら、その下に置く。採点し直したら作り直す
+function shAg() {
+  const sc = $app.querySelector(".agbox .agScore:not([hidden])"), num = sc && sc.querySelector(".agScNum");
+  if (!num) return;
+  const big = num.textContent.replace("/", " / "), old = document.getElementById("shBox");
+  if (old) { if (old.dataset.big === big || !old.closest(".agbox")) return; old.remove(); }
+  const h = $app.querySelector(".chapter-head"), name = (h ? h.textContent.replace(/\s+/g, " ").trim() : "答案") + "（AIの添削）";
+  const rate = ((sc.querySelector(".agScRate") || {}).textContent || "").replace(/^評価\s*/, "") || undefined;
+  const tag = (SH_TAGS.find(([r]) => r.test(name + " " + $app.textContent.slice(0, 400))) || [, "司法試験"])[1];
+  shBuild({ kind: "ai", name, main: "", big, rate, pass: null, streak: S.streak && S.streak.count > 0 ? S.streak.count : 0, tag }, box => sc.after(box));
+}
+// 司法書士の記述式は、閉じた関数の中で採点の画面を描く。「採点を確定する」を押したあと（ボタンが消えたら）に置く
+function shSk() {
+  const h = $app.querySelector(".chapter-head");
+  if (!h || !/記述式の採点/.test(h.textContent) || document.getElementById("skFix") || document.getElementById("shBox")) return;
+  const sec = $app.querySelector("section.win.msg"); if (!sec) return;
+  const mock = !!sec.querySelector(".gyres"), ln = sec.querySelector(".line"), t = ln ? ln.textContent.split("：")[0].trim() : "";
+  shMount("shoshi", mock ? "司法書士・記述式の模試" : `司法書士・記述式「${t}」`);
 }
 // 結果の画面を出す関数を包む（新しい結果の画面を作ったら、ここに名前を足す）。事件の解決（closing）は場面のあとで結果を出すので、出るまで待つ
 new MutationObserver(() => {
+  try { shSk(); shAg(); } catch (e) {}
   if (!shPend) return;
   if (Date.now() > shPend.until) { shPend = null; return; }
   const sec = $app.querySelector("section.win.msg");
   if (!sec || !shPend.test.test(sec.textContent)) return;
   if (shMount(shPend.kind, shPend.title)) shPend = null;
-}).observe($app, { childList: true });
+}).observe($app, { childList: true, subtree: true, attributeFilter: ["hidden"] });
 // [関数名, 種類, 画面の見出しに試験名がないときに前に付ける名前]
 [["gyEnd", d => d && d.mock ? "mock" : "end", "行政書士"], ["gyExamResult", () => "mock", "行政書士"], ["xmResult", () => "mock"], ["srResult", () => "mock"],
  ["xmEnd", () => "end"], ["kmEnd", () => "end"], ["drillEnd", () => "drill"], ["hrEnd", () => "hanrei"], ["closing", () => "case"]].forEach(([n, k, pre]) => {
