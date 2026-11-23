@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="天秤の書">
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#14302a}[hidden]{display:none!important}</style>
-<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611212237";</script>
+<script>window.TENBIN_PWA = true; window.TENBIN_VER = "202611230447";</script>
 </head><body>
 <title>天秤の書</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -28353,6 +28353,162 @@ new MutationObserver(() => {
   document.head.appendChild(css);
 })();
 // ===== 組合せ問題の見やすさ ここまで =====
+// ===== 結果を共有する（2026-11-23） =====
+// satou「模試などの結果をSNSに共有できるようにしたら面白い」。結果の画面に「結果を共有する」を置き、開くと
+// 結果カードの画像・直せる文面・「共有する（スマホ）」「Xに投稿」「文面をコピー」「画像を保存」を出す。自動では何も送らない。
+// 載せるのは試験の名前・点数・合否の目安・連続日数・アプリのURLだけ（名前や答案の本文は載せない）。
+// 根拠：MDN Navigator.share()（ボタンを押したときだけ呼べる・files は canShare で確かめる・AbortError は利用者の取り消し）、
+//   X「Web Intent」（https://x.com/intent/tweet に text・url・hashtags。合わせて280字まで。日本語は1字2と数えるので短く）、
+//   GOV.UK の調査（記事の下の共有ボタンは0.2%しか押されない）→ 目立たせすぎず、達成した瞬間（結果の画面）にだけ置く。
+const SH_URL = "https://satou-aaaaa.github.io/tenbin/";
+const SH_TAGS = [[/行政書士/, "行政書士試験"], [/宅建/, "宅建"], [/司法書士/, "司法書士試験"], [/社労士/, "社労士試験"], [/予備試験/, "予備試験"], [/司法試験|短答|論文|判例|事件/, "司法試験"]];
+let shPend = null;
+// 結果の画面から、共有する中身を読み取る（画面の作りが変わっても動くよう、表示された文字から読む）
+function shRead(kind, title) {
+  const head = $app.querySelector(".chapter-head");
+  const sec = $app.querySelector("section.win.msg, section.win.today");
+  if (!sec) return null;
+  const T = sec.textContent.replace(/\s+/g, " ");
+  const name = (title || (head ? head.textContent : "")).replace(/\s+/g, " ").replace(/(：|の)?結果$/, "").trim();
+  const g = sec.querySelector(".gyres b"), ln = sec.querySelector(".line");
+  const main = (g || ln || { textContent: "" }).textContent.replace(/\s+/g, " ").replace(/！$/, "").trim();
+  let big = "", m;
+  if ((m = T.match(/(\d+)点\/(\d+)点/))) big = `${m[1]}点 / ${m[2]}点`;
+  else if ((m = T.match(/(\d+)問中\s*(\d+)問/))) big = `${m[2]}問 / ${m[1]}問 正解`;
+  else if ((m = T.match(/(\d+)\s*\/\s*(\d+)\s*問/))) big = `${m[1]}問 / ${m[2]}問 正解`;
+  if (!big) return null;
+  const rate = (T.match(/評価\s*(\S+)/) || [])[1];
+  const pass = g ? sec.querySelector(".gyres.ok") ? true : false : null;
+  const streak = S.streak && S.streak.count > 0 ? S.streak.count : 0;
+  const tag = (SH_TAGS.find(([r]) => r.test(name)) || [, kind === "case" ? "司法試験" : ""])[1];
+  return { kind, name, main: main && !/^おつかれさま|^ドリル完了/.test(main) ? main : "", big, rate, pass, streak, tag };
+}
+function shText(d) {
+  return [`「天秤の書」で${d.name}に取り組みました。`, `${d.big}${d.rate ? `（評価 ${d.rate}）` : ""}${d.main && !d.rate ? `　${d.main}` : ""}`, d.streak > 1 ? `${d.streak}日連続で学習中` : ""].filter(Boolean).join("\n");
+}
+// 結果カードの画像（1200×630。天秤の書の装丁：深緑の布・金の罫・明朝）
+async function shCard(d) {
+  const W = 1200, H = 630, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const c = cv.getContext("2d"), MIN = '"Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif';
+  try { await Promise.race([Promise.all(["800 40px", "600 40px"].map(f => document.fonts.load(`${f} "Shippori Mincho B1"`, "天秤の書0123456789"))), new Promise(r => setTimeout(r, 1500))]); } catch (e) {}
+  const gr = c.createLinearGradient(0, 0, W, H); gr.addColorStop(0, "#14302a"); gr.addColorStop(1, "#0b1d17");
+  c.fillStyle = gr; c.fillRect(0, 0, W, H);
+  c.strokeStyle = "#d4b25a"; c.lineWidth = 6; c.strokeRect(28, 28, W - 56, H - 56); c.lineWidth = 2; c.strokeRect(44, 44, W - 88, H - 88);
+  // 天秤の絵
+  c.save(); c.translate(W - 170, 150); c.strokeStyle = "#d4b25a"; c.fillStyle = "#d4b25a"; c.lineWidth = 5; c.lineCap = "round";
+  c.beginPath(); c.moveTo(0, -60); c.lineTo(0, 70); c.moveTo(-34, 72); c.lineTo(34, 72); c.moveTo(-70, -40); c.lineTo(70, -40); c.stroke();
+  c.beginPath(); c.arc(0, -64, 7, 0, 7); c.fill();
+  [-70, 70].forEach(x => { c.beginPath(); c.moveTo(x, -40); c.lineTo(x - 26, 20); c.moveTo(x, -40); c.lineTo(x + 26, 20); c.stroke(); c.beginPath(); c.arc(x, 20, 27, 0, Math.PI); c.fill(); });
+  c.restore();
+  const fit = (t, size, w, wt) => { let s = size; do { c.font = `${wt} ${s}px ${MIN}`; s -= 2; } while (c.measureText(t).width > w && s > 18); return t; };
+  c.textBaseline = "alphabetic"; c.fillStyle = "#d4b25a"; c.font = `800 44px ${MIN}`; c.fillText("天秤の書", 96, 128);
+  c.font = `600 24px ${MIN}`; c.fillStyle = "#b2c0b6"; c.fillText("論文答案クエスト", 96, 166);
+  c.fillStyle = "#efe9d8"; c.fillText(fit(d.name, 40, W - 400, 600), 96, 250);
+  c.fillStyle = "#ffffff"; c.fillText(fit(d.big, 96, W - 200, 800), 96, 380);
+  let y = 446;
+  if (d.rate) { c.fillStyle = "#d4b25a"; c.font = `800 40px ${MIN}`; c.fillText(`評価 ${d.rate}`, 96, y); y += 56; }
+  else if (d.main) { c.fillStyle = d.pass === false ? "#f3a08f" : d.pass ? "#9fe0b6" : "#efe9d8"; c.fillText(fit((d.pass ? "✓ " : "") + d.main, 36, W - 200, 600), 96, y); y += 56; }
+  c.font = `600 28px ${MIN}`; c.fillStyle = "#b2c0b6";
+  c.fillText(`${new Date().toLocaleDateString("ja-JP")}${d.streak > 1 ? `　${d.streak}日連続で学習中` : ""}`, 96, Math.max(y, 520));
+  c.textAlign = "right"; c.fillStyle = "#d4b25a"; c.font = `600 24px ${MIN}`; c.fillText(SH_URL.replace(/^https:\/\//, "").replace(/\/$/, ""), W - 96, 570);
+  return cv;
+}
+function shToast(el, t) { el.textContent = t; clearTimeout(el._t); el._t = setTimeout(() => { el.textContent = ""; }, 4000); }
+async function shCopy(t) {
+  try { await navigator.clipboard.writeText(t); return true; } catch (e) {}
+  const ta = document.createElement("textarea"); ta.value = t; ta.style.cssText = "position:fixed;top:0;left:0;opacity:0"; document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand("copy"); } catch (e) {} ta.remove(); return ok;
+}
+function shMount(kind, title) {
+  if (document.getElementById("shBox")) return true;
+  const d = shRead(kind, title); if (!d) return false;
+  // 結果のすぐ下に置く（達成した瞬間に見える所。見直しの一覧より上）
+  const res = $app.querySelector("section.win.msg, section.win.today"), row = res && res.parentElement === $app ? res.nextElementSibling : null;
+  const box = document.createElement("section"); box.className = "win shbox"; box.id = "shBox";
+  box.innerHTML = `<button type="button" class="shopen" id="shOpen" aria-expanded="false" aria-controls="shPanel"><span aria-hidden="true">📣</span> 結果を共有する</button>
+    <div id="shPanel" hidden>
+      <p class="note" style="margin:8px 0">X や LINE などに、自分で送れます。名前や答案の文章は載りません。文面は直せます。</p>
+      <img class="shimg" id="shImg" alt="結果カードの画像">
+      <label class="shlab" for="shTxt">文面</label>
+      <textarea id="shTxt" rows="4"></textarea>
+      <p class="note shurl">いっしょに付くリンク：${esc(SH_URL)}${d.tag ? `　ハッシュタグ：#天秤の書 #${esc(d.tag)}` : "　ハッシュタグ：#天秤の書"}</p>
+      <div class="shbtns">
+        <button type="button" class="btn-gold" id="shNative" hidden>共有する…</button>
+        <a class="shx" id="shX" target="_blank" rel="noopener">X に投稿</a>
+        <button type="button" id="shCopyB">文面をコピー</button>
+        <button type="button" id="shSave">画像を保存</button>
+      </div>
+      <p class="note shmsg" role="status" aria-live="polite" id="shMsg"></p>
+    </div>`;
+  if (row) row.before(box); else if (res && res.parentElement === $app) res.after(box); else $app.appendChild(box);
+  const $ = id => box.querySelector("#" + id), txt = $("shTxt"), msg = $("shMsg"), img = $("shImg");
+  txt.value = shText(d);
+  const tags = ["天秤の書", d.tag].filter(Boolean);
+  const full = () => `${txt.value.trim()}\n${tags.map(t => "#" + t).join(" ")}\n${SH_URL}`;
+  const setX = () => { $("shX").href = `https://x.com/intent/tweet?text=${encodeURIComponent(txt.value.trim())}&hashtags=${encodeURIComponent(tags.join(","))}&url=${encodeURIComponent(SH_URL)}`; };
+  setX(); txt.oninput = setX;
+  let blob = null, cvs = null;
+  const ready = shCard(d).then(cv => new Promise(r => { cvs = cv; cv.toBlob(b => { blob = b; if (b) img.src = URL.createObjectURL(b); r(b); }, "image/png"); }));  // 画面を移ったあとに出来ても困らないよう、要素は先に取っておく
+  if (navigator.share) $("shNative").hidden = false;
+  $("shOpen").onclick = () => { const p = $("shPanel"), o = p.hidden; p.hidden = !o; $("shOpen").setAttribute("aria-expanded", String(o)); };
+  $("shNative").onclick = async () => {
+    const data = { title: "天秤の書", text: full().replace(/\n\S+$/, ""), url: SH_URL };
+    const file = blob && new File([blob], "tenbin-result.png", { type: "image/png" });
+    try {
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ ...data, files: [file] });
+      else await navigator.share(data);
+    } catch (e) {
+      if (e && e.name === "AbortError") return;  // 利用者が閉じた
+      shToast(msg, "この画面からは共有できませんでした。「文面をコピー」か「X に投稿」を使ってください。");
+    }
+  };
+  $("shCopyB").onclick = async () => shToast(msg, await shCopy(full()) ? "文面をコピーしました。SNS の投稿欄に貼りつけてください。" : "コピーできませんでした。文面を長押しして選んでください。");
+  $("shSave").onclick = async () => {
+    await ready; if (!blob) return shToast(msg, "画像を作れませんでした。");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `tenbin-${new Date().toISOString().slice(0, 10)}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    shToast(msg, "画像を保存しました（保存されないときは、上の画像を長押しして保存してください）。");
+  };
+  return true;
+}
+// 結果の画面を出す関数を包む（新しい結果の画面を作ったら、ここに名前を足す）。事件の解決（closing）は場面のあとで結果を出すので、出るまで待つ
+new MutationObserver(() => {
+  if (!shPend) return;
+  if (Date.now() > shPend.until) { shPend = null; return; }
+  const sec = $app.querySelector("section.win.msg");
+  if (!sec || !shPend.test.test(sec.textContent)) return;
+  if (shMount(shPend.kind, shPend.title)) shPend = null;
+}).observe($app, { childList: true });
+// [関数名, 種類, 画面の見出しに試験名がないときに前に付ける名前]
+[["gyEnd", d => d && d.mock ? "mock" : "end", "行政書士"], ["gyExamResult", () => "mock", "行政書士"], ["xmResult", () => "mock"], ["srResult", () => "mock"],
+ ["xmEnd", () => "end"], ["kmEnd", () => "end"], ["drillEnd", () => "drill"], ["hrEnd", () => "hanrei"], ["closing", () => "case"]].forEach(([n, k, pre]) => {
+  const f = window[n]; if (typeof f !== "function") return;
+  window[n] = function (...a) {
+    shPend = null; const r = f.apply(this, a);
+    try { const c = n === "closing" && a[0] && a[0].c ? `${a[0].c.label}「${a[0].c.title}」` : "";
+      if (n === "closing") shPend = { kind: k(...a), title: c, test: /事件解決/, until: Date.now() + 30 * 60000 }; else { const h = $app.querySelector(".chapter-head"), t = h ? h.textContent.replace(/\s+/g, " ").trim() : "";
+        shMount(k(...a), pre && t && !t.includes(pre) ? `${pre}・${t}` : ""); } } catch (e) {}
+    return r;
+  };
+});
+(() => {
+  const css = document.createElement("style"); css.id = "sh-css";
+  css.textContent = `.shbox{padding:10px 12px}
+.shopen{width:100%;min-height:44px;font-size:15px}
+.shimg{display:block;width:100%;max-width:600px;aspect-ratio:1200/630;margin:0 auto 10px;border:1px solid var(--line);border-radius:4px;background:#10261f}
+.shlab{display:block;font-size:13px;color:var(--muted);margin:4px 0 2px}
+#shTxt{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:15px;line-height:1.6;padding:8px;border:1px solid var(--line);border-radius:4px;background:var(--deep);color:var(--chalk);resize:vertical}
+.shurl{margin:6px 0 10px;font-size:13px;overflow-wrap:anywhere}
+.shbtns{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.shbtns>*{min-height:44px;margin:0}
+.shbtns [hidden]{display:none}
+.shx{display:flex;align-items:center;justify-content:center;text-align:center;padding:8px 12px;border:1px solid var(--gold);border-radius:4px;color:var(--chalk);text-decoration:none;font-size:15px;box-sizing:border-box}
+.shx:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.shmsg{margin:8px 0 0;min-height:1em}
+.shmsg:empty{display:none}`;
+  document.head.appendChild(css);
+})();
+// ===== 結果を共有する ここまで =====
 // keyboard: 1-5 / o x to answer, Enter for next
 document.addEventListener("keydown", e => {
   const next = document.getElementById("next");
